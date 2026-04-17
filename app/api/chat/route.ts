@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -89,20 +88,50 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-        const model = genAI.getGenerativeModel({
-          model: "gemini-1.5-flash-latest",
-          systemInstruction: SYSTEM_PROMPT,
-        });
-
         const prompt = `「${coinName}」（ユーザー入力: "${query}"）について、5つのセクション全てを調査して日本語で報告してください。`;
 
-        const result = await model.generateContentStream(prompt);
+        // Use Gemini v1 REST API directly for SSE streaming
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:streamGenerateContent?key=${process.env.GEMINI_API_KEY}&alt=sse`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: { maxOutputTokens: 8192 },
+            }),
+          }
+        );
 
-        for await (const chunk of result.stream) {
-          const text = chunk.text();
-          if (text) {
-            send({ type: "text", text });
+        if (!geminiRes.ok || !geminiRes.body) {
+          const errText = await geminiRes.text().catch(() => "Unknown error");
+          throw new Error(`Gemini API error ${geminiRes.status}: ${errText}`);
+        }
+
+        const reader = geminiRes.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.slice(6).trim();
+            if (raw === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(raw);
+              const text: string =
+                parsed?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+              if (text) send({ type: "text", text });
+            } catch {
+              // skip malformed chunks
+            }
           }
         }
 
