@@ -1,9 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Japanese / abbreviation → English display name for the AI prompt
 const COIN_NAME_MAP: Record<string, string> = {
@@ -36,36 +34,34 @@ function getEnglishName(query: string): string {
   return COIN_NAME_MAP[query.toLowerCase().trim()] ?? query;
 }
 
-const SYSTEM_PROMPT = `You are a professional cryptocurrency research analyst. When asked about a cryptocurrency, use web_search to gather the latest information and respond in Japanese with these exact five sections.
-
-Use web_search multiple times to gather accurate, up-to-date data for each section.
+const SYSTEM_PROMPT = `あなたは暗号通貨の専門リサーチアナリストです。指定された暗号通貨について、Googleの最新情報を使って以下の5つのセクションで日本語で報告してください。
 
 ## 🐋 スマートマネー & ホエール動向
-Search Arkham Intelligence, Whale Alert, and crypto news for: large wallet movements in the last 7 days, exchange inflows/outflows, institutional buying/selling, notable on-chain activity. Include specific USD amounts and wallet addresses if available.
+Arkham Intelligence、Whale Alert、暗号通貨ニュースから：過去7日間の大口ウォレット移動、取引所への流出入、機関投資家の売買動向、注目すべきオンチェーン活動。具体的なUSD金額やウォレットアドレスがあれば記載。
 
 ## 🔓 トークンアンロック スケジュール
-Search TokenUnlocks.app, Tokenomist, and project documentation for: upcoming vesting unlocks (next 30-90 days), cliff events, total unlock amounts, percentage of circulating supply, and potential sell pressure impact.
+TokenUnlocks.app、Tokenomist、プロジェクト公式情報から：直近30〜90日のベスティングアンロック予定、クリフイベント、アンロック総量、流通量に対する割合、市場への売り圧力の影響予測。
 
 ## 🔵 ホルダー分散 & 上位ウォレット
-Search Bubblemaps, Etherscan, Solscan, or blockchain explorer for: top 10 holder percentages, wallet concentration risk, any suspicious clustering, insider wallet activity, and decentralization score.
+Bubblemaps、Etherscan、Solscan等のブロックチェーンエクスプローラーから：上位10ウォレットの保有割合、集中リスク、不審なクラスタリング、インサイダーウォレットの動向、分散化スコア。
 
 ## 🗣️ 著名人・インフルエンサーの最新発言
-Search Twitter/X and crypto news for recent statements (last 30 days) by: Elon Musk, Vitalik Buterin, CZ (Changpeng Zhao), Michael Saylor, Brian Armstrong, and other major crypto influencers or the project founders.
+Twitter/XやニュースからElon Musk、Vitalik Buterin、CZ (Changpeng Zhao)、Michael Saylor、Brian Armstrong等の過去30日以内の最新コメントや投稿。
 
 ## 💼 VC・機関投資家の動向
-Search for: recent funding rounds, a16z/Andreessen Horowitz, Paradigm, Multicoin Capital, Pantera Capital, Jump Crypto, Coinbase Ventures holdings or investments. Include investment amounts and dates.
+a16z/Andreessen Horowitz、Paradigm、Multicoin Capital、Pantera Capital、Jump Crypto、Coinbase Venturesの投資情報。最新の投資ラウンド、機関保有情報、投資金額と日付。
 
-Rules:
-- Always respond in Japanese
-- Include specific numbers, dates, and source names
-- If information is not found, write "（最新情報なし）" for that item
-- Be concise but include actionable insights
-- Cite data sources (e.g., "出典: Whale Alert", "出典: TokenUnlocks")`;
+ルール：
+- 必ず日本語で回答
+- 具体的な数値、日付、情報源名を含める
+- 情報が見つからない場合は「（最新情報なし）」と記載
+- 各セクションは簡潔かつ実用的な内容にする
+- 情報源を明記する（例：「出典: Whale Alert」「出典: TokenUnlocks」）`;
 
 export async function POST(request: NextRequest) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return Response.json(
-      { error: "ANTHROPIC_API_KEY が設定されていません。Vercelの環境変数を確認してください。" },
+      { error: "GEMINI_API_KEY が設定されていません。Vercelの環境変数を確認してください。" },
       { status: 500 }
     );
   }
@@ -93,51 +89,27 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        const messages: Anthropic.MessageParam[] = [
-          {
-            role: "user",
-            content: `「${coinName}」（ユーザー入力: "${query}"）について、5つのセクション全てを調査して日本語で報告してください。各セクションで必ずweb_searchを使って最新情報を検索してください。`,
-          },
-        ];
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+        const model = genAI.getGenerativeModel({
+          model: "gemini-2.0-flash",
+          systemInstruction: SYSTEM_PROMPT,
+        });
 
-        // Loop to handle pause_turn (server-side tool iteration limit)
-        let continueLoop = true;
-        while (continueLoop) {
-          const aiStream = client.messages.stream({
-            model: "claude-sonnet-4-6",
-            max_tokens: 8000,
-            system: SYSTEM_PROMPT,
-            tools: [{ type: "web_search_20260209", name: "web_search" }],
-            messages,
-          });
+        const prompt = `「${coinName}」（ユーザー入力: "${query}"）について、5つのセクション全てを調査して日本語で報告してください。`;
 
-          for await (const event of aiStream) {
-            if (
-              event.type === "content_block_delta" &&
-              event.delta.type === "text_delta"
-            ) {
-              send({ type: "text", text: event.delta.text });
-            }
-          }
+        const result = await model.generateContentStream(prompt);
 
-          const finalMsg = await aiStream.finalMessage();
-
-          if (finalMsg.stop_reason === "pause_turn") {
-            // Server hit iteration limit; continue from where we left off
-            messages.push({ role: "assistant", content: finalMsg.content });
-          } else {
-            continueLoop = false;
+        for await (const chunk of result.stream) {
+          const text = chunk.text();
+          if (text) {
+            send({ type: "text", text });
           }
         }
 
         send({ type: "done" });
       } catch (error) {
         const msg =
-          error instanceof Anthropic.APIError
-            ? `APIエラー ${error.status}: ${error.message}`
-            : error instanceof Error
-            ? error.message
-            : "不明なエラー";
+          error instanceof Error ? error.message : "不明なエラー";
         send({ type: "error", message: msg });
       } finally {
         controller.close();
