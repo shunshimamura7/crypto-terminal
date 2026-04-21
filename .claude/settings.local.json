@@ -2,7 +2,30 @@
   "permissions": {
     "allow": [
       "Bash(npm install *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(gh auth *)",
+      "Bash(git --version)",
+      "Bash(curl --version)",
+      "Bash(git credential-manager *)",
+      "Bash(git config *)",
+      "Bash(vercel login *)",
+      "Bash(vercel *)",
+      "Bash(npm list *)",
+      "Skill(claude-api)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(node *)",
+      "Bash(curl -s https://openrouter.ai/api/v1/models)",
+      "Bash(npm show *)",
+      "Bash(npm pack *)",
+      "Bash(curl -s https://registry.npmjs.org/openclaw/latest)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('description',''\\)\\); print\\(d.get\\('homepage',''\\)\\); print\\(list\\(d.get\\('dependencies',{}\\).keys\\(\\)\\)[:10]\\)\")",
+      "Bash(curl -s \"https://api.github.com/repos/openclaw/openclaw/git/trees/main?recursive=1\")",
+      "Bash(python3 -c \"import sys,json; t=json.load\\(sys.stdin\\); [print\\(x['path']\\) for x in t.get\\('tree',[]\\) if 'line' in x['path'].lower\\(\\) or 'skill' in x['path'].lower\\(\\)]\")",
+      "Bash(curl *)",
+      "Bash(openclaw *)",
+      "Bash(npx tsc *)",
+      "Bash(git commit *)"
     ]
   }
 }
