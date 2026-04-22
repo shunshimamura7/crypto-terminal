@@ -158,6 +158,36 @@ const T = {
     viewHeat: "🌡️ ヒートマップ",
     btEquityCurve: "📈 エクイティカーブ",
     btEquityR: "累積R",
+    heatDesc: "X軸: スコア（右が高スコア）| Y軸: BTC相関（下が低相関）| 右下が狙い目ゾーン",
+    heatTarget: "🎯 狙い目",
+    heatLegShort: "ショート候補(10+)",
+    heatLegMid: "中程度(6-9)",
+    heatLegWeak: "弱い(≤5)",
+    heatLegLong: "ロング優位",
+    longBiasTitle: "🟢 ロング優位銘柄（ショート注意）",
+    longBiasBadge: "🟢 ロング優位",
+    longBiasNote: "以下の銘柄はロング方向に勢いがあります。ショートは不向きです。",
+    longBiasReason: "理由",
+    frNegativeWarn: "FRマイナス = スクイーズリスク",
+    squeezeWarn: "⚡ スクイーズ警戒",
+    summaryLabel: "📊 結果",
+    summaryShort: "ショート候補",
+    summaryLong: "ロング優位",
+    summaryPattern: "パターン",
+    summaryAllTf: "全TF↓",
+    summarySpike: "スパイク",
+    filterReset: "フィルターリセット",
+    staleDataWarn: "⚠️ 古いデータ",
+    earlyListingWarn: "⚠️ 上場3日以内",
+    earlyListingNote: "意図的スクイーズに注意",
+    btSimTitle: "💰 ポートフォリオシミュレーション",
+    btSimCapital: "初期資金",
+    btSimPos: "1ポジション",
+    btSimCurAsset: "現在資産",
+    btSimReturn: "トータルリターン",
+    btSimMaxDD: "最大DD",
+    btSimSharpe: "シャープレシオ",
+    btSimInsuf: "決着済み5件以上でシミュレーション開始",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -289,6 +319,36 @@ const T = {
     viewHeat: "🌡️ Heatmap",
     btEquityCurve: "📈 Equity Curve",
     btEquityR: "Cumulative R",
+    heatDesc: "X: Score (right = higher) | Y: BTC Corr (bottom = independent) | Bottom-right = target zone",
+    heatTarget: "🎯 Target",
+    heatLegShort: "Short candidate (10+)",
+    heatLegMid: "Moderate (6-9)",
+    heatLegWeak: "Weak (≤5)",
+    heatLegLong: "Long bias",
+    longBiasTitle: "🟢 Long-Bias Symbols (Avoid Shorting)",
+    longBiasBadge: "🟢 Long Bias",
+    longBiasNote: "These symbols show strong bullish momentum. Avoid shorting.",
+    longBiasReason: "Reason",
+    frNegativeWarn: "Negative FR = Short squeeze risk",
+    squeezeWarn: "⚡ Squeeze Risk",
+    summaryLabel: "📊 Results",
+    summaryShort: "Short candidates",
+    summaryLong: "Long bias",
+    summaryPattern: "Pattern",
+    summaryAllTf: "All TF↓",
+    summarySpike: "Spike",
+    filterReset: "Reset Filters",
+    staleDataWarn: "⚠️ Stale data",
+    earlyListingWarn: "⚠️ Listed <3d",
+    earlyListingNote: "Watch for squeeze",
+    btSimTitle: "💰 Portfolio Simulation",
+    btSimCapital: "Initial Capital",
+    btSimPos: "Position Size",
+    btSimCurAsset: "Current Value",
+    btSimReturn: "Total Return",
+    btSimMaxDD: "Max DD",
+    btSimSharpe: "Sharpe",
+    btSimInsuf: "Need 5+ resolved trades to simulate",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -832,58 +892,233 @@ function CustomAlertPanel({ t, candidates }: { t: Translations; candidates: Exte
   );
 }
 
-// ─── Heatmap View (施策7) ─────────────────────────────────────────────────────
-function HeatmapView({ candidates }: { candidates: ExtendedCandidate[] }) {
-  const { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell } =
+// ─── Heatmap View (施策7 改善) ────────────────────────────────────────────────
+function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
+  candidates: ExtendedCandidate[];
+  t: Translations;
+  onClickSymbol: (sym: string) => void;
+  isLongBias: (c: ExtendedCandidate) => boolean;
+}) {
+  const { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell, ReferenceArea, ReferenceLine } =
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require("recharts") as typeof import("recharts");
 
+  function bubbleColor(c: ExtendedCandidate): string {
+    if (isLongBias(c)) return "#3b82f6";          // blue
+    if (c.displayScore >= 10) return "#ef4444";   // red
+    if (c.displayScore >= 6)  return "#f97316";   // orange
+    return "#9ca3af";                              // gray
+  }
+
   const data = candidates.map(c => ({
-    x: Math.abs(c.athDropPct),       // ATH下落率 (絶対値)
-    y: c.displayScore,               // スコア
-    z: Math.max(10, Math.min(1000, c.openInterest / 10_000)), // OI (バブルサイズ)
+    x: c.displayScore,
+    y: parseFloat(c.btcCorrelation.toFixed(3)),
+    z: Math.max(20, Math.min(800, c.volume24h / 50_000)),
+    symbol: c.symbol,
     name: c.symbol.replace("_USDT",""),
+    athDropPct: c.athDropPct,
+    fundingRate: c.fundingRate,
+    volume24h: c.volume24h,
+    exclusivityScore: c.exclusivityScore,
     hasPattern: !!c.chartPattern,
     allTfDown: c.trendMultiTF?.alignment === 3,
-    fr: c.fundingRate,
+    longBias: isLongBias(c),
+    color: bubbleColor(c),
   }));
 
   return (
     <div className="w-full rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-xs text-gray-500 mb-3">X軸: ATH下落率 (%) | Y軸: スコア | 円サイズ: OI | 🟥=パターン検知 🔵=通常</p>
-      <ResponsiveContainer width="100%" height={380}>
-        <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
-          <XAxis dataKey="x" type="number" name="ATH下落%" unit="%" tick={{ fontSize: 10 }} label={{ value: "ATH下落率(%)", position: "insideBottom", offset: -10, fontSize: 11 }} domain={["auto","auto"]} />
-          <YAxis dataKey="y" type="number" name="スコア" tick={{ fontSize: 10 }} label={{ value: "スコア", angle: -90, position: "insideLeft", fontSize: 11 }} />
-          <ZAxis dataKey="z" range={[30, 500]} />
+      <p className="text-xs text-gray-500 mb-3">{t.heatDesc}</p>
+      <ResponsiveContainer width="100%" height={400}>
+        <ScatterChart margin={{ top: 20, right: 30, bottom: 30, left: 10 }}>
+          {/* 狙い目ゾーン: score≥10, corr<0.3 */}
+          <ReferenceArea
+            x1={10} x2={DISPLAY_MAX} y1={-0.5} y2={0.3}
+            fill="#16a34a" fillOpacity={0.07}
+            stroke="#16a34a" strokeOpacity={0.3} strokeDasharray="4 4"
+          />
+          <ReferenceLine x={10} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
+          <ReferenceLine y={0.3} stroke="#a855f7" strokeDasharray="3 3" strokeOpacity={0.5} />
+          <XAxis
+            dataKey="x" type="number" name="Score"
+            tick={{ fontSize: 10 }} domain={[0, DISPLAY_MAX]}
+            label={{ value: "スコア →", position: "insideBottom", offset: -12, fontSize: 11 }}
+          />
+          <YAxis
+            dataKey="y" type="number" name="BTC相関"
+            tick={{ fontSize: 10 }} domain={[-0.5, 1.0]}
+            label={{ value: "BTC相関 ↑", angle: -90, position: "insideLeft", fontSize: 11 }}
+          />
+          <ZAxis dataKey="z" range={[20, 600]} />
           <Tooltip
             cursor={{ strokeDasharray: "3 3" }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
               const d = payload[0].payload;
+              const frPct = d.fundingRate != null ? (d.fundingRate * 100).toFixed(4) : "—";
               return (
-                <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs shadow-lg">
-                  <p className="font-bold text-gray-800">{d.name}</p>
-                  <p>スコア: <span className="font-mono font-bold">{d.y}</span></p>
-                  <p>ATH下落: <span className="font-mono text-red-600">-{d.x.toFixed(1)}%</span></p>
+                <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs shadow-xl min-w-[160px]">
+                  <p className="font-bold text-gray-800 mb-1">{d.name}/USDT</p>
+                  <p>スコア: <span className="font-mono font-bold" style={{ color: d.color }}>{d.x}/{DISPLAY_MAX}</span></p>
+                  <p>ATH比: <span className="font-mono text-red-600">{d.athDropPct.toFixed(1)}%</span></p>
+                  <p>BTC相関: <span className={`font-mono ${d.y < 0.3 ? "text-green-600" : d.y >= 0.7 ? "text-red-600" : "text-orange-500"}`}>{d.y.toFixed(2)}</span></p>
+                  <p>FR: <span className="font-mono">{frPct !== "—" ? `${Number(frPct) >= 0 ? "+" : ""}${frPct}%` : "—"}</span></p>
+                  <p>出来高: <span className="font-mono">{fmtVol(d.volume24h)}</span></p>
+                  {d.exclusivityScore === 2 && <p className="text-red-600 font-semibold">MEXCのみ</p>}
                   {d.hasPattern && <p className="text-sky-600">📐 パターン検知</p>}
                   {d.allTfDown && <p className="text-green-600">🎯 全TFダウン</p>}
+                  {d.longBias && <p className="text-blue-600 font-semibold">🟢 ロング優位</p>}
+                  <p className="text-gray-400 mt-1 text-[10px]">クリックで詳細</p>
                 </div>
               );
             }}
           />
-          <Scatter data={data} shape="circle">
+          <Scatter
+            data={data}
+            shape="circle"
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onClick={(point: any) => {
+              if (point && point.symbol) onClickSymbol(point.symbol as string);
+            }}
+            style={{ cursor: "pointer" }}
+          >
             {data.map((entry, i) => (
-              <Cell key={i} fill={entry.allTfDown ? "#16a34a" : entry.hasPattern ? "#ef4444" : "#3b82f6"} fillOpacity={0.7} />
+              <Cell
+                key={i}
+                fill={entry.color}
+                fillOpacity={0.75}
+                stroke={entry.hasPattern ? "#0ea5e9" : entry.allTfDown ? "#16a34a" : "transparent"}
+                strokeWidth={entry.hasPattern || entry.allTfDown ? 2 : 0}
+              />
             ))}
           </Scatter>
+          {/* 狙い目ラベル */}
+          <text x="75%" y="12" textAnchor="middle" fill="#16a34a" fontSize={10} fontWeight={700}>{t.heatTarget}</text>
         </ScatterChart>
       </ResponsiveContainer>
       <div className="flex items-center gap-4 mt-2 text-[10px] text-gray-500 flex-wrap">
-        <span><span className="inline-block w-3 h-3 rounded-full bg-blue-500 mr-1" />通常</span>
-        <span><span className="inline-block w-3 h-3 rounded-full bg-red-500 mr-1" />パターン検知</span>
-        <span><span className="inline-block w-3 h-3 rounded-full bg-green-600 mr-1" />全TFダウン</span>
+        <span><span className="inline-block w-3 h-3 rounded-full bg-red-500 mr-1" />{t.heatLegShort}</span>
+        <span><span className="inline-block w-3 h-3 rounded-full bg-orange-400 mr-1" />{t.heatLegMid}</span>
+        <span><span className="inline-block w-3 h-3 rounded-full bg-gray-400 mr-1" />{t.heatLegWeak}</span>
+        <span><span className="inline-block w-3 h-3 rounded-full bg-blue-500 mr-1" />{t.heatLegLong}</span>
+        <span className="ml-auto text-gray-400">🟢枠=パターン / 🔵枠=全TFダウン</span>
       </div>
+    </div>
+  );
+}
+
+// ─── Summary Bar (修正5) ─────────────────────────────────────────────────────
+function SummaryBar({ candidates, t, onFilter, isLongBias }: {
+  candidates: ExtendedCandidate[];
+  t: Translations;
+  onFilter: (key: "strong" | "long" | "pattern" | "allTf" | "spike") => void;
+  isLongBias: (c: ExtendedCandidate) => boolean;
+}) {
+  const counts = useMemo(() => ({
+    strong: candidates.filter(c => c.displayScore >= 10).length,
+    long:   candidates.filter(c => isLongBias(c)).length,
+    pattern: candidates.filter(c => !!c.chartPattern).length,
+    allTf:  candidates.filter(c => c.trendMultiTF?.alignment === 3).length,
+    spike:  candidates.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral").length,
+  }), [candidates, isLongBias]);
+
+  const items: Array<{ key: "strong"|"long"|"pattern"|"allTf"|"spike"; label: string; count: number; cls: string }> = [
+    { key: "strong",  label: t.summaryShort,   count: counts.strong,  cls: "text-red-600 bg-red-50 border-red-200" },
+    { key: "long",    label: t.summaryLong,     count: counts.long,    cls: "text-green-700 bg-green-50 border-green-200" },
+    { key: "pattern", label: t.summaryPattern,  count: counts.pattern, cls: "text-sky-700 bg-sky-50 border-sky-200" },
+    { key: "allTf",   label: t.summaryAllTf,    count: counts.allTf,   cls: "text-indigo-600 bg-indigo-50 border-indigo-200" },
+    { key: "spike",   label: t.summarySpike,    count: counts.spike,   cls: "text-orange-600 bg-orange-50 border-orange-200" },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs px-1">
+      <span className="font-semibold text-gray-500">{t.summaryLabel}:</span>
+      {items.map(({ key, label, count, cls }) => (
+        <button key={key} onClick={() => onFilter(key)}
+          className={`px-2 py-0.5 rounded-full border font-semibold transition-colors hover:opacity-80 ${cls}`}>
+          {label} <span className="font-bold">{count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Long Bias (修正3) ────────────────────────────────────────────────────────
+interface LongBiasScore {
+  trendUp: boolean;        // 2TF以上UP
+  momentum: boolean;       // 7d > +20%
+  frNegative: boolean;     // FR < 0
+  volumeExpanding: boolean; // vol ratio > 1.5
+  total: number;           // 0-4
+}
+
+function calcLongBias(c: ExtendedCandidate): LongBiasScore {
+  const upCount = c.trendMultiTF
+    ? [c.trendMultiTF.h1, c.trendMultiTF.h4, c.trendMultiTF.d1].filter(d => d === "UP").length
+    : (c.trendDirection === "UP" ? 1 : 0);
+  const trendUp        = upCount >= 2;
+  const momentum       = c.priceChange7d > 20;
+  const frNegative     = c.fundingRate !== null && c.fundingRate < 0;
+  const volumeExpanding = c.volumeChangeRatio > 1.5;
+  const total = [trendUp, momentum, frNegative, volumeExpanding].filter(Boolean).length;
+  return { trendUp, momentum, frNegative, volumeExpanding, total };
+}
+
+function isLongBias(c: ExtendedCandidate): boolean {
+  return calcLongBias(c).total >= 3;
+}
+
+function LongBiasPanel({ candidates, t }: { candidates: ExtendedCandidate[]; t: Translations }) {
+  const [open, setOpen] = useState(true);
+  const biased = useMemo(
+    () => candidates.filter(isLongBias).slice(0, 5),
+    [candidates]
+  );
+  if (biased.length === 0) return null;
+
+  function reasonStr(c: ExtendedCandidate, t: Translations): string {
+    const lb = calcLongBias(c);
+    const parts: string[] = [];
+    if (lb.momentum)        parts.push(`7d+${c.priceChange7d.toFixed(0)}%急騰`);
+    if (lb.frNegative)      parts.push(`FR${(c.fundingRate! * 100).toFixed(4)}%（負）`);
+    if (lb.volumeExpanding) parts.push(`出来高${c.volumeChangeRatio.toFixed(1)}x拡大`);
+    if (lb.trendUp)         parts.push("TFアップトレンド");
+    return parts.join(" + ");
+  }
+
+  return (
+    <div className="rounded-xl border border-green-200 bg-green-50 overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100 transition-colors">
+        <span>{t.longBiasTitle} <span className="ml-1 text-xs font-normal text-green-600">({biased.length}件)</span></span>
+        <span>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-1 space-y-2">
+          <p className="text-xs text-green-700">{t.longBiasNote}</p>
+          {biased.map(c => {
+            const tf = c.trendMultiTF;
+            const frPct = c.fundingRate != null ? (c.fundingRate * 100).toFixed(4) : "—";
+            return (
+              <div key={c.symbol} className="bg-white rounded-lg border border-green-200 p-2.5">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="font-mono font-bold text-gray-800 text-sm">{c.symbol.replace("_USDT","")}/USDT</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-300 font-bold whitespace-nowrap">{t.longBiasBadge}</span>
+                </div>
+                <div className="text-xs text-gray-600 flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span>7d: <span className={`font-mono font-bold ${c.priceChange7d >= 50 ? "text-red-600" : c.priceChange7d >= 20 ? "text-orange-500" : "text-gray-700"}`}>{fmtPct(c.priceChange7d)}</span></span>
+                  {tf && <span>TF: {(["h1","h4","d1"] as const).map(tf2 => {
+                    const d = tf[tf2];
+                    return <span key={tf2} className={`font-bold ${d==="UP"?"text-green-600":d==="DOWN"?"text-red-500":"text-gray-400"}`}>{d==="UP"?"↑":d==="DOWN"?"↓":"→"}</span>;
+                  })}</span>}
+                  <span>FR: <span className={`font-mono ${c.fundingRate != null && c.fundingRate < 0 ? "text-green-600 font-bold" : "text-gray-600"}`}>{frPct !== "—" ? `${Number(frPct) >= 0 ? "+" : ""}${frPct}%` : "—"}</span></span>
+                </div>
+                <p className="text-[10px] text-green-700 mt-1">{t.longBiasReason}: {reasonStr(c, t)}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1233,6 +1468,7 @@ export default function ShortScanner() {
   // Sort & view
   const [sortBy, setSortBy] = useState<SortKey>("displayScore");
   const [viewMode, setViewMode] = useState<"table" | "heat">("table");
+  const [summaryFilter, setSummaryFilter] = useState<"strong"|"long"|"pattern"|"allTf"|"spike"|null>(null);
 
   // CoinGecko (施策7)
   const [cgMap,      setCgMap]      = useState<Map<string, CgMarketData>>(new Map());
@@ -1352,7 +1588,7 @@ export default function ShortScanner() {
       const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore;
       return { ...c, listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, displayScore };
     });
-    return mapped.sort((a, b) => {
+    const sorted = mapped.sort((a, b) => {
       switch (sortBy) {
         case "athDropPct":     return a.athDropPct - b.athDropPct;
         case "priceChange24h": return b.priceChange24h - a.priceChange24h;
@@ -1361,7 +1597,17 @@ export default function ShortScanner() {
         default:               return b.displayScore - a.displayScore;
       }
     });
-  }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy, cgMap]);
+
+    if (!summaryFilter) return sorted;
+    switch (summaryFilter) {
+      case "strong":  return sorted.filter(c => c.displayScore >= 10);
+      case "long":    return sorted.filter(c => isLongBias(c));
+      case "pattern": return sorted.filter(c => !!c.chartPattern);
+      case "allTf":   return sorted.filter(c => c.trendMultiTF?.alignment === 3);
+      case "spike":   return sorted.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral");
+      default:        return sorted;
+    }
+  }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter]);
 
   const alerts = useMemo(() => detectAlerts(data?.candidates ?? [], snapshots), [data, snapshots]);
 
@@ -1484,10 +1730,13 @@ export default function ShortScanner() {
       {/* Custom Alerts (施策6) */}
       <CustomAlertPanel t={t} candidates={extended} />
 
+      {/* Long Bias Panel (修正3) */}
+      <LongBiasPanel candidates={extended} t={t} />
+
       {/* Error */}
       {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">❌ {error}</div>}
 
-      {/* Scan stats */}
+      {/* Scan stats + stale warning (修正7) */}
       {data && !loading && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
           <span>{t.scanTarget}: <strong className="text-gray-700">{totalScanned}</strong></span>
@@ -1496,7 +1745,33 @@ export default function ShortScanner() {
           {data.mode === "new30" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
           {snapshots.length > 0 && <span>{t.snapshots}: <strong className="text-teal-600">{snapshots.length}</strong></span>}
           {HAS_CG && cgLoading && <span className="text-violet-600">{t.cgFetching} {cgProgress}%</span>}
-          <span className="ml-auto">{t.lastUpdate}: {new Date(data.scanTime).toLocaleTimeString("ja-JP")}</span>
+          <span className="ml-auto flex items-center gap-2">
+            {(() => {
+              const ageMin = Math.floor((Date.now() - new Date(data.scanTime).getTime()) / 60_000);
+              return ageMin >= 5 ? (
+                <span className="text-orange-600 font-semibold">{t.staleDataWarn} ({ageMin}分前)</span>
+              ) : null;
+            })()}
+            <span>{t.lastUpdate}: {new Date(data.scanTime).toLocaleTimeString("ja-JP")}</span>
+          </span>
+        </div>
+      )}
+
+      {/* Summary bar (修正5) */}
+      {data && !loading && extended.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <SummaryBar
+            candidates={extended}
+            t={t}
+            isLongBias={isLongBias}
+            onFilter={(key) => setSummaryFilter(f => f === key ? null : key)}
+          />
+          {summaryFilter && (
+            <button onClick={() => setSummaryFilter(null)}
+              className="text-xs text-gray-400 hover:text-indigo-600 underline">
+              ✕ フィルター解除
+            </button>
+          )}
         </div>
       )}
 
@@ -1514,6 +1789,11 @@ export default function ShortScanner() {
           <div className="text-3xl mb-2 text-gray-300">🔍</div>
           <p className="text-sm text-gray-500">{t.noResult}</p>
           <p className="text-xs text-gray-400 mt-1">{t.noResultNote}</p>
+          <button
+            onClick={() => { setMinDrop(30); setMaxVolRatio(70); setMaxDays(365); setMinVol24k(100); setMinOiK(0); setSummaryFilter(null); }}
+            className="mt-3 px-4 py-1.5 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors">
+            {t.filterReset}
+          </button>
         </div>
       )}
 
@@ -1539,8 +1819,24 @@ export default function ShortScanner() {
             </div>
           </div>
 
-          {/* Heatmap view (施策7) */}
-          {viewMode === "heat" && <div className="p-4"><HeatmapView candidates={extended} /></div>}
+          {/* Heatmap view (施策7 改善) */}
+          {viewMode === "heat" && (
+            <div className="p-4">
+              <HeatmapView
+                candidates={extended}
+                t={t}
+                isLongBias={isLongBias}
+                onClickSymbol={(sym) => {
+                  setViewMode("table");
+                  setExpandedRows(new Set([sym]));
+                  setTimeout(() => {
+                    const el = document.getElementById(`row-${sym}`);
+                    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }, 100);
+                }}
+              />
+            </div>
+          )}
 
           {/* Table view */}
           {viewMode === "table" && <div className="overflow-x-auto"><table className="w-full text-sm min-w-[600px]">
@@ -1572,7 +1868,7 @@ export default function ShortScanner() {
                   const p24 = c.priceChange24h, p7 = c.priceChange7d;
                   return (
                     <React.Fragment key={c.symbol}>
-                      <tr onClick={() => toggleRow(c.symbol)}
+                      <tr id={`row-${c.symbol}`} onClick={() => toggleRow(c.symbol)}
                         className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
 
                         {/* 銘柄 — sticky on mobile */}
@@ -1607,6 +1903,34 @@ export default function ShortScanner() {
                             {c.chartPattern && (
                               <span className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-sky-50 text-sky-700 border-sky-300">
                                 {c.chartPattern.type === "bear_flag" ? t.patBearFlag : c.chartPattern.type === "dead_cat" ? t.patDeadCat : t.patDescWedge}
+                              </span>
+                            )}
+                            {isLongBias(c) && (
+                              <span title={t.longBiasNote}
+                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-green-50 text-green-700 border-green-300 cursor-help">
+                                {t.longBiasBadge}
+                              </span>
+                            )}
+                            {(() => {
+                              const fr = c.fundingRate;
+                              const squeezeCount = [
+                                fr !== null && fr < 0,
+                                c.oiRatio > 3.0,
+                                c.trendDirection === "UP" || (c.trendMultiTF && c.trendMultiTF.alignment === 0),
+                                c.btcCorrelation > 0.7,
+                              ].filter(Boolean).length;
+                              if (squeezeCount >= 2) return (
+                                <span title="FRマイナス×高OI×上昇トレンドなどが重なっています"
+                                  className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-yellow-50 text-yellow-700 border-yellow-300 cursor-help">
+                                  {t.squeezeWarn}
+                                </span>
+                              );
+                              return null;
+                            })()}
+                            {data?.mode === "new30" && c.listedDaysAgo <= 3 && (
+                              <span title={t.earlyListingNote}
+                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-orange-50 text-orange-700 border-orange-300 cursor-help">
+                                {t.earlyListingWarn}
                               </span>
                             )}
                           </div>
@@ -1654,10 +1978,12 @@ export default function ShortScanner() {
                           {fmtPct(p7)}{p7>=100&&<span className="ml-0.5">🚀</span>}
                         </td>
 
-                        {/* FR */}
-                        <td className={`px-2 md:px-3 py-2 text-right text-xs font-mono ${frPct==null?"text-gray-400":frPct>0.01?"text-purple-600 font-bold":frPct>0?"text-purple-500":"text-green-600"}`}>
+                        {/* FR — 修正4: 負値強調 */}
+                        <td className={`px-2 md:px-3 py-2 text-right text-xs font-mono ${frPct==null?"text-gray-400":frPct<0?"bg-red-50 text-red-600 font-bold":frPct>0.01?"text-purple-600 font-bold":frPct>0?"text-purple-500":"text-gray-400"}`}
+                          title={frPct != null && frPct < 0 ? t.frNegativeWarn : undefined}>
                           {frPct!=null?`${frPct>=0?"+":""}${frPct.toFixed(4)}%`:"—"}
                           {c.frBonus>0&&<span className="ml-0.5 text-violet-500">★</span>}
+                          {frPct!=null&&frPct<0&&<span className="ml-0.5">⚡</span>}
                         </td>
 
                         {/* OI */}
