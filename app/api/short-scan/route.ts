@@ -26,6 +26,19 @@ export const maxDuration = 120;
 
 const MEXC = "https://contract.mexc.com";
 
+// ─── In-memory cache (warm instance reuse, 5-min TTL) ────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _apiCache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getCached(key: string): any | null {
+  const e = _apiCache.get(key);
+  if (!e || Date.now() - e.ts > CACHE_TTL_MS) return null;
+  return e.data;
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function setCached(key: string, data: any) { _apiCache.set(key, { data, ts: Date.now() }); }
+
 const MAJOR_PAIRS = new Set([
   "BTC_USDT","ETH_USDT","BNB_USDT","SOL_USDT","XRP_USDT","DOGE_USDT","ADA_USDT","AVAX_USDT",
   "DOT_USDT","MATIC_USDT","LINK_USDT","UNI_USDT","ATOM_USDT","LTC_USDT","BCH_USDT","NEAR_USDT",
@@ -36,9 +49,9 @@ const MAJOR_PAIRS = new Set([
   "JUP_USDT","WLD_USDT","PEPE_USDT","WIF_USDT","BONK_USDT","FLOKI_USDT","SHIB_USDT",
 ]);
 
-// Stage 2 concurrency
-const BATCH = 10;
-const BATCH_DELAY = 200;
+// Stage 2 concurrency (速度最適化: 30並列 / 50ms delay)
+const BATCH = 30;
+const BATCH_DELAY = 50;
 
 async function fetchWithTimeout(url: string, ms = 10000): Promise<Response | null> {
   const ctrl = new AbortController();
@@ -94,12 +107,13 @@ async function analyzeCandidate(
   // 24h変動率 (riseFallRate は小数表現: 0.05 = +5%)
   const priceChange24h = parseFloat(ticker.riseFallRate || "0") * 100;
 
-  const day30AgoSec = nowSec - 30 * 86_400;
+  // 速度最適化: 1h=2日分(~48本), 1d=14日分, FR=tickerから取得済みなのでスキップ
+  const day2AgoSec = nowSec - 2 * 86_400;
   const [kline1hRes, kline4hRes, kline1dRes, frRes] = await Promise.allSettled([
-    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour1&start=${day7AgoSec}&end=${nowSec}`, 8000),  // 施策2
-    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 8000),
-    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Day1&start=${day30AgoSec}&end=${nowSec}`, 8000),
-    mexcGet(`/api/v1/contract/funding_rate/${symbol}`, 5000),
+    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour1&start=${day2AgoSec}&end=${nowSec}`, 7000),
+    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 7000),
+    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Day1&start=${day14AgoSec}&end=${nowSec}`, 7000),
+    mexcGet(`/api/v1/contract/funding_rate/${symbol}`, 4000),
   ]);
 
   // 施策2: 1h closes
@@ -258,46 +272,71 @@ export async function GET(req: NextRequest) {
   const day14AgoSec = nowSec - 14 * 86_400;
   const day7AgoSec  = nowSec - 7 * 86_400;
 
-  // 施策1: BTC 4h kline（1回取得して全銘柄で使い回す）
-  const btcKlineRes = await mexcGet(`/api/v1/contract/kline/BTC_USDT?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 8000);
-  const btcCloses: number[] = btcKlineRes?.data?.close
-    ? (btcKlineRes.data.close as string[]).map(Number).filter((n: number) => n > 0)
-    : [];
-  const btcReturns = priceToReturns(btcCloses);
-  console.log(`[short-scan] BTC 4h closes: ${btcCloses.length} bars`);
+  // BTC 4h kline + ticker + detail を並列取得（ticker/detailはキャッシュ優先）
+  let cachedTicker = getCached("ticker");
+  let cachedDetail = getCached("detail");
+  let cachedBtcReturns = getCached("btcReturns") as number[] | null;
 
-  // Fetch contract list + all tickers in parallel
-  const [detailRes, tickerRes] = await Promise.all([
-    mexcGet("/api/v1/contract/detail"),
-    mexcGet("/api/v1/contract/ticker"),
-  ]);
+  const fetchPromises: Promise<void>[] = [];
 
-  if (!detailRes?.data || !tickerRes?.data) {
+  if (!cachedTicker || !cachedDetail) {
+    fetchPromises.push(
+      Promise.all([
+        mexcGet("/api/v1/contract/ticker"),
+        mexcGet("/api/v1/contract/detail"),
+      ]).then(([tr, dr]) => {
+        if (tr?.data) { setCached("ticker", tr.data); cachedTicker = tr.data; }
+        if (dr?.data) { setCached("detail", dr.data); cachedDetail = dr.data; }
+      })
+    );
+  }
+
+  if (!cachedBtcReturns) {
+    fetchPromises.push(
+      mexcGet(`/api/v1/contract/kline/BTC_USDT?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 8000)
+        .then(res => {
+          const closes: number[] = res?.data?.close
+            ? (res.data.close as string[]).map(Number).filter((n: number) => n > 0)
+            : [];
+          const returns = priceToReturns(closes);
+          setCached("btcReturns", returns);
+          cachedBtcReturns = returns;
+        })
+    );
+  }
+
+  await Promise.all(fetchPromises);
+
+  if (!cachedTicker || !cachedDetail) {
     return NextResponse.json(
       { success: false, error: "MEXC API接続失敗。しばらく待ってから再試行してください。" },
       { status: 502 },
     );
   }
 
+  const btcReturns: number[] = cachedBtcReturns ?? [];
+  console.log(`[short-scan] BTC returns: ${btcReturns.length} bars, ticker cached: ${!!getCached("ticker")}`);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tickerMap: Record<string, any> = {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const t of tickerRes.data as any[]) {
+  for (const t of cachedTicker as any[]) {
     tickerMap[t.symbol] = t;
   }
 
   const createTimeMap: Record<string, number> = {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const c of detailRes.data as any[]) {
+  for (const c of cachedDetail as any[]) {
     if (c.symbol) createTimeMap[c.symbol] = Number(c.createTime || 0);
   }
 
-  const totalTickerPairs = (tickerRes.data as unknown[]).length;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const totalTickerPairs = (cachedTicker as any[]).length;
 
   // ── Stage 1: ticker-based pre-filter ────────────────────────────────────────
   const candidates: CandidateMeta[] = [];
 
-  for (const t of tickerRes.data as Array<{
+  for (const t of cachedTicker as Array<{
     symbol: string; lastPrice: string; amount24?: string; volume24?: string;
   }>) {
     const sym = t.symbol;
