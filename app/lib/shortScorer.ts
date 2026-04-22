@@ -122,9 +122,56 @@ export interface ShortCandidate {
   btcCorrelation: number;    // -1.0〜+1.0 (BTC相関係数)
   trendMultiTF: MultiTFTrend | null;  // マルチタイムフレームトレンド
   volumeSpike: VolumeSpike | null;    // 出来高異常検知 (施策3)
-  chartPattern: ChartPattern | null;  // チャートパターン (施策4)
+  chartPattern: ChartPattern | null;      // チャートパターン (施策4)
+  liquidationZone: LiquidationZone | null; // 清算カスケードゾーン (施策5)
   shortScore: number;        // server max 19 (after v5施策1+2+4)
   scoreBreakdown: ShortScoreBreakdown;
+}
+
+// ─── Liquidation Zone (施策5) ─────────────────────────────────────────────────
+
+export interface LiquidationZone {
+  priceLevel: number;    // 清算が集中する推定価格帯
+  direction: "long" | "short"; // ロング清算 (価格下落で発動) / ショート清算 (価格上昇で発動)
+  intensity: "high" | "medium" | "low"; // 清算強度
+  distancePct: number;   // 現在価格からの距離 (%)
+}
+
+// OI × VolumeProfile から清算カスケードゾーンを推定 (スコア加算なし、表示のみ)
+export function calcLiquidationZone(
+  currentPrice: number,
+  openInterest: number,
+  volumeProfile: VolumeProfile | null,
+  oiRatio: number,
+): LiquidationZone | null {
+  if (!volumeProfile || openInterest <= 0) return null;
+
+  // POC価格帯が現在価格より下にある場合: ロング玉が溜まっている → 価格下落でロング清算カスケード
+  const poc = volumeProfile.poc;
+  const pocPct = volumeProfile.pocVsPricePct; // (現在価格 - POC) / POC * 100
+
+  // 現在価格がPOCより10%以上高い → POC付近でロング清算が起きやすい
+  if (pocPct > 10) {
+    const intensity: LiquidationZone["intensity"] = oiRatio > 3 ? "high" : oiRatio > 1.5 ? "medium" : "low";
+    return {
+      priceLevel: poc,
+      direction: "long",
+      intensity,
+      distancePct: -pocPct,  // 下方向
+    };
+  }
+
+  // 現在価格がPOCより10%以上低い → POC付近でショート清算が起きやすい (反発注意)
+  if (pocPct < -10) {
+    return {
+      priceLevel: poc,
+      direction: "short",
+      intensity: oiRatio > 2 ? "medium" : "low",
+      distancePct: Math.abs(pocPct),  // 上方向
+    };
+  }
+
+  return null;
 }
 
 // ─── Volume Profile (施策8) ───────────────────────────────────────────────────

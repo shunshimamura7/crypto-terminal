@@ -527,6 +527,30 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
           );
         })()}
 
+        {/* 清算カスケードゾーン (施策5) */}
+        {c.liquidationZone && (() => {
+          const lz = c.liquidationZone!;
+          const isLong = lz.direction === "long";
+          const intCls = lz.intensity === "high" ? "bg-red-100 text-red-700 border-red-300" : lz.intensity === "medium" ? "bg-orange-50 text-orange-700 border-orange-200" : "bg-yellow-50 text-yellow-700 border-yellow-200";
+          return (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-gray-700">⚡ 清算ゾーン推定</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${intCls}`}>
+                  {lz.intensity === "high" ? "HIGH" : lz.intensity === "medium" ? "MED" : "LOW"}
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${isLong ? "bg-red-50 text-red-700 border-red-200" : "bg-purple-50 text-purple-700 border-purple-200"}`}>
+                  {isLong ? "🔻 LONG清算帯" : "🔺 SHORT清算帯"}
+                </span>
+                <span className="font-mono text-xs font-bold text-gray-800">{fmtPrice(lz.priceLevel)}</span>
+                <span className={`text-xs font-semibold ${lz.distancePct < 0 ? "text-red-500" : "text-green-600"}`}>
+                  ({lz.distancePct > 0 ? "+" : ""}{lz.distancePct.toFixed(1)}%)
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* CoinGecko (施策7) */}
         {HAS_CG && c.cgData && (() => {
           const cg = c.cgData!;

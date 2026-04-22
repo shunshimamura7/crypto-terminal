@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile, calcTradeSetup, calcVolumeSpike } from "@/app/lib/shortScorer";
+import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone } from "@/app/lib/shortScorer";
 import type { ShortCandidate, VolumeProfile, TradeSetup } from "@/app/lib/shortScorer";
 
 // ─── BTC相関計算 (施策1) ──────────────────────────────────────────────────────
@@ -209,6 +209,9 @@ async function analyzeCandidate(
     kHighs4h, kLows4h, priceChange24h,  // 施策4: パターン検知
   );
 
+  // 施策5: 清算カスケードゾーン推定
+  const liquidationZone = calcLiquidationZone(price, openInterest, volumeProfile, oiRatio);
+
   return {
     symbol,
     currentPrice: price,
@@ -230,6 +233,7 @@ async function analyzeCandidate(
     trendMultiTF,
     volumeSpike,
     chartPattern,
+    liquidationZone,
     shortScore: score,
     scoreBreakdown: breakdown,
   };
