@@ -22,11 +22,11 @@ export default function RankAlert({ change }: { change: RankChange | null }) {
     }`}>
       {isUp ? "🚀" : "⚠️"} {change.ticker}: {change.from} → {change.to}
       {change.alphaDelta !== 0 && (
-        <span className="ml-2 text-xs opacity-80">
+        <span className="ml-2 text-xs">
           Alpha {change.alphaDelta > 0 ? "+" : ""}{change.alphaDelta}
         </span>
       )}
-      <button onClick={() => setVisible(false)} className="ml-3 opacity-60 hover:opacity-100">×</button>
+      <button onClick={() => setVisible(false)} className="ml-3 hover:opacity-70">×</button>
     </div>
   );
 }

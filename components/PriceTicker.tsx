@@ -61,7 +61,7 @@ export default function PriceTicker() {
             </div>
           );
         })}
-        {updatedAt && <span className="text-gray-300 text-[10px] shrink-0 ml-auto">{updatedAt}</span>}
+        {updatedAt && <span className="text-gray-700 text-[10px] shrink-0 ml-auto">{updatedAt}</span>}
       </div>
     </div>
   );

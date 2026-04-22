@@ -1,9 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #1f2937;
-  --accent: #16a34a;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card-bg: #ffffff;
+  --border: #e2e8f0;
+  --accent: #0ea5e9;
+  --up: #16a34a;
+  --down: #dc2626;
 }
 
 @theme inline {
@@ -17,3 +21,12 @@ body {
   color: var(--foreground);
   font-family: var(--font-noto-sans-jp), "Noto Sans JP", sans-serif;
 }
+
+/* Terminal glow effects */
+.glow-cyan { box-shadow: 0 0 20px rgba(0, 212, 255, 0.15); }
+.glow-green { box-shadow: 0 0 20px rgba(0, 255, 136, 0.15); }
+.bar-glow-green { box-shadow: 0 0 6px rgba(0, 255, 136, 0.6); }
+.bar-glow-red   { box-shadow: 0 0 6px rgba(255, 68, 102, 0.6); }
+.bar-glow-blue  { box-shadow: 0 0 6px rgba(59, 130, 246, 0.6); }
+.bar-glow-orange { box-shadow: 0 0 6px rgba(249, 115, 22, 0.6); }
+.bar-glow-purple { box-shadow: 0 0 6px rgba(168, 85, 247, 0.6); }

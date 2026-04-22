@@ -24,11 +24,11 @@ const TABLE_RANK_COLORS: Record<string, string> = {
 };
 
 const PHASE_CONFIG: Record<string, { bg: string; text: string; icon: string; desc: string }> = {
-  "蓄積期":   { bg: "bg-blue-900",   text: "text-blue-100",   icon: "🔵", desc: "Accumulation Phase" },
-  "上昇初期":  { bg: "bg-green-900",  text: "text-green-100",  icon: "🟢", desc: "Early Bull Phase" },
-  "過熱":     { bg: "bg-red-900",    text: "text-red-100",    icon: "🔴", desc: "Overheated Phase" },
-  "分配期":   { bg: "bg-orange-900", text: "text-orange-100", icon: "🟠", desc: "Distribution Phase" },
-  "底値圏":   { bg: "bg-gray-800",   text: "text-gray-100",   icon: "📉", desc: "Capitulation Phase" },
+  "蓄積期":   { bg: "bg-blue-50",   text: "text-blue-800",   icon: "🔵", desc: "Accumulation Phase" },
+  "上昇初期":  { bg: "bg-green-50",  text: "text-green-800",  icon: "🟢", desc: "Early Bull Phase" },
+  "過熱":     { bg: "bg-red-50",    text: "text-red-800",    icon: "🔴", desc: "Overheated Phase" },
+  "分配期":   { bg: "bg-orange-50", text: "text-orange-800", icon: "🟠", desc: "Distribution Phase" },
+  "底値圏":   { bg: "bg-gray-100",  text: "text-gray-700",   icon: "📉", desc: "Capitulation Phase" },
 };
 
 function getPhaseConfig(phase: string) {
@@ -105,7 +105,7 @@ function renderInline(text: string): React.ReactNode {
     <>
       {parts.map((p, i) => {
         const m = p.match(/^\*\*([^*\n]+)\*\*$/);
-        return m ? <strong key={i} className="font-semibold text-gray-100">{m[1]}</strong> : (p || null);
+        return m ? <strong key={i} className="font-semibold text-gray-900">{m[1]}</strong> : (p || null);
       })}
     </>
   );
@@ -129,9 +129,9 @@ function MarkdownTable({ tableLines }: { tableLines: string[] }) {
     <div className="overflow-x-auto mb-4">
       <table className="w-full text-xs border-collapse">
         <thead>
-          <tr className="bg-gray-800">
+          <tr className="bg-[#f8fafc]">
             {headers.map((h, i) => (
-              <th key={i} className="px-2 py-2 text-left text-cyan-400 border border-gray-700 font-semibold">
+              <th key={i} className="px-2 py-2 text-left text-[#0ea5e9] border border-[#e2e8f0] font-semibold">
                 {h}
               </th>
             ))}
@@ -139,14 +139,14 @@ function MarkdownTable({ tableLines }: { tableLines: string[] }) {
         </thead>
         <tbody>
           {dataRows.map((row, ri) => (
-            <tr key={ri} className={ri % 2 === 0 ? "bg-gray-900" : "bg-gray-800/60"}>
+            <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-[#f8fafc]"}>
               {row.map((cell, ci) => {
                 const isRank = /^[SABCDEF][+-]?$/.test(cell.trim());
                 const base = cell.trim()[0];
                 return (
-                  <td key={ci} className="px-2 py-1.5 border border-gray-700 text-gray-200">
+                  <td key={ci} className="px-2 py-1.5 border border-[#e2e8f0] text-[#334155]">
                     {isRank ? (
-                      <span className={`inline-block px-1.5 py-0.5 rounded font-bold text-xs ${TABLE_RANK_COLORS[base] ?? "bg-gray-600 text-white"}`}>
+                      <span className={`inline-block px-1.5 py-0.5 rounded font-bold text-xs ${TABLE_RANK_COLORS[base] ?? "bg-gray-400 text-white"}`}>
                         {cell}
                       </span>
                     ) : (
@@ -173,7 +173,6 @@ function SectorTextRenderer({ text }: { text: string }) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // マークダウンテーブル（| で始まる行が続く）
     if (trimmed.startsWith("|")) {
       const tableLines: string[] = [];
       while (i < lines.length && lines[i].trim().startsWith("|")) {
@@ -184,35 +183,30 @@ function SectorTextRenderer({ text }: { text: string }) {
       continue;
     }
 
-    // ## 大見出し
     if (trimmed.startsWith("## ")) {
       elements.push(
-        <div key={elements.length} className="text-cyan-400 font-bold text-base border-b border-gray-700 pb-1 mb-2 mt-5 first:mt-0">
+        <div key={elements.length} className="text-[#0ea5e9] font-bold text-base border-b border-[#e2e8f0] pb-1 mb-2 mt-5 first:mt-0">
           {renderInline(trimmed.slice(3))}
         </div>
       );
-    // ### 小見出し
     } else if (trimmed.startsWith("### ")) {
       elements.push(
-        <div key={elements.length} className="text-gray-300 font-semibold text-sm mb-1 mt-3">
+        <div key={elements.length} className="text-[#334155] font-semibold text-sm mb-1 mt-3">
           {renderInline(trimmed.slice(4))}
         </div>
       );
-    // リスト
     } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       elements.push(
-        <div key={elements.length} className="flex gap-2 text-gray-300 text-sm leading-relaxed py-0.5">
-          <span className="text-gray-500 shrink-0 mt-0.5">•</span>
+        <div key={elements.length} className="flex gap-2 text-[#334155] text-sm leading-relaxed py-0.5">
+          <span className="text-[#0ea5e9] shrink-0 mt-0.5">•</span>
           <span>{renderInline(trimmed.slice(2))}</span>
         </div>
       );
-    // 空行
     } else if (trimmed === "") {
       elements.push(<div key={elements.length} className="mb-2" />);
-    // 通常テキスト
     } else {
       elements.push(
-        <div key={elements.length} className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+        <div key={elements.length} className="text-[#334155] text-sm leading-relaxed whitespace-pre-wrap">
           {renderInline(line)}
         </div>
       );
@@ -234,17 +228,17 @@ function PhaseBanner({ sector, data, fearGreed }: {
   const fgLabel = data.fear_greed_label || fearGreed?.label;
 
   return (
-    <div className={`rounded-lg p-4 mb-4 ${cfg.bg}`}>
+    <div className={`rounded-lg p-4 mb-4 border ${cfg.bg}`} style={{ borderColor: "var(--border)" }}>
       <div className={`text-lg font-bold ${cfg.text} mb-0.5`}>
         {data.sector || sector} セクター
       </div>
       <div className={`flex items-center gap-2 ${cfg.text}`}>
         <span>{cfg.icon}</span>
         <span className="font-semibold">{data.phase}</span>
-        <span className="text-sm opacity-60">({cfg.desc})</span>
+        <span className="text-sm">({cfg.desc})</span>
       </div>
       {fgVal != null && fgVal !== 0 && (
-        <div className={`text-xs mt-1.5 opacity-80 ${cfg.text}`}>
+        <div className={`text-xs mt-1.5 ${cfg.text}`}>
           Fear &amp; Greed: {fgVal}/100 {fgEmoji(fgVal)}
           {fgLabel ? ` (${fgLabel})` : ""}
         </div>
@@ -253,15 +247,15 @@ function PhaseBanner({ sector, data, fearGreed }: {
   );
 }
 
-function GemsTable({ gems }: { gems: SectorGem[] }) {
+function GemsTable({ gems, onAnalyze }: { gems: SectorGem[]; onAnalyze?: (ticker: string) => void }) {
   const MEDALS = ["🥇", "🥈", "🥉"];
   return (
     <div className="mb-4">
       <h3 className="text-sm font-bold text-cyan-400 mb-2">💎 Gems Top{gems.length}</h3>
-      <div className="overflow-x-auto rounded-lg border border-gray-700">
+      <div className="overflow-x-auto rounded-lg border border-[#e2e8f0] shadow-sm">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-gray-800 border-b border-gray-700 text-gray-400">
+            <tr className="bg-[#f8fafc] border-b border-[#e2e8f0] text-[#475569]">
               <th className="px-2 py-2 text-left font-medium w-7">#</th>
               <th className="px-2 py-2 text-left font-medium">銘柄</th>
               <th className="px-2 py-2 text-right font-medium">Alpha</th>
@@ -274,20 +268,26 @@ function GemsTable({ gems }: { gems: SectorGem[] }) {
             {gems.map((gem, i) => {
               const base = gem.grade?.charAt(0)?.toUpperCase() ?? "C";
               const cls = RANK_COLORS[base] ?? RANK_COLORS.C;
+              const accentStyle: React.CSSProperties = gem.alpha >= 7
+                ? { borderLeft: "3px solid #00d4ff" }
+                : gem.risk >= 7
+                ? { borderLeft: "3px solid #ff4466" }
+                : {};
               return (
-                <tr key={i} className="border-b border-gray-800 hover:bg-gray-800/50">
-                  <td className="px-2 py-2 text-center">
-                    {i < 3 ? <span>{MEDALS[i]}</span> : <span className="text-gray-600">{gem.rank}</span>}
+                <tr
+                  key={i}
+                  className="border-b border-[#e2e8f0] hover:bg-[#f0f9ff] cursor-pointer transition-colors"
+                  style={accentStyle}
+                  onClick={() => onAnalyze?.(gem.ticker)}
+                >
+                  <td className="px-2 py-2 text-center font-bold text-gray-900">
+                    {i < 3 ? <span>{MEDALS[i]}</span> : <span>{gem.rank}</span>}
                   </td>
-                  <td className="px-2 py-2 font-mono font-semibold text-gray-200 whitespace-nowrap">{gem.ticker}</td>
-                  <td className="px-2 py-2 text-right font-bold text-green-400">{gem.alpha}</td>
-                  <td className="px-2 py-2 text-right font-bold text-red-400">{gem.risk}</td>
-                  <td className="px-2 py-2 text-center">
-                    <span className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1 rounded text-[11px] font-black ${cls}`}>
-                      {gem.grade}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2 text-gray-400 text-[11px] leading-snug">{gem.reason}</td>
+                  <td className="px-2 py-2 font-mono font-bold text-gray-900 whitespace-nowrap">{gem.ticker}</td>
+                  <td className="px-2 py-2 text-right font-bold text-green-700">{gem.alpha}</td>
+                  <td className="px-2 py-2 text-right font-bold text-red-600">{gem.risk}</td>
+                  <td className="px-2 py-2 text-center font-bold text-gray-900">{gem.grade}</td>
+                  <td className="px-2 py-2 text-gray-800 text-[11px] leading-snug">{gem.reason}</td>
                 </tr>
               );
             })}
@@ -301,20 +301,20 @@ function GemsTable({ gems }: { gems: SectorGem[] }) {
 function WarningsTable({ warnings }: { warnings: SectorWarning[] }) {
   return (
     <div className="mb-4">
-      <h3 className="text-sm font-bold text-red-400 mb-2">⚠️ Warning Top{warnings.length}</h3>
-      <div className="overflow-x-auto rounded-lg border border-gray-700">
+      <h3 className="text-sm font-bold text-red-600 mb-2">⚠️ Warning Top{warnings.length}</h3>
+      <div className="overflow-x-auto rounded-lg border border-[#e2e8f0] shadow-sm">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-gray-800 border-b border-gray-700 text-gray-400">
+            <tr className="bg-[#f8fafc] border-b border-[#e2e8f0] text-[#475569]">
               <th className="px-2 py-2 text-left font-medium whitespace-nowrap">銘柄</th>
               <th className="px-2 py-2 text-left font-medium">リスク理由</th>
             </tr>
           </thead>
           <tbody>
             {warnings.map((w, i) => (
-              <tr key={i} className="border-b border-gray-800 hover:bg-gray-800/50">
-                <td className="px-2 py-2 font-mono font-semibold text-orange-300 whitespace-nowrap">⚠️ {w.ticker}</td>
-                <td className="px-2 py-2 text-gray-400 text-[11px] leading-snug">{w.risk_reason}</td>
+              <tr key={i} className="border-b border-[#e2e8f0] hover:bg-orange-50">
+                <td className="px-2 py-2 font-mono font-semibold text-orange-600 whitespace-nowrap">⚠️ {w.ticker}</td>
+                <td className="px-2 py-2 text-[#475569] text-[11px] leading-snug">{w.risk_reason}</td>
               </tr>
             ))}
           </tbody>
@@ -326,35 +326,36 @@ function WarningsTable({ warnings }: { warnings: SectorWarning[] }) {
 
 function ActionPlanCard({ plan }: { plan: string }) {
   return (
-    <div className="rounded-lg border border-yellow-700/50 bg-yellow-900/20 p-3 mb-4">
-      <h3 className="text-sm font-bold text-yellow-400 mb-1.5">💡 アクションプラン</h3>
-      <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{plan}</p>
+    <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-3 mb-4">
+      <h3 className="text-sm font-bold text-yellow-700 mb-1.5">💡 アクションプラン</h3>
+      <p className="text-xs text-gray-800 leading-relaxed whitespace-pre-wrap">{plan}</p>
     </div>
   );
 }
 
 // ─── JSON成功時: 構造化表示 + 全文トグル
-function StructuredResult({ sector, data, fearGreed, rawText }: {
+function StructuredResult({ sector, data, fearGreed, rawText, onAnalyze }: {
   sector: string;
   data: SectorData;
   fearGreed: { value: number; label: string } | null;
   rawText: string;
+  onAnalyze?: (ticker: string) => void;
 }) {
   const [showRaw, setShowRaw] = useState(false);
   return (
     <div>
       <PhaseBanner sector={sector} data={data} fearGreed={fearGreed} />
-      {data.gems   && data.gems.length   > 0 && <GemsTable gems={data.gems} />}
+      {data.gems   && data.gems.length   > 0 && <GemsTable gems={data.gems} onAnalyze={onAnalyze} />}
       {data.warnings && data.warnings.length > 0 && <WarningsTable warnings={data.warnings} />}
       {data.action_plan && <ActionPlanCard plan={data.action_plan} />}
       <button
         onClick={() => setShowRaw(v => !v)}
-        className="text-xs text-gray-500 hover:text-gray-400 border border-gray-700 rounded px-2 py-1 transition-colors mb-2"
+        className="text-xs text-[#64748b] hover:text-[#0f172a] border border-[#e2e8f0] rounded px-2 py-1 transition-colors mb-2"
       >
         {showRaw ? "▲ 全文を隠す" : "▼ AIレスポンス全文を見る"}
       </button>
       {showRaw && (
-        <div className="p-3 bg-gray-900 rounded max-h-[500px] overflow-y-auto">
+        <div className="p-3 bg-[#f8fafc] border border-[#e2e8f0] rounded max-h-[500px] overflow-y-auto">
           <SectorTextRenderer text={rawText} />
         </div>
       )}
@@ -365,14 +366,14 @@ function StructuredResult({ sector, data, fearGreed, rawText }: {
 // ─── JSON失敗時: リッチテキスト表示
 function FallbackResult({ text }: { text: string }) {
   return (
-    <div className="p-3 bg-gray-900 rounded max-h-[700px] overflow-y-auto">
+    <div className="p-3 bg-[#f8fafc] border border-[#e2e8f0] rounded max-h-[700px] overflow-y-auto">
       <SectorTextRenderer text={text} />
     </div>
   );
 }
 
 // ─── メインコンポーネント
-export default function SectorAnalyzer() {
+export default function SectorAnalyzer({ onAnalyze }: { onAnalyze?: (ticker: string) => void }) {
   const [sector, setSector] = useState("AI");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
@@ -407,27 +408,27 @@ export default function SectorAnalyzer() {
     : null;
 
   return (
-    <div className="p-4 border border-gray-700 rounded-lg">
-      <h2 className="text-lg font-bold mb-3 text-cyan-400">🔍 セクター分析モード</h2>
+    <div className="p-4 border border-[#e2e8f0] rounded-lg bg-white shadow-sm">
+      <h2 className="text-lg font-bold mb-3 text-[#0ea5e9]">🔍 セクター分析モード</h2>
       <div className="flex gap-2 mb-4 flex-wrap">
         {SECTORS.map(s => (
           <button key={s} onClick={() => setSector(s)}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-              sector === s ? "bg-cyan-500 text-black" : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+            className={`px-3 py-1 rounded text-sm font-medium transition-colors border ${
+              sector === s ? "bg-[#0ea5e9] text-white border-[#0ea5e9]" : "bg-[#f8fafc] text-[#475569] border-[#e2e8f0] hover:bg-sky-50 hover:text-[#0ea5e9]"
             }`}>
             {s}
           </button>
         ))}
       </div>
       <button onClick={analyze} disabled={loading}
-        className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 text-white rounded font-bold transition-colors">
+        className="w-full py-2 bg-[#0ea5e9] hover:bg-[#0284c7] disabled:bg-[#e2e8f0] disabled:text-[#94a3b8] text-white rounded font-bold transition-colors">
         {loading ? "🔄 分析中（30〜60秒）..." : `${sector}セクターを分析`}
       </button>
 
       {result && (
         <div className="mt-4">
           {sectorData ? (
-            <StructuredResult sector={sector} data={sectorData} fearGreed={fearGreed} rawText={result} />
+            <StructuredResult sector={sector} data={sectorData} fearGreed={fearGreed} rawText={result} onAnalyze={onAnalyze} />
           ) : (
             <FallbackResult text={result} />
           )}
@@ -438,7 +439,7 @@ export default function SectorAnalyzer() {
         {Object.entries(RANK_COLORS).map(([rank, cls]) => (
           <span key={rank} className={`px-2 py-0.5 rounded text-xs font-bold ${cls}`}>{rank}</span>
         ))}
-        <span className="text-xs text-gray-500 ml-1">← ランク凡例</span>
+        <span className="text-xs text-gray-700 ml-1">← ランク凡例</span>
       </div>
     </div>
   );

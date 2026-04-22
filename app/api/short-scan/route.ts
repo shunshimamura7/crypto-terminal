@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile, calcTradeSetup } from "@/app/lib/shortScorer";
 import type { ShortCandidate, VolumeProfile, TradeSetup } from "@/app/lib/shortScorer";
 
+// ─── BTC相関計算 (施策1) ──────────────────────────────────────────────────────
+function priceToReturns(closes: number[]): number[] {
+  return closes.slice(1).map((c, i) => closes[i] > 0 ? (c - closes[i]) / closes[i] : 0);
+}
+
+function pearsonCorrelation(x: number[], y: number[]): number {
+  const n = Math.min(x.length, y.length);
+  if (n < 5) return 0;
+  const xs = x.slice(0, n), ys = y.slice(0, n);
+  const sumX  = xs.reduce((a, b) => a + b, 0);
+  const sumY  = ys.reduce((a, b) => a + b, 0);
+  const sumXY = xs.reduce((acc, xi, i) => acc + xi * ys[i], 0);
+  const sumX2 = xs.reduce((acc, xi) => acc + xi * xi, 0);
+  const sumY2 = ys.reduce((acc, yi) => acc + yi * yi, 0);
+  const num = n * sumXY - sumX * sumY;
+  const den = Math.sqrt((n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2));
+  return den === 0 ? 0 : Math.max(-1, Math.min(1, num / den));
+}
+
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
@@ -59,6 +78,7 @@ async function analyzeCandidate(
   day7AgoSec: number,
   nowSec: number,
   isNew30: boolean,
+  btcReturns: number[],  // 施策1: BTC収益率系列
 ): Promise<ShortCandidate | null> {
   const { symbol, listedDaysAgo } = meta;
 
@@ -159,8 +179,16 @@ async function analyzeCandidate(
     : passesFilter(athDropPct, volumeChangeRatio, vol24h);
   if (!passes) return null;
 
+  // 施策1: BTC相関係数
+  let btcCorrelation = 0;
+  if (closes4h.length >= 10 && btcReturns.length >= 5) {
+    const myReturns = priceToReturns(closes4h);
+    const len = Math.min(myReturns.length, btcReturns.length);
+    btcCorrelation = pearsonCorrelation(myReturns.slice(-len), btcReturns.slice(-len));
+  }
+
   const { score, breakdown, oiRatio, trendDirection } = calcShortScore(
-    athDropPct, volumeChangeRatio, fundingRate, listedDaysAgo, openInterest, vol24h, closes4h, priceChange7d,
+    athDropPct, volumeChangeRatio, fundingRate, listedDaysAgo, openInterest, vol24h, closes4h, priceChange7d, btcCorrelation,
   );
 
   return {
@@ -180,6 +208,7 @@ async function analyzeCandidate(
     priceChange7d,
     volumeProfile,
     tradeSetup,
+    btcCorrelation,
     shortScore: score,
     scoreBreakdown: breakdown,
   };
@@ -196,6 +225,14 @@ export async function GET(req: NextRequest) {
   const nowSec      = Math.floor(now / 1000);
   const day14AgoSec = nowSec - 14 * 86_400;
   const day7AgoSec  = nowSec - 7 * 86_400;
+
+  // 施策1: BTC 4h kline（1回取得して全銘柄で使い回す）
+  const btcKlineRes = await mexcGet(`/api/v1/contract/kline/BTC_USDT?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 8000);
+  const btcCloses: number[] = btcKlineRes?.data?.close
+    ? (btcKlineRes.data.close as string[]).map(Number).filter((n: number) => n > 0)
+    : [];
+  const btcReturns = priceToReturns(btcCloses);
+  console.log(`[short-scan] BTC 4h closes: ${btcCloses.length} bars`);
 
   // Fetch contract list + all tickers in parallel
   const [detailRes, tickerRes] = await Promise.all([
@@ -273,7 +310,7 @@ export async function GET(req: NextRequest) {
     const batch = candidates.slice(i, i + BATCH);
     const settled = await Promise.allSettled(
       batch.map(meta =>
-        analyzeCandidate(meta, tickerMap[meta.symbol], day14AgoSec, day7AgoSec, nowSec, isNew30)
+        analyzeCandidate(meta, tickerMap[meta.symbol], day14AgoSec, day7AgoSec, nowSec, isNew30, btcReturns)
       )
     );
 

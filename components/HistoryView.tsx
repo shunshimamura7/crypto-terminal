@@ -59,20 +59,20 @@ export default function HistoryView() {
 
       {rows.length === 0 ? (
         <div className="text-center py-16">
-          <div className="text-4xl text-gray-200 mb-2">📈</div>
-          <p className="text-sm text-gray-400">まだ分析履歴がありません<br />個別分析を実行すると自動保存されます</p>
+          <div className="text-4xl text-gray-400 mb-2">📈</div>
+          <p className="text-sm text-gray-700">まだ分析履歴がありません<br />個別分析を実行すると自動保存されます</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b">
-                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">銘柄</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">ランク</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500">Alpha</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500">Risk</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">前回比</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">最終分析日</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">銘柄</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">ランク</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700">Alpha</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700">Risk</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">前回比</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">最終分析日</th>
               </tr>
             </thead>
             <tbody>
@@ -99,16 +99,16 @@ export default function HistoryView() {
                     <td className="px-3 py-2 text-xs">
                       {d === "up"   && <span className="text-green-600 font-bold">▲{row.prev?.rank}→{row.latest.rank}</span>}
                       {d === "down" && <span className="text-red-500 font-bold">▼{row.prev?.rank}→{row.latest.rank}</span>}
-                      {d === "same" && <span className="text-gray-400">変化なし</span>}
-                      {!d          && <span className="text-gray-300">初回</span>}
+                      {d === "same" && <span className="text-gray-700">変化なし</span>}
+                      {!d          && <span className="text-gray-700">初回</span>}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-400">{row.latest.date}</td>
+                    <td className="px-3 py-2 text-xs text-gray-700">{row.latest.date}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          <div className="px-3 py-1.5 text-xs text-gray-400 bg-gray-50 border-t border-gray-100">
+          <div className="px-3 py-1.5 text-xs text-gray-700 bg-gray-50 border-t border-gray-100">
             行をクリックするとスコア推移グラフが表示されます
           </div>
         </div>

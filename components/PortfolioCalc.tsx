@@ -25,7 +25,7 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
 
   const active = results.filter(r => (RANK_ALLOC[r.rank] ?? 0) > 0);
   if (active.length === 0) return (
-    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-400 text-center">
+    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 text-center">
       💼 ランクS/A/B/C の銘柄がないため配分計算できません
     </div>
   );
@@ -81,7 +81,7 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
         <div className="flex items-center gap-2 mb-4">
           <label className="text-sm text-gray-600 shrink-0">総投資額 (USD):</label>
           <div className="relative">
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-700 text-sm">$</span>
             <input
               type="number" min="0"
               value={totalUsd}
@@ -95,10 +95,10 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b">
-                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">ランク</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">銘柄</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500">配分%</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500">金額</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">ランク</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">銘柄</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700">配分%</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700">金額</th>
               </tr>
             </thead>
             <tbody>
@@ -124,16 +124,16 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
                 </td>
               </tr>
               <tr className="bg-gray-50">
-                <td className="px-3 py-2 text-xs text-gray-400" colSpan={2}>未配分（現金・安全資産）</td>
-                <td className="px-3 py-2 text-right text-xs text-gray-400">{(100 - allocPct).toFixed(1)}%</td>
-                <td className="px-3 py-2 text-right text-xs text-gray-400">
+                <td className="px-3 py-2 text-xs text-gray-700" colSpan={2}>未配分（現金・安全資産）</td>
+                <td className="px-3 py-2 text-right text-xs text-gray-700">{(100 - allocPct).toFixed(1)}%</td>
+                <td className="px-3 py-2 text-right text-xs text-gray-700">
                   ${(total - allocAmt).toLocaleString("en-US", { maximumFractionDigits: 0 })}
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p className="text-[10px] text-gray-400 mt-2">
+        <p className="text-[10px] text-gray-700 mt-2">
           ※S複数は15%を均等分割 / 合計100%超過時は比率を正規化 / D・E・Fは0%配分
         </p>
       </div>

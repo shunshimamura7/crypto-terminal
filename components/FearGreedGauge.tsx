@@ -57,7 +57,7 @@ export default function FearGreedGauge() {
     >
       <span>{getEmoji(val)}</span>
       <span className="font-bold">{val}</span>
-      <span className="hidden sm:inline opacity-70">{data[0].value_classification}</span>
+      <span className="hidden sm:inline">{data[0].value_classification}</span>
       <span className="hidden sm:inline">
         <Sparkline values={sparkValues} />
       </span>

@@ -5,7 +5,7 @@ import type { NewsItem } from "@/app/api/news/route";
 const SENTIMENT_BADGE: Record<string, string> = {
   positive: "bg-green-100 text-green-700",
   negative: "bg-red-100 text-red-600",
-  neutral:  "bg-gray-100 text-gray-500",
+  neutral:  "bg-gray-100 text-gray-700",
 };
 const SENTIMENT_LABEL: Record<string, string> = {
   positive: "↑", negative: "↓", neutral: "→",
@@ -79,15 +79,15 @@ export default function NewsPanel({ highlightTicker = "" }: { highlightTicker?: 
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-400">{item.source}</span>
-                    <span className="text-[10px] text-gray-300">{timeAgo(item.publishedAt)}</span>
+                    <span className="text-[10px] text-gray-700">{item.source}</span>
+                    <span className="text-[10px] text-gray-700">{timeAgo(item.publishedAt)}</span>
                   </div>
                 </a>
               </li>
             );
           })}
           {items.length === 0 && !loading && (
-            <li className="px-4 py-6 text-center text-xs text-gray-400">ニュースを取得できませんでした</li>
+            <li className="px-4 py-6 text-center text-xs text-gray-700">ニュースを取得できませんでした</li>
           )}
         </ul>
       )}

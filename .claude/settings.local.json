@@ -25,7 +25,9 @@
       "Bash(curl *)",
       "Bash(openclaw *)",
       "Bash(npx tsc *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(python -m json.tool)"
     ]
   }
 }

@@ -98,6 +98,9 @@ const T = {
     atl: "ATH(14日)",
     avgVol: "7日平均出来高",
     exchOnly: "MEXCのみ",
+    colBtcCorr: "BTC相関",
+    btcCorrHigh: "BTC連動",
+    btcCorrLow: "BTC非連動",
     btTitle: "📊 バックテスト実績",
     btPeriod: "期間",
     btSummary: "サマリー",
@@ -204,6 +207,9 @@ const T = {
     atl: "ATH (14d)",
     avgVol: "Avg Vol 7d",
     exchOnly: "MEXC Only",
+    colBtcCorr: "BTC Corr",
+    btcCorrHigh: "BTC Correlated",
+    btcCorrLow: "BTC Independent",
     btTitle: "📊 Backtest Results",
     btPeriod: "Period",
     btSummary: "Summary",
@@ -263,7 +269,7 @@ interface ScanResponse {
 
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 22 : 19;
+const DISPLAY_MAX = HAS_CG ? 23 : 20; // v5施策1: BTC非連動+1
 
 type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest";
 
@@ -299,6 +305,7 @@ const SCORE_BARS: Array<{ key: keyof ShortScoreBreakdown; label: string; max: nu
   { key: "oiScore",        label: "OI過剰",     max: 2, color: "#06b6d4" },
   { key: "trendScore",     label: "EMAトレンド", max: 2, color: "#10b981" },
   { key: "pumpScore",      label: "7d急騰",     max: 2, color: "#f43f5e" },
+  { key: "btcCorrScore",   label: "BTC非連動",  max: 1, color: "#8b5cf6" },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -428,6 +435,7 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
           <div>OI/Vol: <span className={`font-mono font-semibold ${c.oiRatio > 3 ? "text-red-600" : c.oiRatio > 1.5 ? "text-orange-600" : "text-gray-800"}`}>{c.oiRatio.toFixed(2)}×</span></div>
           <div>24h: <span className={`font-mono font-semibold ${c.priceChange24h >= 50 ? "text-red-600" : c.priceChange24h <= -30 ? "text-green-600" : "text-gray-700"}`}>{fmtPct(c.priceChange24h)}</span></div>
           <div>7d: <span className={`font-mono font-semibold ${c.priceChange7d >= 100 ? "text-red-700" : c.priceChange7d >= 50 ? "text-red-500" : c.priceChange7d <= -30 ? "text-green-600" : "text-gray-700"}`}>{fmtPct(c.priceChange7d)}</span></div>
+          <div title="BTCとの価格連動度">{t.colBtcCorr}: <span className={`font-mono font-semibold ${c.btcCorrelation >= 0.7 ? "text-red-600" : c.btcCorrelation >= 0.3 ? "text-orange-500" : "text-green-600"}`}>{c.btcCorrelation.toFixed(3)}{c.btcCorrelation < 0.3 ? " ✅" : c.btcCorrelation >= 0.7 ? " ⚠️" : ""}</span></div>
         </div>
 
         {/* Trade Setup (施策10) */}
@@ -1192,6 +1200,7 @@ export default function ShortScanner() {
                   {HAS_CG && <th className="px-2 md:px-3 py-2.5 text-right hidden xl:table-cell">{t.colSpot}</th>}
                   {HAS_CG && <th className="px-2 md:px-3 py-2.5 text-right hidden xl:table-cell">{t.colFsRatio}</th>}
                   <th className="px-2 md:px-3 py-2.5 text-right hidden md:table-cell">{t.colDays}</th>
+                  <th className="px-2 md:px-3 py-2.5 text-right hidden lg:table-cell" title="BTCとの価格連動度。低いほどショートに有利">{t.colBtcCorr}</th>
                   <th className="px-2 md:px-3 py-2.5 text-center hidden sm:table-cell">{t.colExch}</th>
                 </tr>
               </thead>
@@ -1292,6 +1301,17 @@ export default function ShortScanner() {
                         {/* 上場 */}
                         <td className="px-2 md:px-3 py-2 text-right text-gray-500 text-xs hidden md:table-cell">
                           {c.listedDaysAgo}d
+                        </td>
+
+                        {/* BTC相関 */}
+                        <td className="px-2 md:px-3 py-2 text-right text-xs font-mono hidden lg:table-cell"
+                          title="BTCとの価格連動度。低いほどショートに有利">
+                          {(() => {
+                            const corr = c.btcCorrelation;
+                            const cls = corr >= 0.7 ? "text-red-600 font-bold" : corr >= 0.3 ? "text-orange-500" : "text-green-600 font-bold";
+                            const icon = corr >= 0.7 ? "⚠️" : corr < 0.3 ? "✅" : "";
+                            return <span className={cls}>{icon}{corr.toFixed(2)}</span>;
+                          })()}
                         </td>
 
                         {/* 取引所 */}

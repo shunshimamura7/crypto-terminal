@@ -7,9 +7,10 @@ export interface ShortScoreBreakdown {
   volumeDryScore: number;  // 0-3
   frScore: number;         // 0-2
   freshnessScore: number;  // 0-2
-  oiScore: number;         // 0-2 (施策1)
-  trendScore: number;      // 0-2 (EMA9/EMA21)
-  pumpScore: number;       // 0-2 (施策6: 7d急騰度)
+  oiScore: number;         // 0-2
+  trendScore: number;      // 0-2 (EMA9/EMA21 4h)
+  pumpScore: number;       // 0-2 (7d急騰度)
+  btcCorrScore: number;    // 0-1 (BTC非連動ボーナス)
 }
 
 export interface ShortCandidate {
@@ -27,9 +28,10 @@ export interface ShortCandidate {
   listedDaysAgo: number;
   priceChange24h: number;   // % (施策6)
   priceChange7d: number;    // % (施策6)
-  volumeProfile: VolumeProfile | null;  // 施策8
-  tradeSetup: TradeSetup | null;        // 施策10
-  shortScore: number;       // server max 16
+  volumeProfile: VolumeProfile | null;
+  tradeSetup: TradeSetup | null;
+  btcCorrelation: number;    // -1.0〜+1.0 (BTC相関係数)
+  shortScore: number;        // server max 17 (after v5施策1)
   scoreBreakdown: ShortScoreBreakdown;
 }
 
@@ -155,6 +157,11 @@ export function calcTradeSetup(
   return { sl, tp1, tp2, tp3, rrRatio, rrWarning: rrRatio < 1.5, resistanceLevel };
 }
 
+// btcCorrScore (0-1): BTC非連動ボーナス
+export function calcBtcCorrScore(corr: number): number {
+  return corr < 0.3 ? 1 : 0;
+}
+
 // dropScore (0-3)
 export function calcDropScore(athDropPct: number): number {
   const d = Math.abs(athDropPct);
@@ -231,7 +238,7 @@ export function calcExclusivityScore(listedOnBinance: boolean, listedOnBybit: bo
   return 0;
 }
 
-// Server-side score max: 3+3+2+2+2+2+2 = 16
+// Server-side score max: 3+3+2+2+2+2+2+1 = 17 (v5施策1 BTC相関追加)
 export function calcShortScore(
   athDropPct: number,
   volumeChangeRatio: number,
@@ -241,6 +248,7 @@ export function calcShortScore(
   volume24h: number,
   closes4h: number[],
   priceChange7d: number,
+  btcCorrelation: number,
 ): {
   score: number;
   breakdown: ShortScoreBreakdown;
@@ -255,10 +263,11 @@ export function calcShortScore(
   const oiScore        = calcOIScore(oiRatio);
   const { score: trendScore, direction: trendDirection } = calcTrendScore(closes4h);
   const pumpScore      = calcPumpScore(priceChange7d);
+  const btcCorrScore   = calcBtcCorrScore(btcCorrelation);
 
   return {
-    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + trendScore + pumpScore,
-    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, trendScore, pumpScore },
+    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + trendScore + pumpScore + btcCorrScore,
+    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, trendScore, pumpScore, btcCorrScore },
     oiRatio,
     trendDirection,
   };

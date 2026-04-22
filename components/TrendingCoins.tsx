@@ -35,17 +35,17 @@ export default function TrendingCoins({ onAnalyze }: { onAnalyze: (q: string) =>
         <span>🔥</span>
         <h3 className="font-bold text-orange-800 text-sm">今日のトレンド</h3>
         {loading && <span className="ml-1 text-orange-400 text-xs">更新中...</span>}
-        <span className="ml-auto text-[10px] text-gray-400">CoinGecko</span>
+        <span className="ml-auto text-[10px] text-gray-700">CoinGecko</span>
       </div>
       <div className="divide-y divide-gray-100">
         {coins.map((coin, i) => (
           <div key={coin.id} className="px-4 py-2 flex items-center gap-3 hover:bg-orange-50 transition-colors">
-            <span className="text-xs text-gray-400 w-4 font-mono shrink-0">{i + 1}</span>
+            <span className="text-xs text-gray-700 w-4 font-mono shrink-0">{i + 1}</span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={coin.thumb} alt={coin.symbol} width={20} height={20} className="rounded-full shrink-0" />
             <div className="flex-1 min-w-0">
               <span className="text-xs font-semibold text-gray-800 truncate block">{coin.name}</span>
-              <span className="text-[10px] text-gray-400">#{coin.market_cap_rank ?? "?"}</span>
+              <span className="text-[10px] text-gray-700">#{coin.market_cap_rank ?? "?"}</span>
             </div>
             <button
               onClick={() => onAnalyze(coin.symbol)}

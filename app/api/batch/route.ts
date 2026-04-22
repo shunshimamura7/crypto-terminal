@@ -1,8 +1,18 @@
 import { NextRequest } from "next/server";
 import Anthropic, { APIError } from "@anthropic-ai/sdk";
+import { researchCoin, getCachedCommunity } from "@/app/lib/coinResearch";
+import { fetchCoinglassData, formatCoinglass } from "@/app/lib/coinglass";
+import { fetchEtfFlows, formatEtfFlows } from "@/app/lib/sosovalue";
+import { fetchUnlockData, formatUnlock, unlockRiskScore } from "@/app/lib/tokenomist";
+import { fetchArkhamData, formatArkham } from "@/app/lib/arkham";
+import { calculateXHeatScore } from "@/app/lib/socialScore";
+import type { CoinglassData } from "@/app/lib/coinglass";
+import type { UnlockData } from "@/app/lib/tokenomist";
+import type { ArkhamData } from "@/app/lib/arkham";
+import type { EtfFlowData } from "@/app/lib/sosovalue";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 type InputKind = "ticker" | "evm" | "solana" | "ton" | "sui" | "tron";
 
@@ -48,106 +58,27 @@ async function fetchWithTimeout(url: string, timeout = 4000): Promise<Response |
   }
 }
 
-async function fetchGoPlusSecurity(address: string, kind: InputKind, evmChainId = "1"): Promise<string> {
-  let url: string;
-  if (kind === "evm") {
-    url = `https://api.gopluslabs.io/api/v1/token_security/${evmChainId}?contract_addresses=${address}`;
-  } else if (kind === "solana") {
-    url = `https://api.gopluslabs.io/api/v1/solana/token_security?contract_addresses=${address}`;
-  } else {
-    return "GoPlus: このチェーンは非対応";
-  }
-  const res = await fetchWithTimeout(url, 5000);
-  if (!res || !res.ok) return "GoPlus: データ取得失敗";
+async function getChainForAddress(address: string): Promise<{ chainId: string; chainName: string }> {
+  const res = await fetchWithTimeout(`https://api.dexscreener.com/latest/dex/tokens/${address}`, 5000);
+  if (!res?.ok) return { chainId: "1", chainName: "Ethereum" };
   try {
-    const json = await res.json();
-    const data = json?.result?.[address.toLowerCase()] || json?.result?.[address];
-    if (!data) return "GoPlus: データなし";
-    const flags: string[] = [];
-    if (data.is_honeypot === "1") flags.push("ハニーポット");
-    if (data.is_mintable === "1") flags.push("Mint権限");
-    if (data.can_take_back_ownership === "1") flags.push("Owner奪還可");
-    if (parseFloat(data.sell_tax || "0") > 10) flags.push(`売りTax:${data.sell_tax}%`);
-    if (data.is_open_source === "0") flags.push("非公開");
-    const lpLocked = data.lp_holders?.some((h: { is_locked?: number }) => h.is_locked === 1);
-    return [
-      flags.length > 0 ? `⚠️ ${flags.join(",")}` : "✅ 主要リスクなし",
-      `LP:${lpLocked ? "ロック済" : "未ロック"}`,
-    ].join(" / ");
-  } catch {
-    return "GoPlus: パース失敗";
-  }
-}
-
-const COIN_ID_MAP: Record<string, string> = {
-  btc: "bitcoin", eth: "ethereum", sol: "solana", xrp: "ripple",
-  bnb: "binancecoin", doge: "dogecoin", avax: "avalanche-2",
-  link: "chainlink", ada: "cardano", dot: "polkadot", matic: "matic-network",
-  uni: "uniswap", atom: "cosmos", near: "near", arb: "arbitrum",
-  op: "optimism", sui: "sui", apt: "aptos", inj: "injective-protocol",
-  pepe: "pepe", shib: "shiba-inu", ltc: "litecoin", bonk: "bonk",
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function formatCoinData(data: any, label: string): string {
-  const md = data?.market_data;
-  if (!md) return `${label}: 市場データなし`;
-  const price = md.current_price?.usd ?? 0;
-  const mc    = md.market_cap?.usd ?? 0;
-  const vol   = md.total_volume?.usd ?? 0;
-  const ch24  = md.price_change_percentage_24h ?? 0;
-  const ch7d  = md.price_change_percentage_7d  ?? 0;
-  const ath   = md.ath?.usd ?? 0;
-  const fdv   = md.fully_diluted_valuation?.usd ?? 0;
-  const athDrop = ath > 0 ? ((ath - price) / ath * 100).toFixed(0) : "N/A";
-  const mcFdv   = fdv > 0 ? (mc / fdv).toFixed(2) : "N/A";
-  const fmtUsd  = (n: number) =>
-    n >= 1e9 ? `$${(n/1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n/1e6).toFixed(1)}M` : `$${n.toFixed(0)}`;
-  return `${data.name}(${(data.symbol || "").toUpperCase()}): $${price}, MC:${fmtUsd(mc)}, Vol:${fmtUsd(vol)}, 24h:${ch24.toFixed(1)}%, 7d:${ch7d.toFixed(1)}%, ATH比:-${athDrop}%, MC/FDV:${mcFdv}`;
-}
-
-async function fetchCoinData(ticker: string): Promise<string> {
-  const id  = COIN_ID_MAP[ticker.toLowerCase()] ?? ticker.toLowerCase();
-  const res = await fetchWithTimeout(
-    `https://api.coingecko.com/api/v3/coins/${id}?localization=false&tickers=false&market_data=true&sparkline=false`
-  );
-  if (res?.ok) return formatCoinData(await res.json(), ticker);
-  // fallback: search
-  const sr = await fetchWithTimeout(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(ticker)}`);
-  if (!sr?.ok) return `${ticker}: データなし`;
-  const sd  = await sr.json();
-  const foundId: string | undefined = sd.coins?.[0]?.id;
-  if (!foundId) return `${ticker}: データなし`;
-  const res2 = await fetchWithTimeout(
-    `https://api.coingecko.com/api/v3/coins/${foundId}?localization=false&tickers=false&market_data=true&sparkline=false`
-  );
-  if (!res2?.ok) return `${ticker}: データなし`;
-  return formatCoinData(await res2.json(), ticker);
-}
-
-const DEXSCREENER_CHAIN_MAP: Record<string, string> = {
-  ethereum: "1", bsc: "56", polygon: "137",
-  arbitrum: "42161", optimism: "10", avalanche: "43114",
-  base: "8453", solana: "solana", ton: "ton",
-  sui: "sui", tron: "tron",
-};
-
-async function fetchDexDataWithChain(address: string): Promise<{ summary: string; chainId: string }> {
-  const res = await fetchWithTimeout(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
-  if (!res?.ok) return { summary: "DEX: データなし", chainId: "1" };
-  try {
-    const data = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = await res.json();
     const pair = (data.pairs ?? [])[0];
-    if (!pair) return { summary: "DEX: ペアなし", chainId: "1" };
-    const fmtUsd = (n: number) =>
-      n >= 1e6 ? `$${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(0)}K` : `$${n.toFixed(0)}`;
-    const chainId = DEXSCREENER_CHAIN_MAP[pair.chainId] ?? "1";
+    if (!pair) return { chainId: "1", chainName: "Ethereum" };
+    const chainIdRaw = pair.chainId as string;
+    const chainIdNum =
+      chainIdRaw === "solana" ? "solana" :
+      chainIdRaw === "ton"    ? "ton"    :
+      chainIdRaw === "sui"    ? "sui"    :
+      chainIdRaw === "tron"   ? "tron"   :
+      ({ ethereum: "1", bsc: "56", polygon: "137", arbitrum: "42161", optimism: "10", avalanche: "43114", base: "8453" }[chainIdRaw] ?? "1");
     return {
-      summary: `DEX: $${pair.priceUsd ?? "N/A"}, Liq:${fmtUsd(pair.liquidity?.usd ?? 0)}, Vol24h:${fmtUsd(pair.volume?.h24 ?? 0)}, Chain:${pair.chainId}`,
-      chainId,
+      chainId:   chainIdNum,
+      chainName: CHAIN_ID_NAME[chainIdNum] ?? chainIdRaw,
     };
   } catch {
-    return { summary: "DEX: パース失敗", chainId: "1" };
+    return { chainId: "1", chainName: "Ethereum" };
   }
 }
 
@@ -158,9 +89,77 @@ export interface BatchResultItem {
   rank: string;
   alpha: number;
   risk: number;
-  smart_money: number;
+  smart_money_score_100: number;
   decision: string;
   one_line_reason: string;
+  // New fields
+  fundingRate: number | null;
+  openInterest: number | null;
+  longRatio: number | null;
+  xheatScore: number | null;
+  etfBtcDirection: "in" | "out" | null;
+  etfBtcFlow: number | null;
+  unlockDays: number | null;
+  unlockPercent: number | null;
+  arkhamEntity: string | null;
+  isInstitutional: boolean;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function clamp(min: number, max: number, v: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+function adjustScores(
+  baseAlpha: number,
+  baseRisk: number,
+  glass: CoinglassData,
+  unlock: UnlockData,
+  etf: EtfFlowData,
+  xheat: number,
+  inputStr: string,
+): { alpha: number; risk: number } {
+  let alphaDelta = 0;
+  let riskDelta = 0;
+
+  // ETF flow adjustment (Alpha +/-5)
+  const isBtcOrEth = /^(btc|bitcoin|eth|ethereum)$/i.test(inputStr);
+  if (isBtcOrEth && etf.btcDirection) {
+    alphaDelta += etf.btcDirection === "in" ? 5 : -5;
+  }
+
+  // OI trend adjustment (Alpha +/-5)
+  if (glass.openInterestChange24h !== null) {
+    if (glass.openInterestChange24h > 5) alphaDelta += 5;
+    else if (glass.openInterestChange24h < -5) alphaDelta -= 5;
+  }
+
+  // XHeat adjustment (Alpha +/-5): high engagement boosts, extreme heat warns
+  if (xheat >= 70) alphaDelta -= 5; // overheated = risk
+  else if (xheat >= 50) alphaDelta += 3;
+  else if (xheat >= 30) alphaDelta += 5;
+
+  // FR overheating risk (Risk +15 if FR > 0.1%/8h)
+  if (glass.fundingRate !== null && glass.fundingRate * 100 > 0.1) {
+    riskDelta += 15;
+  }
+
+  // Long overheating risk (+10 if long ratio > 70%)
+  if (glass.longRatio !== null) {
+    const longPct = glass.longRatio > 1 ? glass.longRatio : glass.longRatio * 100;
+    if (longPct > 70) riskDelta += 10;
+  }
+
+  // Unlock risk
+  riskDelta += unlockRiskScore(unlock);
+
+  return {
+    alpha: clamp(0, 100, baseAlpha + alphaDelta),
+    risk: clamp(0, 100, baseRisk + riskDelta),
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -176,122 +175,212 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "有効な入力がありません" }, { status: 400 });
   }
 
-  // 並列でデータ取得
-  const dataResults = await Promise.all(valid.map(async (input) => {
+  // Gather chain info for address inputs
+  const chainResults = await Promise.all(valid.map(async (input) => {
     const kind = classifyInput(input) as InputKind;
-    let marketData   = "";
-    let securityData = "";
-    let chainName    = "";
-
-    if (kind === "evm") {
-      const { summary, chainId } = await fetchDexDataWithChain(input);
-      marketData = summary;
-      chainName  = CHAIN_ID_NAME[chainId] ?? `Chain ${chainId}`;
-      securityData = await fetchGoPlusSecurity(input, kind, chainId);
-    } else if (kind === "solana") {
-      chainName = "Solana";
-      [marketData, securityData] = await Promise.all([
-        fetchDexDataWithChain(input).then(r => r.summary),
-        fetchGoPlusSecurity(input, kind),
-      ]);
-    } else if (kind === "ton") {
-      chainName  = "TON";
-      marketData = (await fetchDexDataWithChain(input)).summary;
-    } else if (kind === "sui") {
-      chainName  = "SUI";
-      marketData = (await fetchDexDataWithChain(input)).summary;
-    } else if (kind === "tron") {
-      chainName  = "TRON";
-      marketData = (await fetchDexDataWithChain(input)).summary;
-    } else {
-      marketData = await fetchCoinData(input);
+    let chainId = "";
+    let chainName = "";
+    if (kind === "evm" || kind === "solana" || kind === "ton" || kind === "sui" || kind === "tron") {
+      const r = await getChainForAddress(input);
+      chainId   = r.chainId;
+      chainName = r.chainName;
     }
-
-    return { input, kind, marketData, securityData, chainName };
+    return { input, kind, chainId, chainName };
   }));
 
-  const contextLines = dataResults.map(d => {
-    const label =
-      d.kind === "evm"    ? `[EVM:${d.input.slice(0,8)}...]` :
-      d.kind === "solana" ? `[SOL:${d.input.slice(0,8)}...]` :
-      d.kind === "ton"    ? `[TON:${d.input.slice(0,8)}...]` :
-      d.kind === "sui"    ? `[SUI:${d.input.slice(0,8)}...]` :
-      d.kind === "tron"   ? `[TRX:${d.input.slice(0,8)}...]` :
-      `[${d.input.toUpperCase()}]`;
-    return [
-      d.chainName ? `チェーン: ${d.chainName}` : "",
-      `${label} ${d.marketData}`,
-      d.securityData ? `  セキュリティ: ${d.securityData}` : "",
-    ].filter(Boolean).join("\n");
-  }).join("\n\n");
+  // Fetch global ETF flows once (not per-coin)
+  const etfFlows = await fetchEtfFlows().catch(() => ({
+    btcNetFlow: null, ethNetFlow: null,
+    btcDirection: null, ethDirection: null, btcTotalAum: null,
+  } as EtfFlowData));
+
+  // Sequential research with 1000ms delay to avoid rate limits
+  // Fetch new API data in parallel with each researchCoin call
+  const researched: Array<{
+    input: string;
+    kind: InputKind;
+    chainName: string;
+    context: string;
+    glass: CoinglassData;
+    unlock: UnlockData;
+    arkham: ArkhamData;
+  }> = [];
+
+  for (let i = 0; i < chainResults.length; i++) {
+    if (i > 0) await sleep(1000);
+    const { input, kind, chainName } = chainResults[i];
+
+    const isTicker = kind === "ticker";
+    const isAddress = !isTicker;
+
+    const [context, glass, unlock, arkham] = await Promise.all([
+      researchCoin(input),
+      isTicker
+        ? fetchCoinglassData(input).catch(() => ({ fundingRate: null, openInterest: null, openInterestChange24h: null, longRatio: null } as CoinglassData))
+        : Promise.resolve({ fundingRate: null, openInterest: null, openInterestChange24h: null, longRatio: null } as CoinglassData),
+      isTicker
+        ? fetchUnlockData(input).catch(() => ({ nextUnlockDate: null, nextUnlockDays: null, nextUnlockPercent: null, nextUnlockAmount: null } as UnlockData))
+        : Promise.resolve({ nextUnlockDate: null, nextUnlockDays: null, nextUnlockPercent: null, nextUnlockAmount: null } as UnlockData),
+      isAddress
+        ? fetchArkhamData(input).catch(() => ({ entityName: null, entityType: null, labels: [], isInstitutional: false } as ArkhamData))
+        : Promise.resolve({ entityName: null, entityType: null, labels: [], isInstitutional: false } as ArkhamData),
+    ]);
+
+    researched.push({ input, kind, chainName, context, glass, unlock, arkham });
+  }
 
   const client = new Anthropic();
-  const prompt = `以下の${valid.length}銘柄を評価し、JSONのみ返せ。
+
+  const analysisResults: Array<Omit<BatchResultItem, "type" | "chain">> = [];
+
+  for (let i = 0; i < researched.length; i++) {
+    if (i > 0) await sleep(1000);
+    const { input, context, glass, unlock, arkham } = researched[i];
+
+    // Build supplemental context strings
+    const glassStr   = formatCoinglass(glass);
+    const unlockStr  = formatUnlock(unlock);
+    const arkhamStr  = formatArkham(arkham);
+    const etfStr     = formatEtfFlows(etfFlows);
+
+    const supplemental = [glassStr, unlockStr, arkhamStr, etfStr]
+      .filter(Boolean)
+      .join("\n");
+
+    // Calculate XHeat Score from cached community data
+    const community = getCachedCommunity(input);
+    const xheatResult = community
+      ? calculateXHeatScore(community)
+      : { score: 0, twitterComponent: 0, redditComponent: 0, communityComponent: 0 };
+    const xheatStr = community
+      ? `XHeat Score:${xheatResult.score}/100(TW:${xheatResult.twitterComponent}, Reddit:${xheatResult.redditComponent}, CS:${xheatResult.communityComponent})`
+      : "";
+
+    const fullContext = [context, supplemental, xheatStr].filter(Boolean).join("\n");
+
+    const prompt = `以下のデータを基に「${input}」を評価し、JSONのみ返せ。
 
 ## データ
-${contextLines}
+${fullContext || "データなし"}
 
 ## 出力形式（JSONのみ・説明文不要）
 \`\`\`json
-[
-  {
-    "input": "元の入力文字列をそのまま",
-    "rank": "S|A|B|C|D|E|F",
-    "alpha": 0,
-    "risk": 0,
-    "smart_money": 0,
-    "decision": "推奨(Gem)|投機的(Degen)|要注意|回避推奨",
-    "one_line_reason": "根拠を1行で"
-  }
-]
+{
+  "input": "${input}",
+  "rank": "S|A|B|C|D|E|F",
+  "alpha": 75,
+  "risk": 30,
+  "smart_money_score_100": 60,
+  "decision": "推奨(Gem)|投機的(Degen)|要注意|回避推奨",
+  "one_line_reason": "根拠を1行で"
+}
 \`\`\`
 
-ランク基準：
-S: Alpha≥85かつRisk≤35  A: Alpha≥70かつRisk≤50
-B: Alpha≥55かつRisk≤60  C: Alpha≥40
-D: Alpha<40かつRisk<50   E: Risk>70  F: Risk>85またはScam疑い
-セキュリティ問題があればRiskを必ず上げること。全${valid.length}件必ず含めること。`;
+スコア基準（0-100）：
+- alpha: 上昇ポテンシャル（MC/FDV低・出来高増加・ATH大幅下落=高い・ETFインフロー=+5・OI増加=+5）
+- risk: リスク（セキュリティ問題・流動性低・集中=高い・FR>0.1%/8h=+15・ロング過熱=+10・アンロック30日以内=+10〜+20）
+- smart_money_score_100: スマートマネー注目度（大口取引・急増出来高・機関保有=高い）
+- XHeat Scoreが70以上の場合は過熱サインとしてriskに反映せよ
+ランク：S:Alpha≥85かつRisk≤35 / A:Alpha≥70かつRisk≤50 / B:Alpha≥55かつRisk≤60 / C:Alpha≥40 / D:Alpha<40かつRisk<50 / E:Risk>70 / F:Risk>85またはScam疑い
+プレースホルダーのまま出力するな。必ず実際の評価値を入れよ。`;
 
-  let response;
-  try {
-    response = await client.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 3000,
-      system: "あなたは仮想通貨フォレンジックアナリストです。指示通りJSONのみ出力せよ。",
-      messages: [{ role: "user", content: prompt }],
-    });
-  } catch (err) {
-    let message = err instanceof Error ? err.message : String(err);
-    if (err instanceof APIError) {
-      const status = err.status ?? 500;
-      const isCreditError = status === 402 || /credit|billing|balance|insufficient/i.test(message);
-      if (isCreditError) {
-        message =
-          "💳 Anthropic APIのクレジット残高が不足しています。残高の確認・チャージ: https://console.anthropic.com/settings/billing";
+    try {
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: "あなたは仮想通貨フォレンジックアナリストです。指示通りJSONのみ出力せよ。",
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      const text = response.content
+        .filter(b => b.type === "text")
+        .map(b => (b as { type: "text"; text: string }).text)
+        .join("");
+
+      const m = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/(\{[\s\S]*\})/);
+      if (m) {
+        const parsed = JSON.parse(m[1]);
+        const baseAlpha = parsed.alpha ?? 50;
+        const baseRisk  = parsed.risk  ?? 50;
+
+        const adjusted = adjustScores(baseAlpha, baseRisk, glass, unlock, etfFlows, xheatResult.score, input);
+
+        analysisResults.push({
+          input: parsed.input ?? input,
+          rank: parsed.rank ?? "C",
+          alpha: adjusted.alpha,
+          risk: adjusted.risk,
+          smart_money_score_100: parsed.smart_money_score_100 ?? 50,
+          decision: parsed.decision ?? "要注意",
+          one_line_reason: parsed.one_line_reason ?? "",
+          fundingRate: glass.fundingRate,
+          openInterest: glass.openInterest,
+          longRatio: glass.longRatio,
+          xheatScore: community ? xheatResult.score : null,
+          etfBtcDirection: etfFlows.btcDirection,
+          etfBtcFlow: etfFlows.btcNetFlow,
+          unlockDays: unlock.nextUnlockDays,
+          unlockPercent: unlock.nextUnlockPercent,
+          arkhamEntity: arkham.entityName,
+          isInstitutional: arkham.isInstitutional,
+        });
+      } else {
+        analysisResults.push(makeDefault(input, glass, unlock, etfFlows, xheatResult.score, community !== null, arkham));
       }
+    } catch (err) {
+      let message = err instanceof Error ? err.message : String(err);
+      if (err instanceof APIError) {
+        const status = err.status ?? 500;
+        if (status === 402 || /credit|billing|balance|insufficient/i.test(message)) {
+          message = "💳 Anthropic APIのクレジット残高が不足しています";
+        }
+      }
+      console.error(`[batch] Error analyzing ${input}:`, err);
+      analysisResults.push({
+        ...makeDefault(input, glass, unlock, etfFlows, xheatResult.score, community !== null, arkham),
+        one_line_reason: `分析エラー: ${message}`,
+      });
     }
-    console.error("[batch] Anthropic API error:", err);
-    return Response.json({ error: message }, { status: 500 });
   }
 
-  const text = response.content
-    .filter(b => b.type === "text")
-    .map(b => (b as { type: "text"; text: string }).text)
-    .join("");
+  const kindMap  = Object.fromEntries(researched.map(d => [d.input, d.kind]));
+  const chainMap = Object.fromEntries(researched.map(d => [d.input, d.chainName]));
 
-  try {
-    const m = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/(\[[\s\S]*\])/);
-    if (!m) throw new Error("JSON not found");
-    const parsed: Omit<BatchResultItem, "type">[] = JSON.parse(m[1]);
-    const kindMap  = Object.fromEntries(dataResults.map(d => [d.input, d.kind]));
-    const chainMap = Object.fromEntries(dataResults.map(d => [d.input, d.chainName]));
-    const results: BatchResultItem[] = parsed.map(item => ({
-      ...item,
-      type:  (kindMap[item.input]  ?? "ticker") as InputKind,
-      chain: chainMap[item.input]  ?? "",
-    }));
-    return Response.json({ results });
-  } catch {
-    return Response.json({ error: "結果の解析に失敗しました", raw: text }, { status: 500 });
-  }
+  const results: BatchResultItem[] = analysisResults.map(item => ({
+    ...item,
+    type:  (kindMap[item.input]  ?? "ticker") as InputKind,
+    chain: chainMap[item.input]  ?? "",
+  }));
+
+  return Response.json({ results });
+}
+
+function makeDefault(
+  input: string,
+  glass: CoinglassData,
+  unlock: UnlockData,
+  etf: EtfFlowData,
+  xheat: number,
+  hasCommunity: boolean,
+  arkham: ArkhamData,
+): Omit<BatchResultItem, "type" | "chain"> {
+  return {
+    input,
+    rank: "C",
+    alpha: 50,
+    risk: 50,
+    smart_money_score_100: 50,
+    decision: "要注意",
+    one_line_reason: "解析失敗",
+    fundingRate: glass.fundingRate,
+    openInterest: glass.openInterest,
+    longRatio: glass.longRatio,
+    xheatScore: hasCommunity ? xheat : null,
+    etfBtcDirection: etf.btcDirection,
+    etfBtcFlow: etf.btcNetFlow,
+    unlockDays: unlock.nextUnlockDays,
+    unlockPercent: unlock.nextUnlockPercent,
+    arkhamEntity: arkham.entityName,
+    isInstitutional: arkham.isInstitutional,
+  };
 }

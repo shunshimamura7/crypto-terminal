@@ -62,18 +62,18 @@ export default function WatchList({ onBatchAnalyze, onAnalyze }: Props) {
       </div>
       {flash && <p className="text-xs text-red-500">{flash}</p>}
 
-      <div className="text-xs text-gray-400">{items.length} / 30 件登録済み</div>
+      <div className="text-xs text-gray-700">{items.length} / 30 件登録済み</div>
 
       {items.length === 0 ? (
         <div className="text-center py-12">
-          <div className="text-4xl mb-2 text-gray-200">⭐</div>
-          <p className="text-sm text-gray-400">ウォッチリストが空です<br />銘柄名やCAを追加してください</p>
+          <div className="text-4xl mb-2 text-gray-400">⭐</div>
+          <p className="text-sm text-gray-700">ウォッチリストが空です<br />銘柄名やCAを追加してください</p>
         </div>
       ) : (
         <ul className="space-y-2">
           {items.map((item, i) => (
             <li key={i} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
-              <button onClick={() => moveUp(i)} className="text-gray-300 hover:text-gray-500 text-xs" title="上へ">▲</button>
+              <button onClick={() => moveUp(i)} className="text-gray-600 hover:text-gray-500 text-xs" title="上へ">▲</button>
               <span className="flex-1 font-mono text-sm text-gray-800 truncate">{item}</span>
               <button
                 onClick={() => onAnalyze(item)}
@@ -83,7 +83,7 @@ export default function WatchList({ onBatchAnalyze, onAnalyze }: Props) {
               </button>
               <button
                 onClick={() => remove(item)}
-                className="text-gray-400 hover:text-red-500 transition-colors text-xs px-1"
+                className="text-gray-700 hover:text-red-500 transition-colors text-xs px-1"
               >
                 ✕
               </button>
