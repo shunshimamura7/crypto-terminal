@@ -11,8 +11,7 @@ import type { CgMarketData } from "@/app/lib/coinGeckoClient";
 import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
-// MEXCリファラルコードをここに設定（空文字=リファラルなし）
-const MEXC_REF = "";
+const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
 function mexcUrl(base: string) {
   const ref = MEXC_REF ? `?inviteCode=${MEXC_REF}` : "";
   return `https://www.mexc.com/futures/${base}_USDT${ref}`;
