@@ -1610,6 +1610,46 @@ export default function ShortScanner() {
   const elapsedRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const playSoundRef  = useRef<((type: "alert"|"complete"|"warning") => void) | null>(null);
 
+  // Sound (施策2)
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("shortScanSound") === "on";
+  });
+  const toggleSound = () => setSoundEnabled(v => {
+    const next = !v;
+    localStorage.setItem("shortScanSound", next ? "on" : "off");
+    return next;
+  });
+  useEffect(() => {
+    playSoundRef.current = (type: "alert"|"complete"|"warning") => {
+      if (!soundEnabled) return;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const AudioCtx = window.AudioContext ?? (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+        const play = (freq: number, vol: number, start: number, dur: number) => {
+          const osc = ctx.createOscillator();
+          osc.connect(gain);
+          osc.frequency.value = freq;
+          gain.gain.value = vol;
+          osc.start(ctx.currentTime + start);
+          osc.stop(ctx.currentTime + start + dur);
+        };
+        if (type === "alert") {
+          play(880, 0.3, 0, 0.15);
+          play(1100, 0.3, 0.22, 0.15);
+        } else if (type === "complete") {
+          play(660, 0.2, 0, 0.1);
+        } else {
+          play(440, 0.3, 0, 0.3);
+        }
+      } catch { /* AudioContext blocked */ }
+    };
+  }, [soundEnabled]);
+
   // Language (G)
   const [lang, setLang] = useState<Lang>("ja");
   const t = T[lang];
@@ -1874,6 +1914,12 @@ export default function ShortScanner() {
         <button onClick={handleAutoRefresh}
           className={`px-2 md:px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoRefresh ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
           {t.autoRefresh} {autoRefresh ? "ON" : "OFF"}
+        </button>
+        {/* Sound toggle (施策2) */}
+        <button onClick={toggleSound}
+          className={`px-2 md:px-3 py-1.5 text-xs border rounded-lg transition-colors ${soundEnabled ? "bg-emerald-50 text-emerald-700 border-emerald-300" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"}`}
+          title={soundEnabled ? "サウンドをOFFにする" : "サウンドをONにする"}>
+          {soundEnabled ? t.soundOn : t.soundOff}
         </button>
         {/* Notification (D) */}
         {notifState !== "granted" ? (
