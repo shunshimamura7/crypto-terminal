@@ -27,8 +27,66 @@ export interface ShortCandidate {
   listedDaysAgo: number;
   priceChange24h: number;   // % (施策6)
   priceChange7d: number;    // % (施策6)
+  volumeProfile: VolumeProfile | null;  // 施策8
   shortScore: number;       // server max 16
   scoreBreakdown: ShortScoreBreakdown;
+}
+
+// ─── Volume Profile (施策8) ───────────────────────────────────────────────────
+
+export interface VolumeProfileBucket {
+  low: number;
+  high: number;
+  vol: number;
+}
+
+export interface VolumeProfile {
+  poc: number;                       // Point of Control (最大出来高価格帯の中央値)
+  buckets: VolumeProfileBucket[];    // 10バケット (安値→高値順)
+  pocVsPricePct: number;             // (現在価格 - POC) / POC * 100
+}
+
+export function calcVolumeProfile(
+  highs: number[],
+  lows: number[],
+  volumes: number[],
+  currentPrice: number,
+  bucketCount = 10,
+): VolumeProfile | null {
+  if (highs.length === 0 || highs.length !== lows.length || highs.length !== volumes.length) return null;
+
+  const rangeHigh = Math.max(...highs);
+  const rangeLow  = Math.min(...lows.filter(v => v > 0));
+  if (rangeLow <= 0 || rangeHigh <= rangeLow) return null;
+
+  const step = (rangeHigh - rangeLow) / bucketCount;
+  const buckets: VolumeProfileBucket[] = Array.from({ length: bucketCount }, (_, i) => ({
+    low:  rangeLow + i * step,
+    high: rangeLow + (i + 1) * step,
+    vol:  0,
+  }));
+
+  for (let i = 0; i < highs.length; i++) {
+    const vol = volumes[i];
+    if (!vol || vol <= 0) continue;
+    // ローソクが跨ぐバケットに分配
+    for (const b of buckets) {
+      const overlap = Math.min(highs[i], b.high) - Math.max(lows[i], b.low);
+      if (overlap > 0) {
+        const span = highs[i] - lows[i];
+        b.vol += span > 0 ? vol * (overlap / span) : vol / bucketCount;
+      }
+    }
+  }
+
+  const maxBucket = buckets.reduce((a, b) => b.vol > a.vol ? b : a, buckets[0]);
+  const poc = (maxBucket.low + maxBucket.high) / 2;
+
+  return {
+    poc,
+    buckets,
+    pocVsPricePct: poc > 0 ? (currentPrice - poc) / poc * 100 : 0,
+  };
 }
 
 // dropScore (0-3)

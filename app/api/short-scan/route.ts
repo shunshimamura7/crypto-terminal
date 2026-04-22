@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calcShortScore, passesFilter, passesFilterNew30 } from "@/app/lib/shortScorer";
-import type { ShortCandidate } from "@/app/lib/shortScorer";
+import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile } from "@/app/lib/shortScorer";
+import type { ShortCandidate, VolumeProfile } from "@/app/lib/shortScorer";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -82,16 +82,22 @@ async function analyzeCandidate(
 
   // ATH: max high from 4h klines
   let ath14d = price;
-  // EMA: close prices from 4h klines
   const closes4h: number[] = [];
+  let volumeProfile: VolumeProfile | null = null;
+
   if (kline4hRes.status === "fulfilled" && kline4hRes.value?.data) {
     const kd = kline4hRes.value.data;
     const highs: number[] = (kd.high || []).map(Number).filter((n: number) => n > 0);
     if (highs.length > 0) ath14d = Math.max(price, ...highs);
-    // Extract close prices for EMA trend
     for (const c of (kd.close || []) as string[]) {
       const n = parseFloat(c);
       if (n > 0) closes4h.push(n);
+    }
+    // 施策8: Volume Profile from 4h klines
+    const kLows:    number[] = (kd.low  || []).map(Number);
+    const kVolumes: number[] = (kd.vol  || []).map(Number);
+    if (highs.length >= 3 && kLows.length === highs.length && kVolumes.length === highs.length) {
+      volumeProfile = calcVolumeProfile(highs, kLows, kVolumes, price);
     }
   }
 
@@ -164,6 +170,7 @@ async function analyzeCandidate(
     listedDaysAgo,
     priceChange24h,
     priceChange7d,
+    volumeProfile,
     shortScore: score,
     scoreBreakdown: breakdown,
   };

@@ -276,6 +276,54 @@ function ScoreDetail({
           );
         })()}
 
+        {/* Volume Profile (施策8) */}
+        {c.volumeProfile && (() => {
+          const vp = c.volumeProfile!;
+          const maxVol = Math.max(...vp.buckets.map(b => b.vol));
+          const pocIdx = vp.buckets.findIndex(b => Math.abs((b.low + b.high) / 2 - vp.poc) < (b.high - b.low) * 0.6);
+          return (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="flex items-center gap-3 mb-2">
+                <p className="text-xs font-semibold text-gray-700">📊 出来高プロファイル (VPCR)</p>
+                <span className="text-xs text-gray-500">
+                  POC: <span className="font-mono font-bold text-indigo-600">{fmtPrice(vp.poc)}</span>
+                  <span className={`ml-2 font-semibold ${vp.pocVsPricePct > 0 ? "text-red-500" : "text-green-600"}`}>
+                    ({vp.pocVsPricePct > 0 ? "+" : ""}{vp.pocVsPricePct.toFixed(1)}% 現在価格比)
+                  </span>
+                </span>
+              </div>
+              <div className="space-y-0.5">
+                {[...vp.buckets].reverse().map((b, ri) => {
+                  const fi = vp.buckets.length - 1 - ri;
+                  const isPoc = fi === pocIdx;
+                  const barPct = maxVol > 0 ? (b.vol / maxVol) * 100 : 0;
+                  const isCurrentPrice = c.currentPrice >= b.low && c.currentPrice < b.high;
+                  return (
+                    <div key={ri} className="flex items-center gap-2 text-[10px]">
+                      <span className="w-16 text-right font-mono text-gray-500 shrink-0">
+                        {fmtPrice((b.low + b.high) / 2)}
+                      </span>
+                      <div className="flex-1 h-3 bg-gray-100 rounded relative overflow-hidden">
+                        <div
+                          className={`h-full rounded ${isPoc ? "bg-indigo-500" : "bg-blue-300"}`}
+                          style={{ width: `${barPct}%` }}
+                        />
+                        {isCurrentPrice && (
+                          <div className="absolute inset-y-0 left-0 w-full flex items-center">
+                            <div className="w-full border-t-2 border-dashed border-yellow-500 opacity-80" />
+                          </div>
+                        )}
+                      </div>
+                      {isPoc && <span className="text-indigo-600 font-bold shrink-0">POC</span>}
+                      {isCurrentPrice && <span className="text-yellow-600 font-bold shrink-0">←現在</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* 前回比 (施策3) */}
         {diff && (
           <div className="mt-2 pt-2 border-t border-gray-200 grid grid-cols-3 gap-3 text-xs text-gray-500">
