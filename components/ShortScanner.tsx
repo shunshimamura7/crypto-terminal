@@ -538,6 +538,14 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
           <div>{t.avgVol}: <span className="font-mono font-semibold text-gray-800">{fmtVol(c.volumeAvg7d)}</span></div>
           <div>OI: <span className="font-mono font-semibold text-gray-800">{fmtVol(c.openInterest)}</span></div>
           <div>OI/Vol: <span className={`font-mono font-semibold ${c.oiRatio > 3 ? "text-red-600" : c.oiRatio > 1.5 ? "text-orange-600" : "text-gray-800"}`}>{c.oiRatio.toFixed(2)}×</span></div>
+          {c.initialPrice != null && (() => {
+            const ratio = c.initialPrice > 0 ? (c.currentPrice / c.initialPrice) * 100 : null;
+            return (
+              <div>上場初値比: <span className={`font-mono font-semibold ${ratio == null ? "text-gray-400" : ratio < 70 ? "text-red-600 font-bold" : ratio < 90 ? "text-orange-500" : "text-gray-700"}`}>
+                {ratio != null ? `${ratio.toFixed(0)}%` : "—"}
+              </span></div>
+            );
+          })()}
           <div>24h: <span className={`font-mono font-semibold ${c.priceChange24h >= 50 ? "text-red-600" : c.priceChange24h <= -30 ? "text-green-600" : "text-gray-700"}`}>{fmtPct(c.priceChange24h)}</span></div>
           <div>7d: <span className={`font-mono font-semibold ${c.priceChange7d >= 100 ? "text-red-700" : c.priceChange7d >= 50 ? "text-red-500" : c.priceChange7d <= -30 ? "text-green-600" : "text-gray-700"}`}>{fmtPct(c.priceChange7d)}</span></div>
           <div title="BTCとの価格連動度">{t.colBtcCorr}: <span className={`font-mono font-semibold ${c.btcCorrelation >= 0.7 ? "text-red-600" : c.btcCorrelation >= 0.3 ? "text-orange-500" : "text-green-600"}`}>{c.btcCorrelation.toFixed(3)}{c.btcCorrelation < 0.3 ? " ✅" : c.btcCorrelation >= 0.7 ? " ⚠️" : ""}</span></div>
@@ -1178,6 +1186,9 @@ function BacktestPanel({
 }: { records: BacktestRecord[]; stats: BacktestStats; t: Translations; onReset: () => void }) {
   const [open,        setOpen]        = useState(true);
   const [showRecords, setShowRecords] = useState(false);
+  const [simOpen,     setSimOpen]     = useState(false);
+  const [simCapital,  setSimCapital]  = useState(1000);
+  const [simPos,      setSimPos]      = useState(100);
 
   const periodStr = (() => {
     if (!stats.periodStart) return "—";
@@ -1300,7 +1311,7 @@ function BacktestPanel({
                 </div>
               )}
 
-              {/* Equity Curve (施策8) */}
+              {/* Equity Curve */}
               {stats.resolved >= 2 && (() => {
                 const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } =
                   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1339,6 +1350,92 @@ function BacktestPanel({
                   </div>
                 );
               })()}
+
+              {/* Portfolio Simulation (修正6) */}
+              <div className="mt-2 rounded-lg border border-emerald-200 overflow-hidden">
+                <button onClick={() => setSimOpen(v => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 transition-colors">
+                  <span>{t.btSimTitle}</span>
+                  <span className="text-gray-400">{simOpen ? "▲" : "▼"}</span>
+                </button>
+                {simOpen && (() => {
+                  if (stats.resolved < 5) {
+                    return (
+                      <div className="px-3 py-3 text-xs text-gray-400 text-center">{t.btSimInsuf}</div>
+                    );
+                  }
+
+                  const resolved = [...records]
+                    .filter(r => r.status !== "active" && r.resolvedAt !== null && r.resolvedPrice !== null)
+                    .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
+
+                  // Build equity curve in $ terms
+                  let equity = simCapital;
+                  let peak = simCapital;
+                  let maxDD = 0;
+                  const equityPoints: number[] = [simCapital];
+                  const returns: number[] = [];
+
+                  for (const r of resolved) {
+                    const profit = r.entryPrice - (r.resolvedPrice ?? r.entryPrice);
+                    const risk   = r.sl - r.entryPrice;
+                    const realR  = risk > 0 ? profit / risk : 0;
+                    const pnl    = realR * simPos;
+                    equity += pnl;
+                    returns.push(pnl / (equity - pnl || simCapital));
+                    equityPoints.push(parseFloat(equity.toFixed(2)));
+                    if (equity > peak) peak = equity;
+                    const dd = (peak - equity) / peak * 100;
+                    if (dd > maxDD) maxDD = dd;
+                  }
+
+                  const totalReturn = ((equity - simCapital) / simCapital) * 100;
+
+                  // Sharpe: mean return / std dev (simplified, no risk-free rate)
+                  const meanR = returns.reduce((a, b) => a + b, 0) / returns.length;
+                  const variance = returns.reduce((a, b) => a + (b - meanR) ** 2, 0) / returns.length;
+                  const sharpe = variance > 0 ? meanR / Math.sqrt(variance) * Math.sqrt(returns.length) : 0;
+
+                  return (
+                    <div className="px-3 py-3 space-y-3 bg-white">
+                      {/* Sliders */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-gray-500 font-semibold block mb-1">
+                            {t.btSimCapital}: <span className="text-emerald-700">${simCapital.toLocaleString()}</span>
+                          </label>
+                          <input type="range" min={100} max={10000} step={100} value={simCapital}
+                            onChange={e => setSimCapital(Number(e.target.value))}
+                            className="w-full accent-emerald-500 h-1.5" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 font-semibold block mb-1">
+                            {t.btSimPos}: <span className="text-emerald-700">${simPos.toLocaleString()}</span>
+                          </label>
+                          <input type="range" min={10} max={Math.min(simCapital, 1000)} step={10} value={simPos}
+                            onChange={e => setSimPos(Number(e.target.value))}
+                            className="w-full accent-emerald-500 h-1.5" />
+                        </div>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          { label: t.btSimCurAsset, val: `$${equity.toLocaleString("en-US",{maximumFractionDigits:0})}`, cls: equity >= simCapital ? "text-green-700" : "text-red-600" },
+                          { label: t.btSimReturn,   val: `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(1)}%`, cls: totalReturn >= 0 ? "text-green-700" : "text-red-600" },
+                          { label: t.btSimMaxDD,    val: `-${maxDD.toFixed(1)}%`, cls: maxDD > 20 ? "text-red-600 font-bold" : "text-orange-500" },
+                          { label: t.btSimSharpe,   val: sharpe.toFixed(2), cls: sharpe >= 1 ? "text-green-700" : sharpe >= 0 ? "text-orange-500" : "text-red-600" },
+                        ].map(({ label, val, cls }) => (
+                          <div key={label} className="rounded-lg border border-gray-200 p-2 text-center bg-gray-50">
+                            <div className={`text-sm font-black ${cls}`}>{val}</div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
 
               {/* Full records (expandable) */}
               <div>
@@ -1855,7 +1952,7 @@ export default function ShortScanner() {
                   {HAS_CG && <th className="px-2 md:px-3 py-2.5 text-right hidden xl:table-cell">{t.colSpot}</th>}
                   {HAS_CG && <th className="px-2 md:px-3 py-2.5 text-right hidden xl:table-cell">{t.colFsRatio}</th>}
                   <th className="px-2 md:px-3 py-2.5 text-right hidden md:table-cell">{t.colDays}</th>
-                  <th className="px-2 md:px-3 py-2.5 text-right hidden lg:table-cell" title="BTCとの価格連動度。低いほどショートに有利">{t.colBtcCorr}</th>
+                  <th className="px-2 md:px-3 py-2.5 text-right hidden md:table-cell" title="BTCとの価格連動度。低いほどショートに有利">{t.colBtcCorr}</th>
                   <th className="px-2 md:px-3 py-2.5 text-center hidden sm:table-cell">{t.colExch}</th>
                 </tr>
               </thead>
@@ -2016,7 +2113,7 @@ export default function ShortScanner() {
                         </td>
 
                         {/* BTC相関 */}
-                        <td className="px-2 md:px-3 py-2 text-right text-xs font-mono hidden lg:table-cell"
+                        <td className="px-2 md:px-3 py-2 text-right text-xs font-mono hidden md:table-cell"
                           title="BTCとの価格連動度。低いほどショートに有利">
                           {(() => {
                             const corr = c.btcCorrelation;

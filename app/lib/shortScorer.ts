@@ -124,6 +124,7 @@ export interface ShortCandidate {
   volumeSpike: VolumeSpike | null;    // 出来高異常検知 (施策3)
   chartPattern: ChartPattern | null;      // チャートパターン (施策4)
   liquidationZone: LiquidationZone | null; // 清算カスケードゾーン (施策5)
+  initialPrice: number | null; // 上場初日の始値 (新規上場モード用)
   shortScore: number;        // server max 19 (after v5施策1+2+4)
   scoreBreakdown: ShortScoreBreakdown;
 }

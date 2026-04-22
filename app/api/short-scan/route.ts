@@ -143,6 +143,7 @@ async function analyzeCandidate(
   // 7-day avg daily volume + 7d price change + 施策2: closes1d
   let volumeAvg7d = vol24h;
   let priceChange7d = 0;
+  let initialPrice: number | null = null;
   const closes1d: number[] = [];
   if (kline1dRes.status === "fulfilled" && kline1dRes.value?.data) {
     const kd = kline1dRes.value.data;
@@ -160,6 +161,11 @@ async function analyzeCandidate(
     if (closes1d.length >= 2) {
       const oldest = closes1d[0];
       if (oldest > 0) priceChange7d = (price - oldest) / oldest * 100;
+    }
+    // 修正8: 最古D1 open = 上場初日の始値
+    if (isNew30 && Array.isArray(kd.open) && kd.open.length > 0) {
+      const firstOpen = parseFloat(String(kd.open[0]));
+      if (firstOpen > 0) initialPrice = firstOpen;
     }
   }
 
@@ -227,6 +233,7 @@ async function analyzeCandidate(
     listedDaysAgo,
     priceChange24h,
     priceChange7d,
+    initialPrice,
     volumeProfile,
     tradeSetup,
     btcCorrelation,
