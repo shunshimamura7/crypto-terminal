@@ -277,6 +277,51 @@ function ScoreDetail({
           );
         })()}
 
+        {/* Trade Setup (施策10) */}
+        {c.tradeSetup && (() => {
+          const ts = c.tradeSetup!;
+          return (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="flex items-center gap-3 mb-2">
+                <p className="text-xs font-semibold text-gray-700">⚔️ トレードセットアップ</p>
+                {ts.rrWarning && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 border border-yellow-300 font-bold">
+                    ⚠️ R:R不足 ({ts.rrRatio.toFixed(2)})
+                  </span>
+                )}
+                {!ts.rrWarning && (
+                  <span className="text-[10px] text-green-600 font-semibold">R:R {ts.rrRatio.toFixed(2)}</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="bg-red-50 rounded-lg p-2 border border-red-200">
+                  <div className="text-red-600 font-semibold mb-0.5">損切り (SL)</div>
+                  <div className="font-mono font-bold text-red-700">{fmtPrice(ts.sl)}</div>
+                  <div className="text-red-400 text-[10px]">+{((ts.sl / c.currentPrice - 1) * 100).toFixed(1)}%</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-2 border border-green-200">
+                  <div className="text-green-600 font-semibold mb-0.5">利確1 (TP1)</div>
+                  <div className="font-mono font-bold text-green-700">{fmtPrice(ts.tp1)}</div>
+                  <div className="text-green-400 text-[10px]">{((ts.tp1 / c.currentPrice - 1) * 100).toFixed(1)}%</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-2 border border-green-100">
+                  <div className="text-green-600 font-semibold mb-0.5">利確2 (TP2)</div>
+                  <div className="font-mono font-bold text-green-700">{fmtPrice(ts.tp2)}</div>
+                  <div className="text-green-400 text-[10px]">{((ts.tp2 / c.currentPrice - 1) * 100).toFixed(1)}%</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                  <div className="text-gray-600 font-semibold mb-0.5">利確3 (TP3)</div>
+                  <div className="font-mono font-bold text-gray-700">{fmtPrice(ts.tp3)}</div>
+                  <div className="text-gray-400 text-[10px]">{((ts.tp3 / c.currentPrice - 1) * 100).toFixed(1)}%</div>
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1.5">
+                SL = 高出来高レジスタンス×1.02 (or 現在価格×1.08の小さい方) / TP1 = POC下サポート / TP2 = 直近安値
+              </p>
+            </div>
+          );
+        })()}
+
         {/* Volume Profile (施策8) */}
         {c.volumeProfile && (() => {
           const vp = c.volumeProfile!;

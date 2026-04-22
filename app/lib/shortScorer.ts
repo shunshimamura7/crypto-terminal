@@ -28,6 +28,7 @@ export interface ShortCandidate {
   priceChange24h: number;   // % (施策6)
   priceChange7d: number;    // % (施策6)
   volumeProfile: VolumeProfile | null;  // 施策8
+  tradeSetup: TradeSetup | null;        // 施策10
   shortScore: number;       // server max 16
   scoreBreakdown: ShortScoreBreakdown;
 }
@@ -87,6 +88,71 @@ export function calcVolumeProfile(
     buckets,
     pocVsPricePct: poc > 0 ? (currentPrice - poc) / poc * 100 : 0,
   };
+}
+
+// ─── Trade Setup (施策10) ─────────────────────────────────────────────────────
+
+export interface TradeSetup {
+  sl: number;           // 損切りライン
+  tp1: number;          // 利確1 (POC or サポート近傍)
+  tp2: number;          // 利確2 (直近安値)
+  tp3: number;          // 利確3 (保守的深め)
+  rrRatio: number;      // (エントリー - TP1) / (SL - エントリー)
+  rrWarning: boolean;   // R:R < 1.5
+  resistanceLevel: number; // 高出来高レジスタンス
+}
+
+export function calcTradeSetup(
+  currentPrice: number,
+  highs: number[],
+  lows: number[],
+  volumes: number[],
+  volumeProfile: VolumeProfile | null,
+): TradeSetup {
+  // ── SL: 高出来高レジスタンス TOP3 high の最大値 × 1.02、または現在価格×1.08 の小さい方 ──
+  let resistanceLevel = currentPrice * 1.08;
+  if (highs.length >= 3 && volumes.length === highs.length) {
+    // 直近10本のKlineでvolume TOP3のhighを取得
+    const recent = Math.min(10, highs.length);
+    const recent10 = highs
+      .slice(-recent)
+      .map((h, i) => ({ high: h, vol: volumes[volumes.length - recent + i] }))
+      .sort((a, b) => b.vol - a.vol)
+      .slice(0, 3);
+    if (recent10.length > 0) {
+      const resistHigh = Math.max(...recent10.map(r => r.high)) * 1.02;
+      resistanceLevel = Math.min(resistHigh, currentPrice * 1.08);
+    }
+  }
+  const sl = resistanceLevel;
+
+  // ── TP1: POC または POCの下のサポートバケット (出来高多い帯の下限) ──
+  let tp1 = currentPrice * 0.85;
+  if (volumeProfile) {
+    const supportBuckets = volumeProfile.buckets
+      .filter(b => b.high < currentPrice)
+      .sort((a, b) => b.vol - a.vol);
+    if (supportBuckets.length > 0) {
+      tp1 = supportBuckets[0].low;
+    }
+  }
+
+  // ── TP2: 直近安値 (最近20本のKline中最低値) ──
+  let tp2 = currentPrice * 0.70;
+  if (lows.length >= 2) {
+    const recent20 = lows.slice(-Math.min(20, lows.length)).filter(v => v > 0);
+    if (recent20.length > 0) tp2 = Math.min(...recent20);
+  }
+
+  // ── TP3: 現在価格×0.55 or 直近安値×0.9 の大きい方（より保守的） ──
+  const tp3 = Math.max(currentPrice * 0.55, tp2 * 0.9);
+
+  // ── R:R 計算 ──
+  const risk   = sl - currentPrice;
+  const reward = currentPrice - tp1;
+  const rrRatio = risk > 0 ? reward / risk : 0;
+
+  return { sl, tp1, tp2, tp3, rrRatio, rrWarning: rrRatio < 1.5, resistanceLevel };
 }
 
 // dropScore (0-3)

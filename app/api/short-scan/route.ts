@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile } from "@/app/lib/shortScorer";
-import type { ShortCandidate, VolumeProfile } from "@/app/lib/shortScorer";
+import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile, calcTradeSetup } from "@/app/lib/shortScorer";
+import type { ShortCandidate, VolumeProfile, TradeSetup } from "@/app/lib/shortScorer";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -84,21 +84,29 @@ async function analyzeCandidate(
   let ath14d = price;
   const closes4h: number[] = [];
   let volumeProfile: VolumeProfile | null = null;
+  let tradeSetup: TradeSetup | null = null;
+  let kHighs4h: number[] = [];
+  let kLows4h:  number[] = [];
+  let kVols4h:  number[] = [];
 
   if (kline4hRes.status === "fulfilled" && kline4hRes.value?.data) {
     const kd = kline4hRes.value.data;
-    const highs: number[] = (kd.high || []).map(Number).filter((n: number) => n > 0);
-    if (highs.length > 0) ath14d = Math.max(price, ...highs);
+    kHighs4h = (kd.high || []).map(Number).filter((n: number) => n > 0);
+    if (kHighs4h.length > 0) ath14d = Math.max(price, ...kHighs4h);
     for (const c of (kd.close || []) as string[]) {
       const n = parseFloat(c);
       if (n > 0) closes4h.push(n);
     }
-    // 施策8: Volume Profile from 4h klines
-    const kLows:    number[] = (kd.low  || []).map(Number);
-    const kVolumes: number[] = (kd.vol  || []).map(Number);
-    if (highs.length >= 3 && kLows.length === highs.length && kVolumes.length === highs.length) {
-      volumeProfile = calcVolumeProfile(highs, kLows, kVolumes, price);
+    kLows4h  = (kd.low || []).map(Number);
+    kVols4h  = (kd.vol || []).map(Number);
+    if (kHighs4h.length >= 3 && kLows4h.length === kHighs4h.length && kVols4h.length === kHighs4h.length) {
+      volumeProfile = calcVolumeProfile(kHighs4h, kLows4h, kVols4h, price);
     }
+  }
+
+  // 施策10: Trade Setup (klineデータがあれば計算)
+  if (kHighs4h.length >= 3) {
+    tradeSetup = calcTradeSetup(price, kHighs4h, kLows4h, kVols4h, volumeProfile);
   }
 
   // 7-day avg daily volume + 7d price change
@@ -171,6 +179,7 @@ async function analyzeCandidate(
     priceChange24h,
     priceChange7d,
     volumeProfile,
+    tradeSetup,
     shortScore: score,
     scoreBreakdown: breakdown,
   };
