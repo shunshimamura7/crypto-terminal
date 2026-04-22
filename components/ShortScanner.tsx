@@ -156,6 +156,8 @@ const T = {
     caHits: "🔔 カスタムアラート",
     viewTable: "📋 テーブル",
     viewHeat: "🌡️ ヒートマップ",
+    btEquityCurve: "📈 エクイティカーブ",
+    btEquityR: "累積R",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -285,6 +287,8 @@ const T = {
     caHits: "🔔 Custom Alerts",
     viewTable: "📋 Table",
     viewHeat: "🌡️ Heatmap",
+    btEquityCurve: "📈 Equity Curve",
+    btEquityR: "Cumulative R",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -1060,6 +1064,46 @@ function BacktestPanel({
                   </div>
                 </div>
               )}
+
+              {/* Equity Curve (施策8) */}
+              {stats.resolved >= 2 && (() => {
+                const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } =
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
+                  require("recharts") as typeof import("recharts");
+
+                const resolved = [...records]
+                  .filter(r => r.status !== "active" && r.resolvedAt !== null && r.resolvedPrice !== null)
+                  .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
+
+                let cumR = 0;
+                const equityData = resolved.map(r => {
+                  const profit = r.entryPrice - (r.resolvedPrice ?? r.entryPrice);
+                  const risk   = r.sl - r.entryPrice;
+                  const realR  = risk > 0 ? profit / risk : 0;
+                  cumR += realR;
+                  return { name: r.symbol.replace("_USDT",""), r: parseFloat(cumR.toFixed(2)) };
+                });
+
+                return (
+                  <div className="mt-1">
+                    <p className="text-xs font-semibold text-gray-600 mb-1.5">{t.btEquityCurve}</p>
+                    <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                      <ResponsiveContainer width="100%" height={160}>
+                        <LineChart data={equityData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                          <XAxis dataKey="name" tick={{ fontSize: 8 }} interval="preserveStartEnd" />
+                          <YAxis tick={{ fontSize: 9 }} unit="R" />
+                          <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" />
+                          <Tooltip formatter={(v) => [`${v}R`, t.btEquityR]} labelStyle={{ fontSize: 10 }} contentStyle={{ fontSize: 10 }} />
+                          <Line type="monotone" dataKey="r" stroke={cumR >= 0 ? "#16a34a" : "#dc2626"} strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                      <p className="text-[10px] text-gray-400 text-right mt-0.5">
+                        {t.btEquityR}: <span className={`font-bold ${cumR >= 0 ? "text-green-600" : "text-red-600"}`}>{cumR >= 0 ? "+" : ""}{cumR.toFixed(2)}R</span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Full records (expandable) */}
               <div>
