@@ -13,6 +13,23 @@ export interface ShortScoreBreakdown {
   btcCorrScore: number;    // 0-1 (BTC非連動ボーナス)
 }
 
+// ─── Volume Spike (施策3) ────────────────────────────────────────────────────
+export interface VolumeSpike {
+  ratio: number;
+  direction: "pump" | "dump" | "neutral";
+  spikeLevel: number;  // 0-3
+}
+
+export function calcVolumeSpike(volChangeRatio: number, priceChange24h: number): VolumeSpike {
+  const spikeLevel = volChangeRatio >= 5 ? 3 : volChangeRatio >= 2 ? 2 : volChangeRatio >= 1 ? 1 : 0;
+  let direction: "pump" | "dump" | "neutral" = "neutral";
+  if (volChangeRatio >= 2.0) {
+    if (priceChange24h > 5)  direction = "pump";
+    else if (priceChange24h < -5) direction = "dump";
+  }
+  return { ratio: volChangeRatio, direction, spikeLevel };
+}
+
 export interface MultiTFTrend {
   h1: TrendDirection;
   h4: TrendDirection;
@@ -39,6 +56,7 @@ export interface ShortCandidate {
   tradeSetup: TradeSetup | null;
   btcCorrelation: number;    // -1.0〜+1.0 (BTC相関係数)
   trendMultiTF: MultiTFTrend | null;  // マルチタイムフレームトレンド
+  volumeSpike: VolumeSpike | null;    // 出来高異常検知 (施策3)
   shortScore: number;        // server max 18 (after v5施策1+2)
   scoreBreakdown: ShortScoreBreakdown;
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile, calcTradeSetup } from "@/app/lib/shortScorer";
+import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile, calcTradeSetup, calcVolumeSpike } from "@/app/lib/shortScorer";
 import type { ShortCandidate, VolumeProfile, TradeSetup } from "@/app/lib/shortScorer";
 
 // ─── BTC相関計算 (施策1) ──────────────────────────────────────────────────────
@@ -205,6 +205,9 @@ async function analyzeCandidate(
     athDropPct, volumeChangeRatio, fundingRate, listedDaysAgo, openInterest, vol24h, closes4h, priceChange7d, btcCorrelation, closes1h, closes1d,
   );
 
+  // 施策3: 出来高異常検知
+  const volumeSpike = calcVolumeSpike(volumeChangeRatio, priceChange24h);
+
   return {
     symbol,
     currentPrice: price,
@@ -224,6 +227,7 @@ async function analyzeCandidate(
     tradeSetup,
     btcCorrelation,
     trendMultiTF,
+    volumeSpike,
     shortScore: score,
     scoreBreakdown: breakdown,
   };

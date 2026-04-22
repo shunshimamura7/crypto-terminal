@@ -101,6 +101,8 @@ const T = {
     colBtcCorr: "BTC相関",
     btcCorrHigh: "BTC連動",
     btcCorrLow: "BTC非連動",
+    volSpikePump: "🔥 PUMP",
+    volSpikeDump: "💀 DUMP",
     btTitle: "📊 バックテスト実績",
     btPeriod: "期間",
     btSummary: "サマリー",
@@ -210,6 +212,8 @@ const T = {
     colBtcCorr: "BTC Corr",
     btcCorrHigh: "BTC Correlated",
     btcCorrLow: "BTC Independent",
+    volSpikePump: "🔥 PUMP",
+    volSpikeDump: "💀 DUMP",
     btTitle: "📊 Backtest Results",
     btPeriod: "Period",
     btSummary: "Summary",
@@ -1272,9 +1276,21 @@ export default function ShortScanner() {
                           {c.athDropPct.toFixed(1)}%
                         </td>
 
-                        {/* 出来高比 */}
+                        {/* 出来高比 + 施策3スパイクバッジ */}
                         <td className="px-2 md:px-3 py-2 text-right text-orange-600 text-xs hidden sm:table-cell">
-                          {c.volumeChangeRatio.toFixed(2)}×
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span>{c.volumeChangeRatio.toFixed(2)}×</span>
+                            {c.volumeSpike && c.volumeSpike.direction === "pump" && (
+                              <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1 rounded whitespace-nowrap">
+                                {t.volSpikePump} {c.volumeSpike.ratio.toFixed(1)}x
+                              </span>
+                            )}
+                            {c.volumeSpike && c.volumeSpike.direction === "dump" && (
+                              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-1 rounded whitespace-nowrap">
+                                {t.volSpikeDump} {c.volumeSpike.ratio.toFixed(1)}x
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* 24h */}
