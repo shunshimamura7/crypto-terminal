@@ -2236,7 +2236,7 @@ export default function ShortScanner() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 border border-gray-200 rounded-xl p-3 md:p-4">
         {[
           { label: `${t.athDrop} ≥`, val: `${minDrop}%`, color: "text-red-600", accent: "accent-red-500", min:10, max:80, step:5, v:minDrop, set:setMinDrop },
-          { label: `${t.volRatio} ≤`, val: (maxVolRatio/100).toFixed(2), color: "text-orange-600", accent: "accent-orange-500", min:10, max:150, step:5, v:maxVolRatio, set:setMaxVolRatio },
+          { label: `${t.volRatio} ≤`, val: (maxVolRatio/100).toFixed(1), color: "text-orange-600", accent: "accent-orange-500", min:10, max:1000, step:10, v:maxVolRatio, set:setMaxVolRatio },
           { label: `${t.listDays} ≤`, val: maxDays >= 9999 ? "∞" : `${maxDays}日`, color: "text-blue-600", accent: "accent-blue-500", min:30, max:9999, step:30, v:maxDays, set:setMaxDays },
           { label: `${t.minVol} ≥`, val: `$${minVol24k}K`, color: "text-green-600", accent: "accent-green-500", min:1, max:1000, step:1, v:minVol24k, set:setMinVol24k },
           { label: `${t.minOi} ≥`, val: `$${minOiK}K`, color: "text-cyan-600", accent: "accent-cyan-500", min:0, max:1000, step:10, v:minOiK, set:setMinOiK },
