@@ -1597,6 +1597,33 @@ function BacktestPanel({
   );
 }
 
+// ─── Shortcut Help Modal (施策3) ──────────────────────────────────────────────
+function ShortcutHelpModal({ t, onClose }: { t: Translations; onClose: () => void }) {
+  const rows = [
+    ["S", t.kbScan], ["N", t.kbNewScan], ["H", t.kbToggleView],
+    ["F", t.kbFilter], ["↑/↓", t.kbNav], ["Enter", t.kbDetail],
+    ["Esc", t.kbClose], ["?", t.kbHelp],
+  ];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-xs mx-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-gray-800 text-sm">{t.kbTitle}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+        </div>
+        <div className="border-t border-gray-100 pt-3 space-y-1.5">
+          {rows.map(([key, desc]) => (
+            <div key={key} className="flex items-center gap-3">
+              <kbd className="px-2 py-0.5 rounded bg-gray-100 border border-gray-300 text-xs font-mono font-bold text-gray-700 min-w-[40px] text-center">{key}</kbd>
+              <span className="text-xs text-gray-600">{desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ShortScanner() {
   const [data,         setData]         = useState<ScanResponse | null>(null);
@@ -1687,6 +1714,11 @@ export default function ShortScanner() {
   const [sortBy, setSortBy] = useState<SortKey>("displayScore");
   const [viewMode, setViewMode] = useState<"table" | "heat">("table");
   const [summaryFilter, setSummaryFilter] = useState<"strong"|"long"|"pattern"|"allTf"|"spike"|null>(null);
+
+  // Keyboard shortcuts (施策3)
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+  const [selectedIdx, setSelectedIdx] = useState<number>(-1);
+  const filterInputRef = useRef<HTMLInputElement | null>(null);
 
   // CoinGecko (施策7)
   const [cgMap,      setCgMap]      = useState<Map<string, CgMarketData>>(new Map());
@@ -1866,6 +1898,51 @@ export default function ShortScanner() {
     setExpandedRows(prev => { const n = new Set(prev); n.has(sym) ? n.delete(sym) : n.add(sym); return n; });
   }
 
+  // Keyboard shortcuts (施策3) — declared after extended so it can reference it
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      switch (e.key.toLowerCase()) {
+        case "s": e.preventDefault(); if (!loading) scan(); break;
+        case "n": e.preventDefault(); if (!loading) scan("new30"); break;
+        case "h": e.preventDefault(); setViewMode(v => v === "table" ? "heat" : "table"); break;
+        case "f": e.preventDefault(); filterInputRef.current?.focus(); break;
+        case "arrowdown":
+          e.preventDefault();
+          setSelectedIdx(i => {
+            const next = Math.min(i + 1, extended.length - 1);
+            if (extended[next]) setTimeout(() => document.getElementById(`row-${extended[next].symbol}`)?.scrollIntoView({ block: "nearest" }), 0);
+            return next;
+          });
+          break;
+        case "arrowup":
+          e.preventDefault();
+          setSelectedIdx(i => {
+            const next = Math.max(i - 1, 0);
+            if (extended[next]) setTimeout(() => document.getElementById(`row-${extended[next].symbol}`)?.scrollIntoView({ block: "nearest" }), 0);
+            return next;
+          });
+          break;
+        case "enter":
+          e.preventDefault();
+          if (selectedIdx >= 0 && extended[selectedIdx]) toggleRow(extended[selectedIdx].symbol);
+          break;
+        case "escape":
+          e.preventDefault();
+          setExpandedRows(new Set());
+          setShowShortcutHelp(false);
+          break;
+        case "?":
+          e.preventDefault();
+          setShowShortcutHelp(v => !v);
+          break;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, extended, selectedIdx]);
+
   // Share results (E)
   function shareResults() {
     if (!extended.length) return;
@@ -1941,6 +2018,12 @@ export default function ShortScanner() {
           {t.mexcReg}
         </a>
         <div className="flex gap-2 ml-auto">
+          {/* Keyboard shortcut help (施策3) */}
+          <button onClick={() => setShowShortcutHelp(true)}
+            className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-400 hover:bg-gray-50 transition-colors"
+            title="キーボードショートカット (?)">
+            ⌨️
+          </button>
           <button onClick={() => scan()} disabled={loading}
             className="px-3 md:px-4 py-1.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
             {loading ? "⏳ ..." : t.scanBtn}
@@ -2107,16 +2190,18 @@ export default function ShortScanner() {
                 </tr>
               </thead>
               <tbody>
-                {extended.map(c => {
+                {extended.map((c, idx) => {
                   const isOpen   = expandedRows.has(c.symbol);
                   const base     = c.symbol.replace(/_USDT$/, "");
                   const frPct    = c.fundingRate != null ? c.fundingRate * 100 : null;
                   const hasAlert = alerts.some(a => a.symbol === c.symbol);
                   const p24 = c.priceChange24h, p7 = c.priceChange7d;
+                  const isSelected = idx === selectedIdx;
                   return (
                     <React.Fragment key={c.symbol}>
-                      <tr id={`row-${c.symbol}`} onClick={() => toggleRow(c.symbol)}
-                        className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
+                      <tr id={`row-${c.symbol}`}
+                        onClick={() => { setSelectedIdx(idx); toggleRow(c.symbol); }}
+                        className={`border-b border-gray-100 cursor-pointer transition-colors ${isSelected ? "bg-blue-50 hover:bg-blue-50" : "hover:bg-gray-50"}`}>
 
                         {/* 銘柄 — sticky on mobile */}
                         <td className="px-2 md:px-3 py-2 sticky left-0 bg-white hover:bg-gray-50">
@@ -2307,6 +2392,9 @@ export default function ShortScanner() {
 
       {/* Toast (施策10) */}
       <ToastContainer toasts={toasts} />
+
+      {/* Keyboard shortcut help (施策3) */}
+      {showShortcutHelp && <ShortcutHelpModal t={t} onClose={() => setShowShortcutHelp(false)} />}
     </div>
   );
 }
