@@ -154,6 +154,8 @@ const T = {
     caSave: "保存",
     caReset: "リセット",
     caHits: "🔔 カスタムアラート",
+    viewTable: "📋 テーブル",
+    viewHeat: "🌡️ ヒートマップ",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -281,6 +283,8 @@ const T = {
     caSave: "Save",
     caReset: "Reset",
     caHits: "🔔 Custom Alerts",
+    viewTable: "📋 Table",
+    viewHeat: "🌡️ Heatmap",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -824,6 +828,62 @@ function CustomAlertPanel({ t, candidates }: { t: Translations; candidates: Exte
   );
 }
 
+// ─── Heatmap View (施策7) ─────────────────────────────────────────────────────
+function HeatmapView({ candidates }: { candidates: ExtendedCandidate[] }) {
+  const { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell } =
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require("recharts") as typeof import("recharts");
+
+  const data = candidates.map(c => ({
+    x: Math.abs(c.athDropPct),       // ATH下落率 (絶対値)
+    y: c.displayScore,               // スコア
+    z: Math.max(10, Math.min(1000, c.openInterest / 10_000)), // OI (バブルサイズ)
+    name: c.symbol.replace("_USDT",""),
+    hasPattern: !!c.chartPattern,
+    allTfDown: c.trendMultiTF?.alignment === 3,
+    fr: c.fundingRate,
+  }));
+
+  return (
+    <div className="w-full rounded-xl border border-gray-200 bg-white p-4">
+      <p className="text-xs text-gray-500 mb-3">X軸: ATH下落率 (%) | Y軸: スコア | 円サイズ: OI | 🟥=パターン検知 🔵=通常</p>
+      <ResponsiveContainer width="100%" height={380}>
+        <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+          <XAxis dataKey="x" type="number" name="ATH下落%" unit="%" tick={{ fontSize: 10 }} label={{ value: "ATH下落率(%)", position: "insideBottom", offset: -10, fontSize: 11 }} domain={["auto","auto"]} />
+          <YAxis dataKey="y" type="number" name="スコア" tick={{ fontSize: 10 }} label={{ value: "スコア", angle: -90, position: "insideLeft", fontSize: 11 }} />
+          <ZAxis dataKey="z" range={[30, 500]} />
+          <Tooltip
+            cursor={{ strokeDasharray: "3 3" }}
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null;
+              const d = payload[0].payload;
+              return (
+                <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs shadow-lg">
+                  <p className="font-bold text-gray-800">{d.name}</p>
+                  <p>スコア: <span className="font-mono font-bold">{d.y}</span></p>
+                  <p>ATH下落: <span className="font-mono text-red-600">-{d.x.toFixed(1)}%</span></p>
+                  {d.hasPattern && <p className="text-sky-600">📐 パターン検知</p>}
+                  {d.allTfDown && <p className="text-green-600">🎯 全TFダウン</p>}
+                </div>
+              );
+            }}
+          />
+          <Scatter data={data} shape="circle">
+            {data.map((entry, i) => (
+              <Cell key={i} fill={entry.allTfDown ? "#16a34a" : entry.hasPattern ? "#ef4444" : "#3b82f6"} fillOpacity={0.7} />
+            ))}
+          </Scatter>
+        </ScatterChart>
+      </ResponsiveContainer>
+      <div className="flex items-center gap-4 mt-2 text-[10px] text-gray-500 flex-wrap">
+        <span><span className="inline-block w-3 h-3 rounded-full bg-blue-500 mr-1" />通常</span>
+        <span><span className="inline-block w-3 h-3 rounded-full bg-red-500 mr-1" />パターン検知</span>
+        <span><span className="inline-block w-3 h-3 rounded-full bg-green-600 mr-1" />全TFダウン</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Sortable TH ────────────────────────────────────────────────────────────
 function SortTh({ label, sortKey, current, onSort, cls = "text-right" }: { label: string; sortKey: SortKey; current: SortKey; onSort: (k: SortKey) => void; cls?: string }) {
   return (
@@ -1126,8 +1186,9 @@ export default function ShortScanner() {
   const [minVol24k,   setMinVol24k]   = useState(100);
   const [minOiK,      setMinOiK]      = useState(0);
 
-  // Sort
+  // Sort & view
   const [sortBy, setSortBy] = useState<SortKey>("displayScore");
+  const [viewMode, setViewMode] = useState<"table" | "heat">("table");
 
   // CoinGecko (施策7)
   const [cgMap,      setCgMap]      = useState<Map<string, CgMarketData>>(new Map());
@@ -1412,21 +1473,33 @@ export default function ShortScanner() {
         </div>
       )}
 
-      {/* Results table */}
+      {/* Results table / heatmap */}
       {!loading && extended.length > 0 && (
         <div className="rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          {/* Legend */}
+          {/* Legend + view toggle */}
           <div className="flex flex-wrap items-center gap-3 px-3 md:px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
             <span className="font-semibold text-gray-600">{t.scoreLabel} (/{DISPLAY_MAX}):</span>
             <span style={{ color:"#b91c1c", fontWeight:700 }}>■ {t.scoreHigh}</span>
             <span style={{ color:"#c2410c", fontWeight:700 }} className="hidden sm:inline">■ {t.scoreMid}</span>
             <span style={{ color:"#6b7280" }} className="hidden sm:inline">■ {t.scoreLow}</span>
             <span className="ml-auto text-gray-400 sm:hidden">{t.scrollHint}</span>
+            <div className="flex rounded-lg border border-gray-300 overflow-hidden ml-auto">
+              <button onClick={() => setViewMode("table")}
+                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${viewMode==="table"?"bg-indigo-600 text-white":"bg-white text-gray-600 hover:bg-gray-50"}`}>
+                {t.viewTable}
+              </button>
+              <button onClick={() => setViewMode("heat")}
+                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${viewMode==="heat"?"bg-indigo-600 text-white":"bg-white text-gray-600 hover:bg-gray-50"}`}>
+                {t.viewHeat}
+              </button>
+            </div>
           </div>
 
-          {/* Mobile scroll wrapper */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[600px]">
+          {/* Heatmap view (施策7) */}
+          {viewMode === "heat" && <div className="p-4"><HeatmapView candidates={extended} /></div>}
+
+          {/* Table view */}
+          {viewMode === "table" && <div className="overflow-x-auto"><table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="bg-white border-b border-gray-200 text-xs font-semibold text-gray-600">
                   <th className="px-2 md:px-3 py-2.5 text-left sticky left-0 bg-white z-10">{t.colSymbol}</th>
@@ -1600,11 +1673,10 @@ export default function ShortScanner() {
                   );
                 })}
               </tbody>
-            </table>
-          </div>
-          <div className="px-3 md:px-4 py-2 text-xs text-gray-400 bg-gray-50 border-t border-gray-100">
+            </table></div>}
+          {viewMode === "table" && <div className="px-3 md:px-4 py-2 text-xs text-gray-400 bg-gray-50 border-t border-gray-100">
             {t.clickHint}
-          </div>
+          </div>}
         </div>
       )}
 
