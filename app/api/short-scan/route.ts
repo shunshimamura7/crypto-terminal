@@ -207,11 +207,8 @@ async function analyzeCandidate(
   const volumeChangeRatio = volumeAvg7d > 0 ? vol24h / volumeAvg7d : 1;
   const openInterest = parseFloat(ticker.holdVol || "0") * price;
 
-  // Apply mode-appropriate filter
-  const passes = isNew30
-    ? passesFilterNew30(athDropPct, volumeChangeRatio, vol24h, listedDaysAgo)
-    : passesFilter(athDropPct, volumeChangeRatio, vol24h);
-  if (!passes) return null;
+  // new30モードのみ上場日数で弾く（通常モードはクライアント側でフィルタ）
+  if (isNew30 && !passesFilterNew30(athDropPct, volumeChangeRatio, vol24h, listedDaysAgo)) return null;
 
   // 施策1: BTC相関係数
   let btcCorrelation = 0;
@@ -315,7 +312,6 @@ export async function GET(req: NextRequest) {
   }
 
   const btcReturns: number[] = cachedBtcReturns ?? [];
-  console.log(`[short-scan] BTC returns: ${btcReturns.length} bars, ticker cached: ${!!getCached("ticker")}`);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tickerMap: Record<string, any> = {};
@@ -332,6 +328,7 @@ export async function GET(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const totalTickerPairs = (cachedTicker as any[]).length;
+  console.log(`[short-scan] ── Stage0 ── ticker pairs total: ${totalTickerPairs}, BTC returns: ${btcReturns.length} bars`);
 
   // ── Stage 1: ticker-based pre-filter ────────────────────────────────────────
   const candidates: CandidateMeta[] = [];
@@ -364,6 +361,7 @@ export async function GET(req: NextRequest) {
   }
 
   const stage1Passed = candidates.length;
+  console.log(`[short-scan] ── Stage1 ── passed: ${stage1Passed} (vol≥$${PRE_FILTER_VOL_USD.toLocaleString()}${isNew30 ? ", listed≤30d" : ""})`);
 
   // ── Stage 2: fetch klines + FR ───────────────────────────────────────────────
   const results: ShortCandidate[] = [];
@@ -398,14 +396,27 @@ export async function GET(req: NextRequest) {
     if (i + BATCH < candidates.length) await sleep(BATCH_DELAY);
   }
 
-  const top20 = results
-    .sort((a, b) => b.shortScore - a.shortScore)
-    .slice(0, 20);
+  const sorted = results.sort((a, b) => b.shortScore - a.shortScore);
+  const top100 = sorted.slice(0, 100);
+
+  // ATH下落率の分布ログ
+  const dropBuckets = { lt10: 0, lt30: 0, lt50: 0, lt70: 0, ge70: 0 };
+  for (const r of results) {
+    const d = Math.abs(r.athDropPct);
+    if (d < 10) dropBuckets.lt10++;
+    else if (d < 30) dropBuckets.lt30++;
+    else if (d < 50) dropBuckets.lt50++;
+    else if (d < 70) dropBuckets.lt70++;
+    else dropBuckets.ge70++;
+  }
+  console.log(`[short-scan] ── Stage2 ── analyzed: ${stage2Fetched}, failed: ${stage2Failed}, passed: ${results.length}, returned: ${top100.length}`);
+  console.log(`[short-scan] ATH drop dist: <10%=${dropBuckets.lt10}, 10-30%=${dropBuckets.lt30}, 30-50%=${dropBuckets.lt50}, 50-70%=${dropBuckets.lt70}, ≥70%=${dropBuckets.ge70}`);
+  console.log(`[short-scan] volRatio dist: <0.3=${results.filter(r=>r.volumeChangeRatio<0.3).length}, 0.3-0.7=${results.filter(r=>r.volumeChangeRatio>=0.3&&r.volumeChangeRatio<0.7).length}, 0.7-2=${results.filter(r=>r.volumeChangeRatio>=0.7&&r.volumeChangeRatio<2).length}, ≥2=${results.filter(r=>r.volumeChangeRatio>=2).length}`);
 
   return NextResponse.json({
     success: true,
     scanTime: new Date().toISOString(),
-    candidates: top20,
+    candidates: top100,
     mode: isNew30 ? "new30" : "normal",
     meta: {
       totalTickerPairs,
