@@ -2097,6 +2097,33 @@ export default function ShortScanner() {
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank", "noopener");
   }
 
+  // URL share (施策4)
+  function shareFilterURL() {
+    const params = new URLSearchParams();
+    if (minDrop !== 30)     params.set("min_drop",    String(minDrop));
+    if (maxVolRatio !== 70) params.set("max_vol",     String(maxVolRatio));
+    if (minVol24k !== 100)  params.set("min_vol24h",  String(minVol24k));
+    if (maxDays !== 365)    params.set("max_days",    String(maxDays));
+    if (minOiK !== 0)       params.set("min_oi",      String(minOiK));
+    if (sortBy !== "displayScore") params.set("sort", sortBy);
+    const qs = params.toString();
+    const url = `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ""}`;
+    navigator.clipboard.writeText(url).then(() => addToast(t.urlCopied, "success")).catch(() => addToast(t.urlCopied, "success"));
+  }
+
+  // Restore filters from URL on mount (施策4)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.has("min_drop"))   setMinDrop(Number(p.get("min_drop")));
+    if (p.has("max_vol"))    setMaxVolRatio(Number(p.get("max_vol")));
+    if (p.has("min_vol24h")) setMinVol24k(Number(p.get("min_vol24h")));
+    if (p.has("max_days"))   setMaxDays(Number(p.get("max_days")));
+    if (p.has("min_oi"))     setMinOiK(Number(p.get("min_oi")));
+    if (p.has("sort"))       setSortBy(p.get("sort") as SortKey);
+    if (p.toString()) scan();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function exportCSV() {
     if (!extended.length) return;
     const hdr = ["Symbol","DisplayScore","BaseScore","ATH Drop%","Vol Ratio","24h%","7d%","FR","Vol24h","Avg7d Vol","List Days","OI","OI/Vol","Exclusivity","FRBonus","OnBinance","OnBybit"].join(",");
@@ -2173,6 +2200,11 @@ export default function ShortScanner() {
         <button onClick={shareResults} disabled={extended.length === 0}
           className="px-2 md:px-3 py-1.5 text-xs bg-sky-50 text-sky-700 border border-sky-300 rounded-lg hover:bg-sky-100 disabled:opacity-40 transition-colors">
           {t.shareBtn}
+        </button>
+        {/* URL share (施策4) */}
+        <button onClick={shareFilterURL}
+          className="px-2 md:px-3 py-1.5 text-xs bg-violet-50 text-violet-700 border border-violet-300 rounded-lg hover:bg-violet-100 transition-colors">
+          {t.shareUrl}
         </button>
         {/* MEXC referral (C) */}
         <a href={MEXC_REG_URL} target="_blank" rel="noopener noreferrer"
