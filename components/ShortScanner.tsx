@@ -580,36 +580,63 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
           </div>
         )}
 
-        {/* Score bars */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 mb-3">
-          {SCORE_BARS.map(bar => (
-            <div key={bar.key}>
-              <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span className="truncate">{bar.label}</span>
-                <span className="font-bold ml-1 shrink-0">{c.scoreBreakdown[bar.key]}/{bar.max}</span>
+        {/* Score bars + Radar (施策7) */}
+        <div className="flex flex-col md:flex-row gap-3 mb-3">
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {SCORE_BARS.map(bar => (
+              <div key={bar.key}>
+                <div className="flex justify-between text-xs text-gray-600 mb-1">
+                  <span className="truncate">{bar.label}</span>
+                  <span className="font-bold ml-1 shrink-0">{c.scoreBreakdown[bar.key]}/{bar.max}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div className="h-1.5 rounded-full" style={{ width: `${(c.scoreBreakdown[bar.key] / bar.max) * 100}%`, background: bar.color }} />
+                </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                <div className="h-1.5 rounded-full" style={{ width: `${(c.scoreBreakdown[bar.key] / bar.max) * 100}%`, background: bar.color }} />
+            ))}
+            {/* Client scores */}
+            {[
+              { label: "取引所独占度", val: c.exclusivityScore, max: 2, color: "#22c55e" },
+              { label: "FR連続ボーナス", val: c.frBonus, max: 1, color: "#8b5cf6" },
+            ].map(({ label, val, max, color }) => (
+              <div key={label}>
+                <div className="flex justify-between text-xs text-gray-600 mb-1">
+                  <span className="truncate">{label}</span><span className="font-bold">{val}/{max}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div className="h-1.5 rounded-full" style={{ width: `${(val / max) * 100}%`, background: color }} />
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        {/* Client scores */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          {[
-            { label: "取引所独占度", val: c.exclusivityScore, max: 2, cls: "bg-green-500" },
-            { label: "FR連続ボーナス", val: c.frBonus, max: 1, cls: "bg-violet-500" },
-          ].map(({ label, val, max, cls }) => (
-            <div key={label}>
-              <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span>{label}</span><span className="font-bold">{val}/{max}</span>
+          {/* Radar chart (施策7) */}
+          {(() => {
+            const { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } =
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              require("recharts") as typeof import("recharts");
+            const radarData = [
+              { s: "ATH",  v: (c.scoreBreakdown.dropScore / 3) * 100 },
+              { s: "出来高", v: (c.scoreBreakdown.volumeDryScore / 3) * 100 },
+              { s: "FR",   v: (c.scoreBreakdown.frScore / 2) * 100 },
+              { s: "TF",   v: (c.scoreBreakdown.trendScore / 3) * 100 },
+              { s: "OI",   v: (c.scoreBreakdown.oiScore / 2) * 100 },
+              { s: "急騰",  v: (c.scoreBreakdown.pumpScore / 2) * 100 },
+              { s: "独占",  v: (c.exclusivityScore / 2) * 100 },
+              { s: "BTC",  v: (c.scoreBreakdown.btcCorrScore / 1) * 100 },
+            ];
+            return (
+              <div className="shrink-0 flex flex-col items-center">
+                <ResponsiveContainer width={180} height={180}>
+                  <RadarChart data={radarData} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
+                    <PolarGrid stroke="#e5e7eb" />
+                    <PolarAngleAxis dataKey="s" tick={{ fontSize: 9, fill: "#6b7280" }} />
+                    <Radar dataKey="v" stroke="#ef4444" fill="#ef4444" fillOpacity={0.25} strokeWidth={1.5} />
+                  </RadarChart>
+                </ResponsiveContainer>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                <div className={`h-1.5 rounded-full ${cls}`} style={{ width: `${(val / max) * 100}%` }} />
-              </div>
-            </div>
-          ))}
+            );
+          })()}
         </div>
 
         {/* Data grid */}
