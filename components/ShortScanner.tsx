@@ -9,6 +9,8 @@ import {
 import type { ScanSnapshot } from "@/app/lib/snapshotStorage";
 import { detectAlerts, getDiffSummary } from "@/app/lib/snapshotDiff";
 import type { DiffAlert } from "@/app/lib/snapshotDiff";
+import { fetchCoinGeckoData, calcFuturesHeatScore, calcSnsHeatScore } from "@/app/lib/coinGeckoClient";
+import type { CgMarketData } from "@/app/lib/coinGeckoClient";
 
 // ─── Extended candidate with client-side scores ───────────────────────────────
 interface ExtendedCandidate extends ShortCandidate {
@@ -16,7 +18,10 @@ interface ExtendedCandidate extends ShortCandidate {
   listedOnBybit: boolean;
   exclusivityScore: number;   // 0-2 (施策2)
   frBonus: number;            // 0-1 (施策4)
-  displayScore: number;       // shortScore + exclusivity + frBonus (max 19)
+  cgData: CgMarketData | null; // 施策7
+  futuresHeatScore: number;   // 0-2 (施策7)
+  snsHeatScore: number;       // 0-1 (施策7)
+  displayScore: number;       // max 22 (with CG) or 19 (without)
 }
 
 interface ScanResponse {
@@ -30,8 +35,10 @@ interface ScanResponse {
 
 // ─── Score system ─────────────────────────────────────────────────────────────
 // Server max: 16 (drop3+volDry3+fr2+fresh2+oi2+trend2+pump2)
-// Client max: +2 exclusivity + 1 frBonus = 19 total
-const DISPLAY_MAX = 19;
+// Client max: +2 exclusivity + 1 frBonus + 2 futuresHeat + 1 snsHeat = 22 total
+const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
+const HAS_CG = CG_API_KEY.length > 0;
+const DISPLAY_MAX = HAS_CG ? 22 : 19;
 
 type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest";
 
@@ -146,7 +153,7 @@ function ScoreDetail({
 
   return (
     <tr>
-      <td colSpan={12} className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+      <td colSpan={HAS_CG ? 15 : 12} className="px-4 py-3 bg-gray-50 border-b border-gray-100">
         {/* Alert strip */}
         {symAlerts.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-3">
@@ -218,6 +225,56 @@ function ScoreDetail({
             {fmtPct(c.priceChange7d)}
           </span></div>
         </div>
+
+        {/* CoinGecko データ (施策7) */}
+        {HAS_CG && c.cgData && (() => {
+          const cg = c.cgData;
+          const snsTotal = (cg.twitterFollowers ?? 0) + (cg.telegramMembers ?? 0);
+          const futuresRatio = cg.spotVolume ? ((c.volume24h / cg.spotVolume) * 100) : null;
+          return (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <p className="text-xs font-semibold text-violet-700 mb-2">📊 CoinGecko データ</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-600">
+                <div>時価総額: <span className="font-mono font-semibold text-gray-800">{cg.marketCap ? fmtVol(cg.marketCap) : "N/A"}</span></div>
+                <div>FDV: <span className="font-mono font-semibold text-gray-800">{cg.fdv ? fmtVol(cg.fdv) : "N/A"}</span></div>
+                <div>現物出来高: <span className="font-mono font-semibold text-gray-800">{cg.spotVolume ? fmtVol(cg.spotVolume) : "N/A"}</span></div>
+                <div>先物/現物:
+                  <span className={`ml-1 font-mono font-semibold ${futuresRatio && futuresRatio > 500 ? "text-red-600" : futuresRatio && futuresRatio > 200 ? "text-orange-500" : "text-gray-800"}`}>
+                    {futuresRatio != null ? `${futuresRatio.toFixed(0)}%` : "N/A"}
+                  </span>
+                </div>
+                <div>Twitter: <span className="font-mono font-semibold text-gray-800">{cg.twitterFollowers != null ? cg.twitterFollowers.toLocaleString() : "N/A"}</span></div>
+                <div>Telegram: <span className="font-mono font-semibold text-gray-800">{cg.telegramMembers != null ? cg.telegramMembers.toLocaleString() : "N/A"}</span></div>
+                <div>SNS合計: <span className="font-mono font-semibold text-gray-800">{snsTotal > 0 ? snsTotal.toLocaleString() : "N/A"}</span></div>
+                {cg.mexcSharePct != null && (
+                  <div>MEXC集中: <span className={`font-mono font-semibold ${cg.mexcSharePct >= 90 ? "text-red-600" : "text-gray-800"}`}>
+                    {cg.mexcSharePct.toFixed(1)}%{cg.mexcSharePct >= 90 ? " 🔴" : ""}
+                  </span></div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div>
+                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <span>先物過熱度</span>
+                    <span className="font-bold">{c.futuresHeatScore}/2</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="h-2 rounded-full bg-rose-500" style={{ width: `${(c.futuresHeatScore / 2) * 100}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <span>SNS過熱ボーナス</span>
+                    <span className="font-bold">{c.snsHeatScore}/1</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="h-2 rounded-full bg-pink-400" style={{ width: `${c.snsHeatScore * 100}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 前回比 (施策3) */}
         {diff && (
@@ -322,6 +379,11 @@ export default function ShortScanner() {
   // Sort state (施策6)
   const [sortBy, setSortBy] = useState<SortKey>("displayScore");
 
+  // 施策7: CoinGecko data
+  const [cgMap, setCgMap]       = useState<Map<string, CgMarketData>>(new Map());
+  const [cgLoading, setCgLoading] = useState(false);
+  const [cgProgress, setCgProgress] = useState(0);
+
   // Load snapshots on mount
   useEffect(() => { setSnapshots(getSnapshots()); }, []);
 
@@ -380,6 +442,23 @@ export default function ShortScanner() {
       };
       saveSnapshot(snap);
       setSnapshots(getSnapshots());
+
+      // 施策7: CoinGecko enrichment（APIキー設定時のみ、スコア上位20件）
+      if (HAS_CG && json.candidates.length > 0) {
+        const top20 = json.candidates.slice(0, 20).map(c => c.symbol);
+        setCgLoading(true);
+        setCgProgress(0);
+        fetchCoinGeckoData(top20, CG_API_KEY, (done, total) => {
+          setCgProgress(Math.round(done / total * 100));
+        }).then(map => {
+          setCgMap(map);
+          console.log("[CoinGecko] enriched", map.size, "symbols");
+        }).catch(e => {
+          console.warn("[CoinGecko] fetch failed:", e);
+        }).finally(() => {
+          setCgLoading(false);
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -419,8 +498,15 @@ export default function ShortScanner() {
       const exclusivityScore = calcExclusivityScore(listedOnBinance, listedOnBybit);
       const consecutivePositive = getConsecutivePositiveFR(c.symbol, snapshots);
       const frBonus = (c.fundingRate !== null && c.fundingRate > 0 && consecutivePositive >= 3) ? 1 : 0;
-      const displayScore = c.shortScore + exclusivityScore + frBonus;
-      return { ...c, listedOnBinance, listedOnBybit, exclusivityScore, frBonus, displayScore };
+      const cgData = cgMap.get(c.symbol) ?? null;
+      const futuresHeatScore = cgData
+        ? calcFuturesHeatScore(c.volume24h, cgData.spotVolume)
+        : 0;
+      const snsHeatScore = cgData
+        ? calcSnsHeatScore(cgData.twitterFollowers, cgData.telegramMembers, c.priceChange7d)
+        : 0;
+      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore;
+      return { ...c, listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, displayScore };
     });
 
     // 施策6: ソート
@@ -433,7 +519,7 @@ export default function ShortScanner() {
         default:               return b.displayScore - a.displayScore;
       }
     });
-  }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy]);
+  }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy, cgMap]);
 
   // 施策3: アラート検知
   const alerts = useMemo(() => detectAlerts(data?.candidates ?? [], snapshots), [data, snapshots]);
@@ -565,6 +651,12 @@ export default function ShortScanner() {
           {snapshots.length > 0 && (
             <span>スナップショット: <strong className="text-teal-600">{snapshots.length}件</strong></span>
           )}
+          {HAS_CG && cgLoading && (
+            <span className="text-violet-600">CoinGecko取得中... {cgProgress}%</span>
+          )}
+          {HAS_CG && !cgLoading && cgMap.size > 0 && (
+            <span className="text-violet-600">CG: <strong>{cgMap.size}件</strong></span>
+          )}
           <span className="ml-auto">最終更新: {new Date(data.scanTime).toLocaleTimeString("ja-JP")}</span>
         </div>
       )}
@@ -625,6 +717,9 @@ export default function ShortScanner() {
                 <th className="px-3 py-2.5 text-right">FR</th>
                 <SortTh label="OI"      sortKey="openInterest"   current={sortBy} onSort={setSortBy} />
                 <th className="px-3 py-2.5 text-right">24h出来高</th>
+                {HAS_CG && <th className="px-3 py-2.5 text-right">現物Vol</th>}
+                {HAS_CG && <th className="px-3 py-2.5 text-right">先/現</th>}
+                {HAS_CG && <th className="px-3 py-2.5 text-right">SNS</th>}
                 <th className="px-3 py-2.5 text-right">上場</th>
                 <th className="px-3 py-2.5 text-center">取引所</th>
               </tr>
@@ -728,6 +823,43 @@ export default function ShortScanner() {
                       <td className="px-3 py-2.5 text-right text-gray-600">
                         {fmtVol(c.volume24h)}
                       </td>
+
+                      {/* CoinGecko: 現物Vol (施策7) */}
+                      {HAS_CG && (() => {
+                        const cg = c.cgData;
+                        if (!cg) return <td className="px-3 py-2.5 text-right text-gray-300 text-xs">—</td>;
+                        return (
+                          <td className="px-3 py-2.5 text-right text-xs text-gray-600">
+                            {cg.spotVolume != null ? fmtVol(cg.spotVolume) : <span className="text-gray-300">N/A</span>}
+                          </td>
+                        );
+                      })()}
+
+                      {/* 先物/現物比 (施策7) */}
+                      {HAS_CG && (() => {
+                        const cg = c.cgData;
+                        if (!cg?.spotVolume) return <td className="px-3 py-2.5 text-right text-gray-300 text-xs">—</td>;
+                        const ratio = (c.volume24h / cg.spotVolume) * 100;
+                        const cls = ratio > 500 ? "text-red-600 font-bold" : ratio > 200 ? "text-orange-500" : "text-gray-500";
+                        return (
+                          <td className={`px-3 py-2.5 text-right text-xs font-mono ${cls}`}>
+                            {ratio.toFixed(0)}%
+                            {ratio > 500 && <span className="ml-0.5">🔴</span>}
+                          </td>
+                        );
+                      })()}
+
+                      {/* SNS (施策7) */}
+                      {HAS_CG && (() => {
+                        const cg = c.cgData;
+                        if (!cg) return <td className="px-3 py-2.5 text-right text-gray-300 text-xs">—</td>;
+                        const total = (cg.twitterFollowers ?? 0) + (cg.telegramMembers ?? 0);
+                        return (
+                          <td className="px-3 py-2.5 text-right text-xs text-gray-600">
+                            {total > 0 ? fmtVol(total).replace("$", "") : <span className="text-gray-300">N/A</span>}
+                          </td>
+                        );
+                      })()}
 
                       {/* 上場日数 */}
                       <td className="px-3 py-2.5 text-right text-gray-500 text-xs">
