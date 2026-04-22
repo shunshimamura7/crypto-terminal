@@ -21,7 +21,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja" className={`${notoSansJP.variable} h-full`}>
-      <body className="min-h-full bg-white text-gray-800">{children}</body>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#ef4444" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
+      </head>
+      <body className="min-h-full bg-white text-gray-800">
+        {children}
+        <script dangerouslySetInnerHTML={{ __html: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+          }
+        `}} />
+      </body>
     </html>
   );
 }
