@@ -94,11 +94,22 @@ async function analyzeCandidate(
   // 24h変動率 (riseFallRate は小数表現: 0.05 = +5%)
   const priceChange24h = parseFloat(ticker.riseFallRate || "0") * 100;
 
-  const [kline4hRes, kline1dRes, frRes] = await Promise.allSettled([
+  const day30AgoSec = nowSec - 30 * 86_400;
+  const [kline1hRes, kline4hRes, kline1dRes, frRes] = await Promise.allSettled([
+    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour1&start=${day7AgoSec}&end=${nowSec}`, 8000),  // 施策2
     mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 8000),
-    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Day1&start=${day7AgoSec}&end=${nowSec}`, 8000),
+    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Day1&start=${day30AgoSec}&end=${nowSec}`, 8000),
     mexcGet(`/api/v1/contract/funding_rate/${symbol}`, 5000),
   ]);
+
+  // 施策2: 1h closes
+  const closes1h: number[] = [];
+  if (kline1hRes.status === "fulfilled" && kline1hRes.value?.data) {
+    for (const c of (kline1hRes.value.data.close || []) as string[]) {
+      const n = parseFloat(c);
+      if (n > 0) closes1h.push(n);
+    }
+  }
 
   // ATH: max high from 4h klines
   let ath14d = price;
@@ -129,9 +140,10 @@ async function analyzeCandidate(
     tradeSetup = calcTradeSetup(price, kHighs4h, kLows4h, kVols4h, volumeProfile);
   }
 
-  // 7-day avg daily volume + 7d price change
+  // 7-day avg daily volume + 7d price change + 施策2: closes1d
   let volumeAvg7d = vol24h;
   let priceChange7d = 0;
+  const closes1d: number[] = [];
   if (kline1dRes.status === "fulfilled" && kline1dRes.value?.data) {
     const kd = kline1dRes.value.data;
     const useAmount = Array.isArray(kd.amount) && kd.amount.length > 0;
@@ -141,8 +153,10 @@ async function analyzeCandidate(
       const vals = useAmount ? nums : nums.map(v => v * price);
       volumeAvg7d = vals.reduce((a, b) => a + b, 0) / vals.length;
     }
-    // 7d price change: (current - 7d ago close) / 7d ago close * 100
-    const closes1d: number[] = ((kd.close || []) as string[]).map(Number).filter((n: number) => n > 0);
+    for (const c of (kd.close || []) as string[]) {
+      const n = parseFloat(c);
+      if (n > 0) closes1d.push(n);
+    }
     if (closes1d.length >= 2) {
       const oldest = closes1d[0];
       if (oldest > 0) priceChange7d = (price - oldest) / oldest * 100;
@@ -187,8 +201,8 @@ async function analyzeCandidate(
     btcCorrelation = pearsonCorrelation(myReturns.slice(-len), btcReturns.slice(-len));
   }
 
-  const { score, breakdown, oiRatio, trendDirection } = calcShortScore(
-    athDropPct, volumeChangeRatio, fundingRate, listedDaysAgo, openInterest, vol24h, closes4h, priceChange7d, btcCorrelation,
+  const { score, breakdown, oiRatio, trendDirection, trendMultiTF } = calcShortScore(
+    athDropPct, volumeChangeRatio, fundingRate, listedDaysAgo, openInterest, vol24h, closes4h, priceChange7d, btcCorrelation, closes1h, closes1d,
   );
 
   return {
@@ -209,6 +223,7 @@ async function analyzeCandidate(
     volumeProfile,
     tradeSetup,
     btcCorrelation,
+    trendMultiTF,
     shortScore: score,
     scoreBreakdown: breakdown,
   };

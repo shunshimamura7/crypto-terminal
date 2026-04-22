@@ -8,9 +8,16 @@ export interface ShortScoreBreakdown {
   frScore: number;         // 0-2
   freshnessScore: number;  // 0-2
   oiScore: number;         // 0-2
-  trendScore: number;      // 0-2 (EMA9/EMA21 4h)
+  trendScore: number;      // 0-3 (マルチTF一致度: 3TF全DOWN=3, 2=2, 1=1, 0=0)
   pumpScore: number;       // 0-2 (7d急騰度)
   btcCorrScore: number;    // 0-1 (BTC非連動ボーナス)
+}
+
+export interface MultiTFTrend {
+  h1: TrendDirection;
+  h4: TrendDirection;
+  d1: TrendDirection;
+  alignment: number;  // 0-3: DOWNのTF数
 }
 
 export interface ShortCandidate {
@@ -31,7 +38,8 @@ export interface ShortCandidate {
   volumeProfile: VolumeProfile | null;
   tradeSetup: TradeSetup | null;
   btcCorrelation: number;    // -1.0〜+1.0 (BTC相関係数)
-  shortScore: number;        // server max 17 (after v5施策1)
+  trendMultiTF: MultiTFTrend | null;  // マルチタイムフレームトレンド
+  shortScore: number;        // server max 18 (after v5施策1+2)
   scoreBreakdown: ShortScoreBreakdown;
 }
 
@@ -219,16 +227,40 @@ function calcEMA(closes: number[], period: number): number {
   return ema;
 }
 
-// trendScore (0-2): EMA9/EMA21によるトレンド判定
-export function calcTrendScore(closes4h: number[]): { score: number; direction: TrendDirection } {
-  if (closes4h.length < 21) return { score: 1, direction: "NEUTRAL" };
-  const ema9  = calcEMA(closes4h, 9);
-  const ema21 = calcEMA(closes4h, 21);
-  if (ema21 === 0) return { score: 1, direction: "NEUTRAL" };
+// 単一TFのトレンド判定（EMA9/EMA21）
+export function calcTrendDirection(closes: number[]): TrendDirection {
+  if (closes.length < 21) return "NEUTRAL";
+  const ema9  = calcEMA(closes, 9);
+  const ema21 = calcEMA(closes, 21);
+  if (ema21 === 0) return "NEUTRAL";
   const diffPct = (ema9 - ema21) / ema21 * 100;
-  if (diffPct < -0.5) return { score: 2, direction: "DOWN" };
-  if (diffPct > 0.5)  return { score: 0, direction: "UP" };
+  if (diffPct < -0.5) return "DOWN";
+  if (diffPct > 0.5)  return "UP";
+  return "NEUTRAL";
+}
+
+// trendScore (0-2→0-3): マルチTF一致度 (施策2)
+export function calcTrendScore(closes4h: number[]): { score: number; direction: TrendDirection } {
+  const dir = calcTrendDirection(closes4h);
+  // 単独4hの場合: DOWN=2, UP=0, NEUTRAL=1（後方互換）
+  if (dir === "DOWN")    return { score: 2, direction: "DOWN" };
+  if (dir === "UP")      return { score: 0, direction: "UP" };
   return { score: 1, direction: "NEUTRAL" };
+}
+
+// マルチTFトレンドスコア (0-3): 施策2
+export function calcMultiTFScore(closes1h: number[], closes4h: number[], closes1d: number[]): {
+  score: number;
+  multiTF: MultiTFTrend;
+} {
+  const h1 = calcTrendDirection(closes1h);
+  const h4 = calcTrendDirection(closes4h);
+  const d1 = calcTrendDirection(closes1d);
+  const alignment = [h1, h4, d1].filter(d => d === "DOWN").length;
+  return {
+    score: alignment,  // 0-3点
+    multiTF: { h1, h4, d1, alignment },
+  };
 }
 
 // exclusivityScore (0-2): 取引所独占度 (施策2, client-side)
@@ -238,7 +270,7 @@ export function calcExclusivityScore(listedOnBinance: boolean, listedOnBybit: bo
   return 0;
 }
 
-// Server-side score max: 3+3+2+2+2+2+2+1 = 17 (v5施策1 BTC相関追加)
+// Server-side score max: 3+3+2+2+3+2+2+1 = 18 (v5施策1+2)
 export function calcShortScore(
   athDropPct: number,
   volumeChangeRatio: number,
@@ -249,11 +281,14 @@ export function calcShortScore(
   closes4h: number[],
   priceChange7d: number,
   btcCorrelation: number,
+  closes1h: number[],   // 施策2: マルチTF
+  closes1d: number[],   // 施策2: マルチTF
 ): {
   score: number;
   breakdown: ShortScoreBreakdown;
   oiRatio: number;
   trendDirection: TrendDirection;
+  trendMultiTF: MultiTFTrend;
 } {
   const dropScore      = calcDropScore(athDropPct);
   const volumeDryScore = calcVolumeDryScore(volumeChangeRatio);
@@ -261,15 +296,22 @@ export function calcShortScore(
   const freshnessScore = calcFreshnessScore(listedDaysAgo);
   const oiRatio        = volume24h > 0 ? openInterest / volume24h : 0;
   const oiScore        = calcOIScore(oiRatio);
-  const { score: trendScore, direction: trendDirection } = calcTrendScore(closes4h);
   const pumpScore      = calcPumpScore(priceChange7d);
   const btcCorrScore   = calcBtcCorrScore(btcCorrelation);
+
+  // 施策2: マルチTFトレンド（4hデータがあれば3TF、なければ4h単独）
+  const { score: trendScore, multiTF: trendMultiTF } = closes1h.length >= 10 || closes1d.length >= 5
+    ? calcMultiTFScore(closes1h, closes4h, closes1d)
+    : { score: calcTrendScore(closes4h).score, multiTF: { h1: "NEUTRAL" as TrendDirection, h4: calcTrendDirection(closes4h), d1: "NEUTRAL" as TrendDirection, alignment: calcTrendDirection(closes4h) === "DOWN" ? 1 : 0 } };
+
+  const trendDirection = trendMultiTF.h4; // 後方互換: 4hが主トレンド
 
   return {
     score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + trendScore + pumpScore + btcCorrScore,
     breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, trendScore, pumpScore, btcCorrScore },
     oiRatio,
     trendDirection,
+    trendMultiTF,
   };
 }
 

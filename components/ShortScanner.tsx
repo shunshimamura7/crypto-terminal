@@ -269,7 +269,7 @@ interface ScanResponse {
 
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 23 : 20; // v5施策1: BTC非連動+1
+const DISPLAY_MAX = HAS_CG ? 24 : 21; // v5施策1+2: BTC非連動+1, MTF 2→3
 
 type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest";
 
@@ -303,7 +303,7 @@ const SCORE_BARS: Array<{ key: keyof ShortScoreBreakdown; label: string; max: nu
   { key: "frScore",        label: "FR逆張り",   max: 2, color: "#a855f7" },
   { key: "freshnessScore", label: "上場新しさ",  max: 2, color: "#3b82f6" },
   { key: "oiScore",        label: "OI過剰",     max: 2, color: "#06b6d4" },
-  { key: "trendScore",     label: "EMAトレンド", max: 2, color: "#10b981" },
+  { key: "trendScore",     label: "TF一致度",   max: 3, color: "#10b981" },
   { key: "pumpScore",      label: "7d急騰",     max: 2, color: "#f43f5e" },
   { key: "btcCorrScore",   label: "BTC非連動",  max: 1, color: "#8b5cf6" },
 ];
@@ -436,6 +436,15 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
           <div>24h: <span className={`font-mono font-semibold ${c.priceChange24h >= 50 ? "text-red-600" : c.priceChange24h <= -30 ? "text-green-600" : "text-gray-700"}`}>{fmtPct(c.priceChange24h)}</span></div>
           <div>7d: <span className={`font-mono font-semibold ${c.priceChange7d >= 100 ? "text-red-700" : c.priceChange7d >= 50 ? "text-red-500" : c.priceChange7d <= -30 ? "text-green-600" : "text-gray-700"}`}>{fmtPct(c.priceChange7d)}</span></div>
           <div title="BTCとの価格連動度">{t.colBtcCorr}: <span className={`font-mono font-semibold ${c.btcCorrelation >= 0.7 ? "text-red-600" : c.btcCorrelation >= 0.3 ? "text-orange-500" : "text-green-600"}`}>{c.btcCorrelation.toFixed(3)}{c.btcCorrelation < 0.3 ? " ✅" : c.btcCorrelation >= 0.7 ? " ⚠️" : ""}</span></div>
+          {c.trendMultiTF && (
+            <div>MTF:
+              {(["h1","h4","d1"] as const).map(tf => {
+                const d = c.trendMultiTF![tf];
+                return <span key={tf} className={`ml-1 font-mono font-bold text-[10px] ${d==="DOWN"?"text-red-500":d==="UP"?"text-green-600":"text-gray-400"}`}>{tf.toUpperCase()}{d==="DOWN"?"↓":d==="UP"?"↑":"→"}</span>;
+              })}
+              {c.trendMultiTF.alignment === 3 && <span className="ml-1 text-green-600 font-bold text-xs">🎯全TF一致</span>}
+            </div>
+          )}
         </div>
 
         {/* Trade Setup (施策10) */}
@@ -1223,9 +1232,19 @@ export default function ShortScanner() {
                               <span className="font-mono font-bold text-gray-800 text-xs md:text-sm">{base}</span>
                               <span className="text-gray-400 text-[10px]">/USDT</span>
                               {hasAlert && <span className="text-xs">🔔</span>}
-                              <span className={`text-[10px] font-bold ${c.trendDirection==="DOWN"?"text-red-500":c.trendDirection==="UP"?"text-green-600":"text-gray-400"}`}>
-                                {c.trendDirection==="DOWN"?"▼":c.trendDirection==="UP"?"▲":"→"}
-                              </span>
+                              {c.trendMultiTF ? (
+                                <span className="flex items-center gap-0.5 text-[9px] font-bold">
+                                  {(["h1","h4","d1"] as const).map(tf => {
+                                    const d = c.trendMultiTF![tf];
+                                    return <span key={tf} className={d==="DOWN"?"text-red-500":d==="UP"?"text-green-600":"text-gray-400"}>{tf.toUpperCase()}{d==="DOWN"?"↓":d==="UP"?"↑":"→"}</span>;
+                                  })}
+                                  {c.trendMultiTF.alignment === 3 && <span className="text-green-600 font-black">🎯</span>}
+                                </span>
+                              ) : (
+                                <span className={`text-[10px] font-bold ${c.trendDirection==="DOWN"?"text-red-500":c.trendDirection==="UP"?"text-green-600":"text-gray-400"}`}>
+                                  {c.trendDirection==="DOWN"?"▼":c.trendDirection==="UP"?"▲":"→"}
+                                </span>
+                              )}
                               <span className="text-gray-400 text-[10px]">{isOpen?"▲":"▼"}</span>
                             </div>
                             <LiquidityBadge oi={c.openInterest} />
