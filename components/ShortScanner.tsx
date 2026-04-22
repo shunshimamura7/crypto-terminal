@@ -103,6 +103,9 @@ const T = {
     btcCorrLow: "BTC非連動",
     volSpikePump: "🔥 PUMP",
     volSpikeDump: "💀 DUMP",
+    patBearFlag: "🚩 ベアフラッグ",
+    patDeadCat: "🐱 デッドキャット",
+    patDescWedge: "📐 下降ウェッジ",
     btTitle: "📊 バックテスト実績",
     btPeriod: "期間",
     btSummary: "サマリー",
@@ -214,6 +217,9 @@ const T = {
     btcCorrLow: "BTC Independent",
     volSpikePump: "🔥 PUMP",
     volSpikeDump: "💀 DUMP",
+    patBearFlag: "🚩 Bear Flag",
+    patDeadCat: "🐱 Dead Cat",
+    patDescWedge: "📐 Desc Wedge",
     btTitle: "📊 Backtest Results",
     btPeriod: "Period",
     btSummary: "Summary",
@@ -273,7 +279,7 @@ interface ScanResponse {
 
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 24 : 21; // v5施策1+2: BTC非連動+1, MTF 2→3
+const DISPLAY_MAX = HAS_CG ? 25 : 22; // v5施策1+2+4: BTC非連動+1, MTF 2→3, パターン+1
 
 type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest";
 
@@ -310,6 +316,7 @@ const SCORE_BARS: Array<{ key: keyof ShortScoreBreakdown; label: string; max: nu
   { key: "trendScore",     label: "TF一致度",   max: 3, color: "#10b981" },
   { key: "pumpScore",      label: "7d急騰",     max: 2, color: "#f43f5e" },
   { key: "btcCorrScore",   label: "BTC非連動",  max: 1, color: "#8b5cf6" },
+  { key: "patternScore",   label: "パターン",   max: 1, color: "#0ea5e9" },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -1258,6 +1265,11 @@ export default function ShortScanner() {
                               const { label, cls } = btStatusLabel(bts, t);
                               return <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>{label}</span>;
                             })()}
+                            {c.chartPattern && (
+                              <span className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-sky-50 text-sky-700 border-sky-300">
+                                {c.chartPattern.type === "bear_flag" ? t.patBearFlag : c.chartPattern.type === "dead_cat" ? t.patDeadCat : t.patDescWedge}
+                              </span>
+                            )}
                           </div>
                         </td>
 

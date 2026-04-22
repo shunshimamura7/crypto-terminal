@@ -11,6 +11,71 @@ export interface ShortScoreBreakdown {
   trendScore: number;      // 0-3 (マルチTF一致度: 3TF全DOWN=3, 2=2, 1=1, 0=0)
   pumpScore: number;       // 0-2 (7d急騰度)
   btcCorrScore: number;    // 0-1 (BTC非連動ボーナス)
+  patternScore: number;    // 0-1 (チャートパターン検知: 施策4)
+}
+
+// ─── Chart Pattern (施策4) ────────────────────────────────────────────────────
+
+export type PatternType = "bear_flag" | "dead_cat" | "descending_wedge";
+
+export interface ChartPattern {
+  type: PatternType;
+  confidence: number; // 0-1
+}
+
+export function detectChartPattern(
+  closes: number[],
+  highs: number[],
+  lows: number[],
+  priceChange24h: number,
+  athDropPct: number,
+): ChartPattern | null {
+  if (closes.length < 10) return null;
+
+  const n = closes.length;
+  const split = Math.floor(n * 0.6);
+  const phase1 = closes.slice(0, split);
+  const phase2 = closes.slice(split);
+
+  // ── Bear Flag: 急落 → 横ばい/小反発 ──
+  if (phase1.length >= 5 && phase2.length >= 3) {
+    const p1High = Math.max(...phase1);
+    const p1Low  = Math.min(...phase1);
+    const p1Drop = p1High > 0 ? (p1High - p1Low) / p1High : 0;
+    const p2First = phase2[0];
+    const p2Last  = phase2[phase2.length - 1];
+    const p2Change = p2First > 0 ? (p2Last - p2First) / p2First : 0;
+    const p2High   = Math.max(...phase2);
+    if (p1Drop > 0.30 && Math.abs(p2Change) < 0.15 && p2High < p1High * 0.9) {
+      return { type: "bear_flag", confidence: Math.min(1, p1Drop) };
+    }
+  }
+
+  // ── Dead Cat Bounce: 大幅下落後の短期反発 ──
+  if (athDropPct <= -40 && priceChange24h >= 5) {
+    return { type: "dead_cat", confidence: 0.7 };
+  }
+
+  // ── Descending Wedge: 高値・安値ともに下降しレンジが収縮 ──
+  if (highs.length >= 10 && lows.length >= 10) {
+    const rHigh = highs.slice(-10);
+    const rLow  = lows.slice(-10);
+    const highDecline  = rHigh[0] > rHigh[rHigh.length - 1];
+    const lowDecline   = rLow[0]  > rLow[rLow.length - 1];
+    const rangeFirst   = rHigh[0] - rLow[0];
+    const rangeLast    = rHigh[rHigh.length - 1] - rLow[rLow.length - 1];
+    const narrowing    = rangeFirst > 0 && rangeLast < rangeFirst * 0.7;
+    if (highDecline && lowDecline && narrowing) {
+      return { type: "descending_wedge", confidence: 0.6 };
+    }
+  }
+
+  return null;
+}
+
+// patternScore (0-1)
+export function calcPatternScore(pattern: ChartPattern | null): number {
+  return pattern !== null ? 1 : 0;
 }
 
 // ─── Volume Spike (施策3) ────────────────────────────────────────────────────
@@ -57,7 +122,8 @@ export interface ShortCandidate {
   btcCorrelation: number;    // -1.0〜+1.0 (BTC相関係数)
   trendMultiTF: MultiTFTrend | null;  // マルチタイムフレームトレンド
   volumeSpike: VolumeSpike | null;    // 出来高異常検知 (施策3)
-  shortScore: number;        // server max 18 (after v5施策1+2)
+  chartPattern: ChartPattern | null;  // チャートパターン (施策4)
+  shortScore: number;        // server max 19 (after v5施策1+2+4)
   scoreBreakdown: ShortScoreBreakdown;
 }
 
@@ -288,7 +354,7 @@ export function calcExclusivityScore(listedOnBinance: boolean, listedOnBybit: bo
   return 0;
 }
 
-// Server-side score max: 3+3+2+2+3+2+2+1 = 18 (v5施策1+2)
+// Server-side score max: 3+3+2+2+3+2+2+1+1 = 19 (v5施策1+2+4)
 export function calcShortScore(
   athDropPct: number,
   volumeChangeRatio: number,
@@ -301,12 +367,16 @@ export function calcShortScore(
   btcCorrelation: number,
   closes1h: number[],   // 施策2: マルチTF
   closes1d: number[],   // 施策2: マルチTF
+  highs4h: number[],    // 施策4: パターン検知
+  lows4h: number[],     // 施策4: パターン検知
+  priceChange24h: number, // 施策4: デッドキャット判定
 ): {
   score: number;
   breakdown: ShortScoreBreakdown;
   oiRatio: number;
   trendDirection: TrendDirection;
   trendMultiTF: MultiTFTrend;
+  chartPattern: ChartPattern | null;
 } {
   const dropScore      = calcDropScore(athDropPct);
   const volumeDryScore = calcVolumeDryScore(volumeChangeRatio);
@@ -324,12 +394,17 @@ export function calcShortScore(
 
   const trendDirection = trendMultiTF.h4; // 後方互換: 4hが主トレンド
 
+  // 施策4: チャートパターン検知
+  const chartPattern = detectChartPattern(closes4h, highs4h, lows4h, priceChange24h, athDropPct);
+  const patternScore  = calcPatternScore(chartPattern);
+
   return {
-    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + trendScore + pumpScore + btcCorrScore,
-    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, trendScore, pumpScore, btcCorrScore },
+    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + trendScore + pumpScore + btcCorrScore + patternScore,
+    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, trendScore, pumpScore, btcCorrScore, patternScore },
     oiRatio,
     trendDirection,
     trendMultiTF,
+    chartPattern,
   };
 }
 

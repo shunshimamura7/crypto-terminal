@@ -201,12 +201,13 @@ async function analyzeCandidate(
     btcCorrelation = pearsonCorrelation(myReturns.slice(-len), btcReturns.slice(-len));
   }
 
-  const { score, breakdown, oiRatio, trendDirection, trendMultiTF } = calcShortScore(
-    athDropPct, volumeChangeRatio, fundingRate, listedDaysAgo, openInterest, vol24h, closes4h, priceChange7d, btcCorrelation, closes1h, closes1d,
-  );
-
   // 施策3: 出来高異常検知
   const volumeSpike = calcVolumeSpike(volumeChangeRatio, priceChange24h);
+
+  const { score, breakdown, oiRatio, trendDirection, trendMultiTF, chartPattern } = calcShortScore(
+    athDropPct, volumeChangeRatio, fundingRate, listedDaysAgo, openInterest, vol24h, closes4h, priceChange7d, btcCorrelation, closes1h, closes1d,
+    kHighs4h, kLows4h, priceChange24h,  // 施策4: パターン検知
+  );
 
   return {
     symbol,
@@ -228,6 +229,7 @@ async function analyzeCandidate(
     btcCorrelation,
     trendMultiTF,
     volumeSpike,
+    chartPattern,
     shortScore: score,
     scoreBreakdown: breakdown,
   };
