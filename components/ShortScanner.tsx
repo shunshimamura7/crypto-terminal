@@ -221,10 +221,6 @@ const T = {
     toastCsvDone: "📄 CSVをダウンロードしました",
     toastBtRecord: "件の銘柄を自動記録しました",
     toastScanError: "スキャンに失敗しました",
-    // TOP10
-    top10Btn: "🔥 ショートTOP10",
-    top10ModeBadge: "🔥 TOP10モード",
-    top10Desc: "スコア上位10銘柄を自動選出。流動性$50K+、OI $10K+でフィルタ済み。",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -413,10 +409,6 @@ const T = {
     toastCsvDone: "📄 CSV downloaded",
     toastBtRecord: "symbols auto-recorded",
     toastScanError: "Scan failed",
-    // TOP10
-    top10Btn: "🔥 Short TOP10",
-    top10ModeBadge: "🔥 TOP10 Mode",
-    top10Desc: "Top 10 by score. Filtered: Vol $50K+, OI $10K+.",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -1801,7 +1793,7 @@ export default function ShortScanner() {
   // Filters
   const [minDrop,     setMinDrop]     = useState(30);
   const [maxVolRatio, setMaxVolRatio] = useState(70);
-  const [maxDays,     setMaxDays]     = useState(365);
+  const [maxDays,     setMaxDays]     = useState(9999);
   const [minVol24k,   setMinVol24k]   = useState(100);
   const [minOiK,      setMinOiK]      = useState(0);
 
@@ -1809,7 +1801,6 @@ export default function ShortScanner() {
   const [sortBy, setSortBy] = useState<SortKey>("displayScore");
   const [viewMode, setViewMode] = useState<"table" | "heat">("table");
   const [summaryFilter, setSummaryFilter] = useState<"strong"|"long"|"pattern"|"allTf"|"spike"|null>(null);
-  const [top10Mode, setTop10Mode] = useState(false);
 
   // Auto-refresh interval (施策5)
   const [autoIntervalMin, setAutoIntervalMin] = useState<0|5|10|30|60>(() => {
@@ -1953,18 +1944,6 @@ export default function ShortScanner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notifState]);
 
-  function handleTop10Scan() {
-    setMinVol24k(50);
-    setMinOiK(10);
-    setTop10Mode(true);
-    scan();
-  }
-
-  function handleNormalScan(mode?: "new30") {
-    setTop10Mode(false);
-    scan(mode);
-  }
-
   function handleAutoRefresh() {
     if (autoRefresh) { if (autoTimerRef.current) clearInterval(autoTimerRef.current); autoTimerRef.current = null; setAutoRefresh(false); }
     else { setAutoRefresh(true); autoTimerRef.current = setInterval(() => scan(), 5 * 60 * 1000); }
@@ -2037,19 +2016,16 @@ export default function ShortScanner() {
       }
     });
 
-    let result = sorted;
-    if (summaryFilter) {
-      switch (summaryFilter) {
-        case "strong":  result = sorted.filter(c => c.displayScore >= 10); break;
-        case "long":    result = sorted.filter(c => isLongBias(c)); break;
-        case "pattern": result = sorted.filter(c => !!c.chartPattern); break;
-        case "allTf":   result = sorted.filter(c => c.trendMultiTF?.alignment === 3); break;
-        case "spike":   result = sorted.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral"); break;
-      }
+    if (!summaryFilter) return sorted;
+    switch (summaryFilter) {
+      case "strong":  return sorted.filter(c => c.displayScore >= 10);
+      case "long":    return sorted.filter(c => isLongBias(c));
+      case "pattern": return sorted.filter(c => !!c.chartPattern);
+      case "allTf":   return sorted.filter(c => c.trendMultiTF?.alignment === 3);
+      case "spike":   return sorted.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral");
+      default:        return sorted;
     }
-    if (top10Mode) result = result.slice(0, 10);
-    return result;
-  }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, top10Mode]);
+  }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter]);
 
   const alerts = useMemo(() => detectAlerts(data?.candidates ?? [], snapshots), [data, snapshots]);
 
@@ -2073,8 +2049,8 @@ export default function ShortScanner() {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       switch (e.key.toLowerCase()) {
-        case "s": e.preventDefault(); if (!loading) handleNormalScan(); break;
-        case "n": e.preventDefault(); if (!loading) handleNormalScan("new30"); break;
+        case "s": e.preventDefault(); if (!loading) scan(); break;
+        case "n": e.preventDefault(); if (!loading) scan("new30"); break;
         case "h": e.preventDefault(); setViewMode(v => v === "table" ? "heat" : "table"); break;
         case "f": e.preventDefault(); filterInputRef.current?.focus(); break;
         case "arrowdown":
@@ -2127,7 +2103,7 @@ export default function ShortScanner() {
     if (minDrop !== 30)     params.set("min_drop",    String(minDrop));
     if (maxVolRatio !== 70) params.set("max_vol",     String(maxVolRatio));
     if (minVol24k !== 100)  params.set("min_vol24h",  String(minVol24k));
-    if (maxDays !== 365)    params.set("max_days",    String(maxDays));
+    if (maxDays !== 9999)   params.set("max_days",    String(maxDays));
     if (minOiK !== 0)       params.set("min_oi",      String(minOiK));
     if (sortBy !== "displayScore") params.set("sort", sortBy);
     const qs = params.toString();
@@ -2242,17 +2218,13 @@ export default function ShortScanner() {
             title="キーボードショートカット (?)">
             ⌨️
           </button>
-          <button onClick={() => handleNormalScan()} disabled={loading}
+          <button onClick={() => scan()} disabled={loading}
             className="px-3 md:px-4 py-1.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
             {loading ? "⏳ ..." : t.scanBtn}
           </button>
-          <button onClick={() => handleNormalScan("new30")} disabled={loading}
+          <button onClick={() => scan("new30")} disabled={loading}
             className="px-3 md:px-4 py-1.5 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-300 text-white rounded-lg transition-colors whitespace-nowrap">
             {loading ? "⏳ ..." : t.new30Btn}
-          </button>
-          <button onClick={() => handleTop10Scan()} disabled={loading}
-            className="px-3 md:px-4 py-1.5 text-sm font-bold bg-orange-500 hover:bg-orange-400 disabled:bg-orange-300 text-white rounded-lg transition-colors whitespace-nowrap">
-            {loading ? "⏳ ..." : t.top10Btn}
           </button>
         </div>
       </div>
@@ -2265,7 +2237,7 @@ export default function ShortScanner() {
         {[
           { label: `${t.athDrop} ≥`, val: `${minDrop}%`, color: "text-red-600", accent: "accent-red-500", min:10, max:80, step:5, v:minDrop, set:setMinDrop },
           { label: `${t.volRatio} ≤`, val: (maxVolRatio/100).toFixed(2), color: "text-orange-600", accent: "accent-orange-500", min:10, max:150, step:5, v:maxVolRatio, set:setMaxVolRatio },
-          { label: `${t.listDays} ≤`, val: `${maxDays}日`, color: "text-blue-600", accent: "accent-blue-500", min:1, max:365, step:1, v:maxDays, set:setMaxDays },
+          { label: `${t.listDays} ≤`, val: maxDays >= 9999 ? "∞" : `${maxDays}日`, color: "text-blue-600", accent: "accent-blue-500", min:30, max:9999, step:30, v:maxDays, set:setMaxDays },
           { label: `${t.minVol} ≥`, val: `$${minVol24k}K`, color: "text-green-600", accent: "accent-green-500", min:1, max:1000, step:1, v:minVol24k, set:setMinVol24k },
           { label: `${t.minOi} ≥`, val: `$${minOiK}K`, color: "text-cyan-600", accent: "accent-cyan-500", min:0, max:1000, step:10, v:minOiK, set:setMinOiK },
         ].map(({ label, val, color, accent, min, max, step, v, set }) => (
@@ -2298,7 +2270,6 @@ export default function ShortScanner() {
           <span>{t.passed}: <strong className="text-indigo-600">{data.meta.filtered}</strong></span>
           <span>{t.showing}: <strong className="text-gray-700">{extended.length}</strong></span>
           {data.mode === "new30" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
-          {top10Mode && <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold">{t.top10ModeBadge}</span>}
           {snapshots.length > 0 && <span>{t.snapshots}: <strong className="text-teal-600">{snapshots.length}</strong></span>}
           {HAS_CG && cgLoading && <span className="text-violet-600">{t.cgFetching} {cgProgress}%</span>}
           <span className="ml-auto flex items-center gap-2">
@@ -2346,19 +2317,10 @@ export default function ShortScanner() {
           <p className="text-sm text-gray-500">{t.noResult}</p>
           <p className="text-xs text-gray-400 mt-1">{t.noResultNote}</p>
           <button
-            onClick={() => { setMinDrop(30); setMaxVolRatio(70); setMaxDays(365); setMinVol24k(100); setMinOiK(0); setSummaryFilter(null); }}
+            onClick={() => { setMinDrop(30); setMaxVolRatio(70); setMaxDays(9999); setMinVol24k(100); setMinOiK(0); setSummaryFilter(null); }}
             className="mt-3 px-4 py-1.5 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors">
             {t.filterReset}
           </button>
-        </div>
-      )}
-
-      {/* TOP10 mode description */}
-      {top10Mode && !loading && data && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
-          <span className="font-bold">{t.top10ModeBadge}</span>
-          <span>{t.top10Desc}</span>
-          <button onClick={() => setTop10Mode(false)} className="ml-auto text-orange-400 hover:text-orange-600 underline">✕</button>
         </div>
       )}
 
