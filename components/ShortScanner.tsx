@@ -11,6 +11,7 @@ import { detectAlerts, getDiffSummary } from "@/app/lib/snapshotDiff";
 import type { DiffAlert } from "@/app/lib/snapshotDiff";
 import { fetchCoinGeckoData, calcFuturesHeatScore, calcSnsHeatScore } from "@/app/lib/coinGeckoClient";
 import type { CgMarketData } from "@/app/lib/coinGeckoClient";
+import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
 
 // ─── Extended candidate with client-side scores ───────────────────────────────
 interface ExtendedCandidate extends ShortCandidate {
@@ -609,6 +610,9 @@ export default function ShortScanner() {
 
   return (
     <div className="space-y-4">
+
+      {/* ── Market Environment Panel (施策9) ── */}
+      <MarketEnvironmentPanel cgApiKey={HAS_CG ? CG_API_KEY : undefined} />
 
       {/* ── Header ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
