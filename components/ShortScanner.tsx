@@ -1775,6 +1775,15 @@ export default function ShortScanner() {
   const [viewMode, setViewMode] = useState<"table" | "heat">("table");
   const [summaryFilter, setSummaryFilter] = useState<"strong"|"long"|"pattern"|"allTf"|"spike"|null>(null);
 
+  // Auto-refresh interval (施策5)
+  const [autoIntervalMin, setAutoIntervalMin] = useState<0|5|10|30|60>(() => {
+    if (typeof window === "undefined") return 0;
+    return (Number(localStorage.getItem("shortScanInterval") ?? "0") as 0|5|10|30|60);
+  });
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [showAutoMenu, setShowAutoMenu] = useState(false);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Keyboard shortcuts (施策3)
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState<number>(-1);
@@ -1915,7 +1924,37 @@ export default function ShortScanner() {
   useEffect(() => () => {
     if (autoTimerRef.current) clearInterval(autoTimerRef.current);
     if (elapsedRef.current)   clearInterval(elapsedRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
   }, []);
+
+  // Auto-interval logic (施策5)
+  useEffect(() => {
+    if (autoTimerRef.current) { clearInterval(autoTimerRef.current); autoTimerRef.current = null; }
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+    setCountdown(null);
+    setAutoRefresh(autoIntervalMin > 0);
+    if (autoIntervalMin > 0) {
+      const ms = autoIntervalMin * 60 * 1000;
+      let remaining = ms / 1000;
+      setCountdown(remaining);
+      countdownRef.current = setInterval(() => {
+        remaining -= 1;
+        setCountdown(remaining);
+        if (remaining <= 0) {
+          remaining = ms / 1000;
+          setCountdown(remaining);
+          scan();
+        }
+      }, 1000);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoIntervalMin]);
+
+  function setAutoInterval(min: 0|5|10|30|60) {
+    localStorage.setItem("shortScanInterval", String(min));
+    setAutoIntervalMin(min);
+    setShowAutoMenu(false);
+  }
 
   // Extended candidates
   const extended = useMemo((): ExtendedCandidate[] => {
@@ -2068,10 +2107,26 @@ export default function ShortScanner() {
           className="px-2 md:px-3 py-1.5 text-xs bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed border border-gray-300 rounded-lg text-gray-600 transition-colors">
           {t.csvBtn}
         </button>
-        <button onClick={handleAutoRefresh}
-          className={`px-2 md:px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoRefresh ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
-          {t.autoRefresh} {autoRefresh ? "ON" : "OFF"}
-        </button>
+        {/* Auto-refresh interval dropdown (施策5) */}
+        <div className="relative">
+          <button onClick={() => setShowAutoMenu(v => !v)}
+            className={`px-2 md:px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoIntervalMin > 0 ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
+            {t.autoRefresh} {autoIntervalMin > 0 ? `${autoIntervalMin}m` : t.autoOff} ▾
+            {autoIntervalMin > 0 && countdown != null && (
+              <span className="ml-1 text-indigo-400">{Math.floor(countdown / 60)}:{String(Math.floor(countdown % 60)).padStart(2,"0")}</span>
+            )}
+          </button>
+          {showAutoMenu && (
+            <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[120px]">
+              {([0,5,10,30,60] as const).map(m => (
+                <button key={m} onClick={() => setAutoInterval(m)}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-indigo-50 transition-colors ${autoIntervalMin === m ? "text-indigo-600 font-bold" : "text-gray-600"}`}>
+                  {m === 0 ? t.autoOff : `${m}分ごと`}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {/* Sound toggle (施策2) */}
         <button onClick={toggleSound}
           className={`px-2 md:px-3 py-1.5 text-xs border rounded-lg transition-colors ${soundEnabled ? "bg-emerald-50 text-emerald-700 border-emerald-300" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"}`}
