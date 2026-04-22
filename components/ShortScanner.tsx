@@ -9,6 +9,11 @@ import type { DiffAlert } from "@/app/lib/snapshotDiff";
 import { fetchCoinGeckoData, calcFuturesHeatScore, calcSnsHeatScore } from "@/app/lib/coinGeckoClient";
 import type { CgMarketData } from "@/app/lib/coinGeckoClient";
 import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
+import { checkAndUpdateRecords, recordNewCandidates } from "@/app/lib/backtestChecker";
+import { getRecords, clearRecords } from "@/app/lib/backtestStorage";
+import type { BacktestRecord } from "@/app/lib/backtestStorage";
+import { calculateStats } from "@/app/lib/backtestStats";
+import type { BacktestStats } from "@/app/lib/backtestStats";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -93,6 +98,41 @@ const T = {
     atl: "ATH(14日)",
     avgVol: "7日平均出来高",
     exchOnly: "MEXCのみ",
+    btTitle: "📊 バックテスト実績",
+    btPeriod: "期間",
+    btSummary: "サマリー",
+    btTotal: "記録数",
+    btResolved: "決着",
+    btActive: "進行中",
+    btExpired: "期限切れ",
+    btWinRate: "勝率",
+    btAvgRR: "平均R:R",
+    btExpectancy: "期待値",
+    btBest: "ベスト",
+    btWorst: "ワースト",
+    btByScore: "スコア帯別勝率",
+    btScoreRange: "スコア帯",
+    btWins: "勝",
+    btLosses: "負",
+    btAllRecords: "全記録",
+    btCsvExport: "📋 CSVエクスポート",
+    btReset: "🗑️ データリセット",
+    btResetConfirm: "バックテストデータを全削除しますか？",
+    btNoData: "まだデータがありません。スキャン実行でスコア8以上の銘柄が自動記録されます。",
+    btRecorded: "📊記録済",
+    btTp1: "✅TP1",
+    btTp2: "✅TP2",
+    btTp3: "✅TP3",
+    btSl: "❌SL",
+    btActiveStatus: "⏳進行中",
+    btExpiredStatus: "⏰期限切れ",
+    btEntryCol: "エントリー",
+    btSlCol: "SL",
+    btTp1Col: "TP1",
+    btCurCol: "現在",
+    btStatusCol: "状態",
+    btPnlCol: "損益",
+    btDaysCol: "日数",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -164,6 +204,41 @@ const T = {
     atl: "ATH (14d)",
     avgVol: "Avg Vol 7d",
     exchOnly: "MEXC Only",
+    btTitle: "📊 Backtest Results",
+    btPeriod: "Period",
+    btSummary: "Summary",
+    btTotal: "Total Records",
+    btResolved: "Resolved",
+    btActive: "Active",
+    btExpired: "Expired",
+    btWinRate: "Win Rate",
+    btAvgRR: "Avg R:R",
+    btExpectancy: "Expectancy",
+    btBest: "Best",
+    btWorst: "Worst",
+    btByScore: "Win Rate by Score",
+    btScoreRange: "Score Range",
+    btWins: "W",
+    btLosses: "L",
+    btAllRecords: "All Records",
+    btCsvExport: "📋 CSV Export",
+    btReset: "🗑️ Reset Data",
+    btResetConfirm: "Delete all backtest data?",
+    btNoData: "No data yet. Run a scan to auto-record candidates with score 8+.",
+    btRecorded: "📊Active",
+    btTp1: "✅TP1",
+    btTp2: "✅TP2",
+    btTp3: "✅TP3",
+    btSl: "❌SL",
+    btActiveStatus: "⏳Active",
+    btExpiredStatus: "⏰Expired",
+    btEntryCol: "Entry",
+    btSlCol: "SL",
+    btTp1Col: "TP1",
+    btCurCol: "Current",
+    btStatusCol: "Status",
+    btPnlCol: "PnL",
+    btDaysCol: "Days",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -512,6 +587,253 @@ function SortTh({ label, sortKey, current, onSort, cls = "text-right" }: { label
   );
 }
 
+// ─── Backtest helpers ────────────────────────────────────────────────────────
+function fmtDate(ts: number): string {
+  return new Date(ts).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" });
+}
+
+function btStatusLabel(status: BacktestRecord["status"], t: Translations): { label: string; cls: string } {
+  switch (status) {
+    case "tp3_hit": return { label: t.btTp3, cls: "text-green-700 bg-green-50 border-green-300" };
+    case "tp2_hit": return { label: t.btTp2, cls: "text-green-700 bg-green-50 border-green-300" };
+    case "tp1_hit": return { label: t.btTp1, cls: "text-green-700 bg-green-50 border-green-200" };
+    case "sl_hit":  return { label: t.btSl,  cls: "text-red-700 bg-red-50 border-red-300" };
+    case "expired": return { label: t.btExpiredStatus, cls: "text-gray-500 bg-gray-100 border-gray-300" };
+    default:        return { label: t.btActiveStatus,  cls: "text-yellow-700 bg-yellow-50 border-yellow-300" };
+  }
+}
+
+function exportBtCSV(records: BacktestRecord[]): void {
+  const hdr = ["Symbol","Score","ScoreMax","RecordedAt","EntryPrice","SL","TP1","TP2","TP3","R:R","Trend","Status","ResolvedAt","ResolvedPrice","PnL%","MaxProfit%","MaxDrawdown%","Days"].join(",");
+  const rows = records.map(r => {
+    const days = Math.floor((Date.now() - r.recordedAt) / 86_400_000);
+    const pnl  = r.resolvedPrice != null ? ((r.entryPrice - r.resolvedPrice) / r.entryPrice * 100).toFixed(2) : "";
+    return [
+      r.symbol.replace("_USDT",""), r.score, r.scoreMax,
+      new Date(r.recordedAt).toISOString(),
+      r.entryPrice, r.sl, r.tp1, r.tp2, r.tp3,
+      r.rrRatio.toFixed(2), r.trendDirection, r.status,
+      r.resolvedAt   ? new Date(r.resolvedAt).toISOString()  : "",
+      r.resolvedPrice ?? "", pnl,
+      r.maxProfit?.toFixed(2) ?? "", r.maxDrawdown?.toFixed(2) ?? "", days,
+    ].join(",");
+  });
+  const blob = new Blob(["﻿" + [hdr, ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(blob),
+    download: `mexc-backtest-${new Date().toISOString().slice(0, 10)}.csv`,
+  });
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ─── Backtest Panel ───────────────────────────────────────────────────────────
+function BacktestPanel({
+  records, stats, t, onReset,
+}: { records: BacktestRecord[]; stats: BacktestStats; t: Translations; onReset: () => void }) {
+  const [open,        setOpen]        = useState(true);
+  const [showRecords, setShowRecords] = useState(false);
+
+  const periodStr = (() => {
+    if (!stats.periodStart) return "—";
+    const s = fmtDate(stats.periodStart);
+    const e = fmtDate(stats.periodEnd ?? Date.now());
+    return `${s} 〜 ${e}`;
+  })();
+
+  const sorted = [...records].sort((a, b) => b.recordedAt - a.recordedAt);
+
+  return (
+    <div className="rounded-xl border border-indigo-200 bg-white overflow-hidden shadow-sm">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-indigo-800 hover:bg-indigo-50 transition-colors">
+        <span>
+          {t.btTitle}
+          {records.length > 0 && (
+            <span className="ml-2 text-xs font-normal text-indigo-500">
+              {t.btTotal}: {records.length} / {t.btWinRate}: {stats.winRate.toFixed(0)}%
+              {stats.active > 0 && <span className="ml-2 text-yellow-600">⏳{stats.active}</span>}
+            </span>
+          )}
+        </span>
+        <span className="text-gray-400 text-xs">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 pt-1 space-y-3">
+          {records.length === 0 ? (
+            <p className="text-xs text-gray-400 py-3">{t.btNoData}</p>
+          ) : (
+            <>
+              {/* Period */}
+              <p className="text-xs text-gray-500">{t.btPeriod}: <span className="font-semibold text-gray-700">{periodStr}</span></p>
+
+              {/* Summary grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                {[
+                  { label: t.btTotal,    val: records.length,              cls: "text-gray-700" },
+                  { label: t.btResolved, val: stats.resolved,              cls: "text-gray-700" },
+                  { label: t.btActive,   val: stats.active,                cls: "text-yellow-600 font-bold" },
+                  { label: t.btExpired,  val: stats.expired,               cls: "text-gray-400" },
+                ].map(s => (
+                  <div key={s.label} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+                    <div className={`text-base font-bold ${s.cls}`}>{s.val}</div>
+                    <div className="text-gray-500 text-[10px] mt-0.5">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* TP / SL breakdown */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                {[
+                  { label: "TP1+",  val: `${stats.tp1Hits + stats.tp2Hits + stats.tp3Hits}件`, cls: "text-green-700" },
+                  { label: "SL",    val: `${stats.slHits}件`,                                   cls: "text-red-600" },
+                  { label: t.btWinRate, val: `${stats.winRate.toFixed(1)}%`,                   cls: stats.winRate >= 50 ? "text-green-700 font-bold" : "text-red-600 font-bold" },
+                  { label: t.btAvgRR,   val: stats.avgRR.toFixed(2),                           cls: stats.avgRR >= 0 ? "text-indigo-700 font-bold" : "text-red-600 font-bold" },
+                ].map(s => (
+                  <div key={s.label} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+                    <div className={`text-base font-bold ${s.cls}`}>{s.val}</div>
+                    <div className="text-gray-500 text-[10px] mt-0.5">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Expectancy + Best/Worst */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="bg-gray-50 rounded-lg p-2 border border-gray-100">
+                  <span className="text-gray-500">{t.btExpectancy}: </span>
+                  <span className={`font-bold ${stats.expectancy >= 0 ? "text-green-700" : "text-red-600"}`}>
+                    {stats.expectancy >= 0 ? "+" : ""}{stats.expectancy.toFixed(2)}R
+                  </span>
+                </div>
+                {stats.bestTrade && (
+                  <div className="bg-green-50 rounded-lg p-2 border border-green-100">
+                    <span className="text-gray-500">{t.btBest}: </span>
+                    <span className="font-mono font-bold text-green-700">{stats.bestTrade.symbol.replace("_USDT","")}</span>
+                    <span className="text-green-600 ml-1">-{stats.bestTrade.profit.toFixed(1)}%</span>
+                  </div>
+                )}
+                {stats.worstTrade && (
+                  <div className="bg-red-50 rounded-lg p-2 border border-red-100">
+                    <span className="text-gray-500">{t.btWorst}: </span>
+                    <span className="font-mono font-bold text-red-700">{stats.worstTrade.symbol.replace("_USDT","")}</span>
+                    <span className="text-red-600 ml-1">+{stats.worstTrade.loss.toFixed(1)}%</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Score range table */}
+              {stats.resolved > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-1.5">{t.btByScore}</p>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-gray-50 text-gray-600 border-b border-gray-200">
+                          <th className="px-3 py-1.5 text-left">{t.btScoreRange}</th>
+                          <th className="px-3 py-1.5 text-center">{t.btWins}</th>
+                          <th className="px-3 py-1.5 text-center">{t.btLosses}</th>
+                          <th className="px-3 py-1.5 text-right">{t.btWinRate}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(stats.byScore).reverse().map(([range, s]) => (
+                          <tr key={range} className="border-b border-gray-100 last:border-0">
+                            <td className="px-3 py-1.5 font-mono text-gray-700">{range}</td>
+                            <td className="px-3 py-1.5 text-center text-green-600 font-bold">{s.wins}</td>
+                            <td className="px-3 py-1.5 text-center text-red-500">{s.losses}</td>
+                            <td className="px-3 py-1.5 text-right font-bold">
+                              <span className={s.winRate >= 50 ? "text-green-700" : s.wins + s.losses > 0 ? "text-red-600" : "text-gray-400"}>
+                                {s.wins + s.losses > 0 ? `${s.winRate.toFixed(0)}%` : "—"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Full records (expandable) */}
+              <div>
+                <button onClick={() => setShowRecords(v => !v)}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold">
+                  {t.btAllRecords} ({records.length}) {showRecords ? "▲" : "▼"}
+                </button>
+                {showRecords && (
+                  <div className="mt-2 overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="w-full text-xs min-w-[640px]">
+                      <thead>
+                        <tr className="bg-gray-50 text-gray-600 border-b border-gray-200 font-semibold">
+                          <th className="px-2 py-1.5 text-left">銘柄</th>
+                          <th className="px-2 py-1.5 text-center">Score</th>
+                          <th className="px-2 py-1.5 text-right">日付</th>
+                          <th className="px-2 py-1.5 text-right">{t.btEntryCol}</th>
+                          <th className="px-2 py-1.5 text-right">{t.btSlCol}</th>
+                          <th className="px-2 py-1.5 text-right">{t.btTp1Col}</th>
+                          <th className="px-2 py-1.5 text-right">{t.btCurCol}</th>
+                          <th className="px-2 py-1.5 text-center">{t.btStatusCol}</th>
+                          <th className="px-2 py-1.5 text-right">{t.btPnlCol}</th>
+                          <th className="px-2 py-1.5 text-right">{t.btDaysCol}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map(r => {
+                          const { label, cls } = btStatusLabel(r.status, t);
+                          const resolvedPnl = r.resolvedPrice != null
+                            ? ((r.entryPrice - r.resolvedPrice) / r.entryPrice * 100)
+                            : null;
+                          const currentPnl = r.currentPrice != null
+                            ? ((r.entryPrice - r.currentPrice) / r.entryPrice * 100)
+                            : null;
+                          const pnl = resolvedPnl ?? currentPnl;
+                          const days = Math.floor((Date.now() - r.recordedAt) / 86_400_000);
+                          return (
+                            <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="px-2 py-1.5 font-mono font-bold text-gray-800">{r.symbol.replace("_USDT","")}</td>
+                              <td className="px-2 py-1.5 text-center text-gray-600">{r.score}/{r.scoreMax}</td>
+                              <td className="px-2 py-1.5 text-right text-gray-500">{fmtDate(r.recordedAt)}</td>
+                              <td className="px-2 py-1.5 text-right font-mono text-gray-700">{fmtPrice(r.entryPrice)}</td>
+                              <td className="px-2 py-1.5 text-right font-mono text-red-500">{fmtPrice(r.sl)}</td>
+                              <td className="px-2 py-1.5 text-right font-mono text-green-600">{fmtPrice(r.tp1)}</td>
+                              <td className="px-2 py-1.5 text-right font-mono text-gray-600">
+                                {r.currentPrice != null ? fmtPrice(r.currentPrice) : "—"}
+                              </td>
+                              <td className="px-2 py-1.5 text-center">
+                                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold whitespace-nowrap ${cls}`}>{label}</span>
+                              </td>
+                              <td className={`px-2 py-1.5 text-right font-mono font-bold ${pnl == null ? "text-gray-400" : pnl >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                {pnl != null ? `${pnl >= 0 ? "+" : ""}${pnl.toFixed(1)}%` : "—"}
+                              </td>
+                              <td className="px-2 py-1.5 text-right text-gray-500">{days}d</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => exportBtCSV(records)}
+                  className="px-3 py-1.5 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors">
+                  {t.btCsvExport}
+                </button>
+                <button onClick={() => { if (window.confirm(t.btResetConfirm)) onReset(); }}
+                  className="px-3 py-1.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                  {t.btReset}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ShortScanner() {
   const [data,         setData]         = useState<ScanResponse | null>(null);
@@ -565,7 +887,12 @@ export default function ShortScanner() {
   const [cgLoading,  setCgLoading]  = useState(false);
   const [cgProgress, setCgProgress] = useState(0);
 
+  // Backtest
+  const [btRecords, setBtRecords] = useState<BacktestRecord[]>([]);
+  const btStats = useMemo(() => calculateStats(btRecords), [btRecords]);
+
   useEffect(() => { setSnapshots(getSnapshots()); }, []);
+  useEffect(() => { setBtRecords(getRecords()); }, []);
 
   useEffect(() => {
     fetch("https://fapi.binance.com/fapi/v1/exchangeInfo")
@@ -609,6 +936,15 @@ export default function ShortScanner() {
       };
       saveSnapshot(snap);
       setSnapshots(getSnapshots());
+
+      // Backtest: check先 → record後 (順序重要)
+      try {
+        checkAndUpdateRecords(json.candidates);
+        recordNewCandidates(json.candidates);
+        setBtRecords(getRecords());
+      } catch (e) {
+        console.error("[backtest]", e);
+      }
 
       // Notification (D)
       const highScore = json.candidates.filter(c => c.shortScore >= 10);
@@ -676,6 +1012,17 @@ export default function ShortScanner() {
   }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy, cgMap]);
 
   const alerts = useMemo(() => detectAlerts(data?.candidates ?? [], snapshots), [data, snapshots]);
+
+  // バックテスト: シンボルごとの最新レコード (badge表示用)
+  const btRecordMap = useMemo(() => {
+    const m = new Map<string, BacktestRecord["status"]>();
+    for (const r of btRecords) {
+      const prev = m.get(r.symbol);
+      // active > tp/sl > expired の優先順位
+      if (!prev || r.status === "active" || prev === "expired") m.set(r.symbol, r.status);
+    }
+    return m;
+  }, [btRecords]);
 
   function toggleRow(sym: string) {
     setExpandedRows(prev => { const n = new Set(prev); n.has(sym) ? n.delete(sym) : n.add(sym); return n; });
@@ -873,6 +1220,12 @@ export default function ShortScanner() {
                               <span className="text-gray-400 text-[10px]">{isOpen?"▲":"▼"}</span>
                             </div>
                             <LiquidityBadge oi={c.openInterest} />
+                            {(() => {
+                              const bts = btRecordMap.get(c.symbol);
+                              if (!bts) return null;
+                              const { label, cls } = btStatusLabel(bts, t);
+                              return <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>{label}</span>;
+                            })()}
                           </div>
                         </td>
 
@@ -965,6 +1318,14 @@ export default function ShortScanner() {
           </div>
         </div>
       )}
+
+      {/* Backtest Panel */}
+      <BacktestPanel
+        records={btRecords}
+        stats={btStats}
+        t={t}
+        onReset={() => { clearRecords(); setBtRecords([]); }}
+      />
     </div>
   );
 }
