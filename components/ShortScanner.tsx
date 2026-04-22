@@ -188,6 +188,39 @@ const T = {
     btSimMaxDD: "最大DD",
     btSimSharpe: "シャープレシオ",
     btSimInsuf: "決着済み5件以上でシミュレーション開始",
+    // 施策2: サウンド
+    soundOn: "🔊 サウンドON",
+    soundOff: "🔇 サウンドOFF",
+    // 施策3: キーボードショートカット
+    kbTitle: "⌨️ キーボードショートカット",
+    kbScan: "スキャン実行",
+    kbNewScan: "新規上場スキャン",
+    kbToggleView: "テーブル/ヒートマップ切替",
+    kbFilter: "フィルターにフォーカス",
+    kbNav: "銘柄選択",
+    kbDetail: "詳細展開/折りたたみ",
+    kbClose: "閉じる",
+    kbHelp: "このヘルプを表示",
+    // 施策4: URL共有
+    shareUrl: "🔗 URLで共有",
+    urlCopied: "🔗 URLをコピーしました",
+    // 施策5: 自動更新間隔
+    autoOff: "OFF",
+    autoCountdown: "次回スキャン",
+    // 施策6: プリセット
+    presetsLabel: "プリセット",
+    presetStandard: "通常スキャン",
+    presetStrict: "厳選ショート",
+    presetNewListing: "新規上場ハンター",
+    presetSave: "+ 保存",
+    presetNamePrompt: "プリセット名を入力",
+    presetDelConfirm: "このプリセットを削除しますか？",
+    // 施策10: トースト
+    toastScanDone: "件検出",
+    toastUrlCopy: "🔗 URLをコピーしました",
+    toastCsvDone: "📄 CSVをダウンロードしました",
+    toastBtRecord: "件の銘柄を自動記録しました",
+    toastScanError: "スキャンに失敗しました",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -349,6 +382,33 @@ const T = {
     btSimMaxDD: "Max DD",
     btSimSharpe: "Sharpe",
     btSimInsuf: "Need 5+ resolved trades to simulate",
+    soundOn: "🔊 Sound ON",
+    soundOff: "🔇 Sound OFF",
+    kbTitle: "⌨️ Keyboard Shortcuts",
+    kbScan: "Run scan",
+    kbNewScan: "New listing scan",
+    kbToggleView: "Table/Heatmap toggle",
+    kbFilter: "Focus filter",
+    kbNav: "Select symbol",
+    kbDetail: "Expand/collapse detail",
+    kbClose: "Close",
+    kbHelp: "Show this help",
+    shareUrl: "🔗 Share URL",
+    urlCopied: "🔗 URL copied!",
+    autoOff: "OFF",
+    autoCountdown: "Next scan",
+    presetsLabel: "Presets",
+    presetStandard: "Standard",
+    presetStrict: "Strict Short",
+    presetNewListing: "New Listing",
+    presetSave: "+ Save",
+    presetNamePrompt: "Enter preset name",
+    presetDelConfirm: "Delete this preset?",
+    toastScanDone: "found",
+    toastUrlCopy: "🔗 URL copied!",
+    toastCsvDone: "📄 CSV downloaded",
+    toastBtRecord: "symbols auto-recorded",
+    toastScanError: "Scan failed",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -393,6 +453,26 @@ function fmtVol(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 function fmtPct(n: number): string { return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`; }
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+interface Toast { id: string; message: string; type: "success"|"info"|"warning"|"error"; leaving?: boolean; }
+
+function ToastContainer({ toasts }: { toasts: Toast[] }) {
+  if (toasts.length === 0) return null;
+  const colors: Record<string, string> = {
+    success: "bg-green-500", info: "bg-blue-500", warning: "bg-orange-500", error: "bg-red-500",
+  };
+  return (
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+      {toasts.map(toast => (
+        <div key={toast.id}
+          className={`px-4 py-2 rounded-lg shadow-lg text-white text-sm font-medium max-w-xs ${colors[toast.type] ?? "bg-gray-800"} ${toast.leaving ? "toast-leave" : "toast-enter"}`}>
+          {toast.message}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function scoreBadgeStyle(s: number): React.CSSProperties {
   const bg    = s >= 10 ? "#fef2f2" : s >= 6 ? "#fff7ed" : "#f9fafb";
@@ -1526,8 +1606,9 @@ export default function ShortScanner() {
   const [error,        setError]        = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [autoRefresh,  setAutoRefresh]  = useState(false);
-  const autoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const elapsedRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const elapsedRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playSoundRef  = useRef<((type: "alert"|"complete"|"warning") => void) | null>(null);
 
   // Language (G)
   const [lang, setLang] = useState<Lang>("ja");
@@ -1575,6 +1656,17 @@ export default function ShortScanner() {
   // Backtest
   const [btRecords, setBtRecords] = useState<BacktestRecord[]>([]);
   const btStats = useMemo(() => calculateStats(btRecords), [btRecords]);
+
+  // Toast (施策10)
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const addToast = useCallback((message: string, type: Toast["type"] = "info", duration = 3000) => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, leaving: true } : t));
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 280);
+    }, duration);
+  }, []);
 
   useEffect(() => { setSnapshots(getSnapshots()); }, []);
   useEffect(() => { setBtRecords(getRecords()); }, []);
@@ -1625,15 +1717,24 @@ export default function ShortScanner() {
       // Backtest: check先 → record後 (順序重要)
       try {
         checkAndUpdateRecords(json.candidates);
+        const beforeCount = getRecords().length;
         recordNewCandidates(json.candidates);
-        setBtRecords(getRecords());
+        const newRecords = getRecords();
+        const recorded = newRecords.length - beforeCount;
+        setBtRecords(newRecords);
+        if (recorded > 0) addToast(`📊 ${recorded}${t.toastBtRecord}`, "info");
       } catch (e) {
         console.error("[backtest]", e);
       }
 
-      // Notification (D)
+      // Toast: scan complete (施策10)
+      addToast(`✅ スキャン完了 ${json.candidates.length}${t.toastScanDone}`, "success");
+
+      // Sound: scan complete + high score (施策2 - via ref)
+      playSoundRef.current?.("complete");
       const highScore = json.candidates.filter(c => c.shortScore >= 10);
       if (highScore.length > 0) {
+        playSoundRef.current?.("alert");
         sendNotif(`🎯 ショート候補 ${highScore.length}件`, `${highScore[0].symbol.replace("_USDT","")} スコア${highScore[0].shortScore}/${DISPLAY_MAX}`);
       }
 
@@ -1645,7 +1746,9 @@ export default function ShortScanner() {
           .then(map => setCgMap(map)).catch(() => {}).finally(() => setCgLoading(false));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      addToast(`❌ ${t.toastScanError}`, "error");
     } finally {
       setLoading(false);
       if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
@@ -1738,6 +1841,7 @@ export default function ShortScanner() {
     const blob = new Blob(["﻿"+ [hdr,...rows].join("\n")], { type:"text/csv;charset=utf-8;" });
     const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `mexc-short-scan-${new Date().toISOString().slice(0,10)}.csv` });
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    addToast(t.toastCsvDone, "success");
   }
 
   const totalScanned = data?.meta.totalTickerPairs ?? data?.meta.totalScanned ?? 0;
@@ -2154,6 +2258,9 @@ export default function ShortScanner() {
         t={t}
         onReset={() => { clearRecords(); setBtRecords([]); }}
       />
+
+      {/* Toast (施策10) */}
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }

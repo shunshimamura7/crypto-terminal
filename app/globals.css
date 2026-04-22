@@ -30,3 +30,15 @@ body {
 .bar-glow-blue  { box-shadow: 0 0 6px rgba(59, 130, 246, 0.6); }
 .bar-glow-orange { box-shadow: 0 0 6px rgba(249, 115, 22, 0.6); }
 .bar-glow-purple { box-shadow: 0 0 6px rgba(168, 85, 247, 0.6); }
+
+/* Toast animations */
+@keyframes toast-in {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes toast-out {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(110%); opacity: 0; }
+}
+.toast-enter { animation: toast-in  0.3s ease-out forwards; }
+.toast-leave { animation: toast-out 0.25s ease-in forwards; }
