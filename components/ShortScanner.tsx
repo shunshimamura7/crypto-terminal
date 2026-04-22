@@ -221,6 +221,10 @@ const T = {
     toastCsvDone: "📄 CSVをダウンロードしました",
     toastBtRecord: "件の銘柄を自動記録しました",
     toastScanError: "スキャンに失敗しました",
+    // TOP10
+    top10Btn: "🔥 ショートTOP10",
+    top10ModeBadge: "🔥 TOP10モード",
+    top10Desc: "スコア上位10銘柄を自動選出。流動性$50K+、OI $10K+でフィルタ済み。",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -409,6 +413,10 @@ const T = {
     toastCsvDone: "📄 CSV downloaded",
     toastBtRecord: "symbols auto-recorded",
     toastScanError: "Scan failed",
+    // TOP10
+    top10Btn: "🔥 Short TOP10",
+    top10ModeBadge: "🔥 TOP10 Mode",
+    top10Desc: "Top 10 by score. Filtered: Vol $50K+, OI $10K+.",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -1801,6 +1809,7 @@ export default function ShortScanner() {
   const [sortBy, setSortBy] = useState<SortKey>("displayScore");
   const [viewMode, setViewMode] = useState<"table" | "heat">("table");
   const [summaryFilter, setSummaryFilter] = useState<"strong"|"long"|"pattern"|"allTf"|"spike"|null>(null);
+  const [top10Mode, setTop10Mode] = useState(false);
 
   // Auto-refresh interval (施策5)
   const [autoIntervalMin, setAutoIntervalMin] = useState<0|5|10|30|60>(() => {
@@ -1944,6 +1953,18 @@ export default function ShortScanner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notifState]);
 
+  function handleTop10Scan() {
+    setMinVol24k(50);
+    setMinOiK(10);
+    setTop10Mode(true);
+    scan();
+  }
+
+  function handleNormalScan(mode?: "new30") {
+    setTop10Mode(false);
+    scan(mode);
+  }
+
   function handleAutoRefresh() {
     if (autoRefresh) { if (autoTimerRef.current) clearInterval(autoTimerRef.current); autoTimerRef.current = null; setAutoRefresh(false); }
     else { setAutoRefresh(true); autoTimerRef.current = setInterval(() => scan(), 5 * 60 * 1000); }
@@ -2016,16 +2037,19 @@ export default function ShortScanner() {
       }
     });
 
-    if (!summaryFilter) return sorted;
-    switch (summaryFilter) {
-      case "strong":  return sorted.filter(c => c.displayScore >= 10);
-      case "long":    return sorted.filter(c => isLongBias(c));
-      case "pattern": return sorted.filter(c => !!c.chartPattern);
-      case "allTf":   return sorted.filter(c => c.trendMultiTF?.alignment === 3);
-      case "spike":   return sorted.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral");
-      default:        return sorted;
+    let result = sorted;
+    if (summaryFilter) {
+      switch (summaryFilter) {
+        case "strong":  result = sorted.filter(c => c.displayScore >= 10); break;
+        case "long":    result = sorted.filter(c => isLongBias(c)); break;
+        case "pattern": result = sorted.filter(c => !!c.chartPattern); break;
+        case "allTf":   result = sorted.filter(c => c.trendMultiTF?.alignment === 3); break;
+        case "spike":   result = sorted.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral"); break;
+      }
     }
-  }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter]);
+    if (top10Mode) result = result.slice(0, 10);
+    return result;
+  }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, top10Mode]);
 
   const alerts = useMemo(() => detectAlerts(data?.candidates ?? [], snapshots), [data, snapshots]);
 
@@ -2049,8 +2073,8 @@ export default function ShortScanner() {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       switch (e.key.toLowerCase()) {
-        case "s": e.preventDefault(); if (!loading) scan(); break;
-        case "n": e.preventDefault(); if (!loading) scan("new30"); break;
+        case "s": e.preventDefault(); if (!loading) handleNormalScan(); break;
+        case "n": e.preventDefault(); if (!loading) handleNormalScan("new30"); break;
         case "h": e.preventDefault(); setViewMode(v => v === "table" ? "heat" : "table"); break;
         case "f": e.preventDefault(); filterInputRef.current?.focus(); break;
         case "arrowdown":
@@ -2218,13 +2242,17 @@ export default function ShortScanner() {
             title="キーボードショートカット (?)">
             ⌨️
           </button>
-          <button onClick={() => scan()} disabled={loading}
+          <button onClick={() => handleNormalScan()} disabled={loading}
             className="px-3 md:px-4 py-1.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
             {loading ? "⏳ ..." : t.scanBtn}
           </button>
-          <button onClick={() => scan("new30")} disabled={loading}
+          <button onClick={() => handleNormalScan("new30")} disabled={loading}
             className="px-3 md:px-4 py-1.5 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-300 text-white rounded-lg transition-colors whitespace-nowrap">
             {loading ? "⏳ ..." : t.new30Btn}
+          </button>
+          <button onClick={() => handleTop10Scan()} disabled={loading}
+            className="px-3 md:px-4 py-1.5 text-sm font-bold bg-orange-500 hover:bg-orange-400 disabled:bg-orange-300 text-white rounded-lg transition-colors whitespace-nowrap">
+            {loading ? "⏳ ..." : t.top10Btn}
           </button>
         </div>
       </div>
@@ -2270,6 +2298,7 @@ export default function ShortScanner() {
           <span>{t.passed}: <strong className="text-indigo-600">{data.meta.filtered}</strong></span>
           <span>{t.showing}: <strong className="text-gray-700">{extended.length}</strong></span>
           {data.mode === "new30" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
+          {top10Mode && <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold">{t.top10ModeBadge}</span>}
           {snapshots.length > 0 && <span>{t.snapshots}: <strong className="text-teal-600">{snapshots.length}</strong></span>}
           {HAS_CG && cgLoading && <span className="text-violet-600">{t.cgFetching} {cgProgress}%</span>}
           <span className="ml-auto flex items-center gap-2">
@@ -2321,6 +2350,15 @@ export default function ShortScanner() {
             className="mt-3 px-4 py-1.5 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors">
             {t.filterReset}
           </button>
+        </div>
+      )}
+
+      {/* TOP10 mode description */}
+      {top10Mode && !loading && data && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
+          <span className="font-bold">{t.top10ModeBadge}</span>
+          <span>{t.top10Desc}</span>
+          <button onClick={() => setTop10Mode(false)} className="ml-auto text-orange-400 hover:text-orange-600 underline">✕</button>
         </div>
       )}
 
