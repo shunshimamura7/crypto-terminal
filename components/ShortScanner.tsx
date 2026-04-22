@@ -141,6 +141,19 @@ const T = {
     btStatusCol: "状態",
     btPnlCol: "損益",
     btDaysCol: "日数",
+    caTitle: "🔔 カスタムアラート設定",
+    caMinScore: "最低スコア",
+    caMaxAth: "ATH下落率 以下",
+    caReqPattern: "パターン検知",
+    caReqAllTf: "全TFダウン",
+    caReqBtcInd: "BTC非連動",
+    caPreset: "プリセット",
+    caPresetStrong: "強いショート",
+    caPresetNewListing: "新規上場急落",
+    caPresetMtf: "マルチTF一致",
+    caSave: "保存",
+    caReset: "リセット",
+    caHits: "🔔 カスタムアラート",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -255,6 +268,19 @@ const T = {
     btStatusCol: "Status",
     btPnlCol: "PnL",
     btDaysCol: "Days",
+    caTitle: "🔔 Custom Alert Settings",
+    caMinScore: "Min Score",
+    caMaxAth: "ATH Drop ≤",
+    caReqPattern: "Require Pattern",
+    caReqAllTf: "All TF Down",
+    caReqBtcInd: "BTC Independent",
+    caPreset: "Preset",
+    caPresetStrong: "Strong Short",
+    caPresetNewListing: "New Listing Drop",
+    caPresetMtf: "Multi-TF Aligned",
+    caSave: "Save",
+    caReset: "Reset",
+    caHits: "🔔 Custom Alerts",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -623,6 +649,175 @@ function AlertPanel({ alerts }: { alerts: DiffAlert[] }) {
               <span>{a.message}</span>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Custom Alert (施策6) ──────────────────────────────────────────────────────
+const CA_KEY = "bell:custom-alert-config";
+
+interface CustomAlertConfig {
+  enabled: boolean;
+  minScore: number;
+  maxAthDropPct: number; // e.g. -30 means drop ≥ 30%
+  requirePattern: boolean;
+  requireAllTfDown: boolean;
+  requireBtcIndependent: boolean;
+}
+
+const CA_DEFAULTS: CustomAlertConfig = {
+  enabled: false,
+  minScore: 12,
+  maxAthDropPct: -40,
+  requirePattern: false,
+  requireAllTfDown: false,
+  requireBtcIndependent: false,
+};
+
+const CA_PRESETS = {
+  strong:      { minScore: 14, maxAthDropPct: -50, requirePattern: false, requireAllTfDown: false, requireBtcIndependent: false },
+  newListing:  { minScore: 10, maxAthDropPct: -20, requirePattern: false, requireAllTfDown: false, requireBtcIndependent: false },
+  mtf:         { minScore: 12, maxAthDropPct: -30, requirePattern: false, requireAllTfDown: true,  requireBtcIndependent: false },
+} as const;
+
+function loadCAConfig(): CustomAlertConfig {
+  try {
+    const raw = localStorage.getItem(CA_KEY);
+    if (raw) return { ...CA_DEFAULTS, ...JSON.parse(raw) };
+  } catch { /* ignore */ }
+  return { ...CA_DEFAULTS };
+}
+
+function saveCAConfig(cfg: CustomAlertConfig): void {
+  try { localStorage.setItem(CA_KEY, JSON.stringify(cfg)); } catch { /* ignore */ }
+}
+
+function checkCustomAlerts(candidates: ExtendedCandidate[], cfg: CustomAlertConfig): ExtendedCandidate[] {
+  if (!cfg.enabled) return [];
+  return candidates.filter(c => {
+    if (c.displayScore < cfg.minScore) return false;
+    if (c.athDropPct > cfg.maxAthDropPct) return false;
+    if (cfg.requirePattern && !c.chartPattern) return false;
+    if (cfg.requireAllTfDown && (!c.trendMultiTF || c.trendMultiTF.alignment < 3)) return false;
+    if (cfg.requireBtcIndependent && c.btcCorrelation >= 0.3) return false;
+    return true;
+  });
+}
+
+function CustomAlertPanel({ t, candidates }: { t: Translations; candidates: ExtendedCandidate[] }) {
+  const [cfg, setCfg] = useState<CustomAlertConfig>(CA_DEFAULTS);
+  const [open, setOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => { setCfg(loadCAConfig()); }, []);
+
+  const hits = useMemo(() => checkCustomAlerts(candidates, cfg), [candidates, cfg]);
+
+  function applyPreset(name: keyof typeof CA_PRESETS) {
+    const p = CA_PRESETS[name];
+    setCfg(c => ({ ...c, ...p }));
+    setDirty(true);
+  }
+
+  function handleSave() {
+    saveCAConfig(cfg);
+    setDirty(false);
+  }
+
+  function handleReset() {
+    setCfg({ ...CA_DEFAULTS });
+    saveCAConfig({ ...CA_DEFAULTS });
+    setDirty(false);
+  }
+
+  return (
+    <div className="rounded-xl border border-indigo-200 bg-indigo-50 overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 transition-colors">
+        <span>{t.caTitle} {cfg.enabled && hits.length > 0 && <span className="ml-1 bg-red-500 text-white rounded-full text-[10px] px-1.5 py-0.5 font-bold">{hits.length}</span>}</span>
+        <span>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-3">
+          {/* Enable toggle */}
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input type="checkbox" checked={cfg.enabled} onChange={e => { setCfg(c => ({ ...c, enabled: e.target.checked })); setDirty(true); }} className="rounded" />
+            <span className="font-semibold text-indigo-700">{cfg.enabled ? "ON" : "OFF"}</span>
+          </label>
+
+          {/* Preset buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500">{t.caPreset}:</span>
+            {(["strong","newListing","mtf"] as const).map(p => (
+              <button key={p} onClick={() => applyPreset(p)}
+                className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-100 font-semibold">
+                {p === "strong" ? t.caPresetStrong : p === "newListing" ? t.caPresetNewListing : t.caPresetMtf}
+              </button>
+            ))}
+          </div>
+
+          {/* Conditions */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+            <label className="flex flex-col gap-0.5">
+              <span className="text-gray-600">{t.caMinScore}</span>
+              <input type="number" min={0} max={25} value={cfg.minScore}
+                onChange={e => { setCfg(c => ({ ...c, minScore: Number(e.target.value) })); setDirty(true); }}
+                className="w-full px-2 py-1 border border-indigo-200 rounded text-xs font-mono" />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-gray-600">{t.caMaxAth} (%)</span>
+              <input type="number" max={0} value={cfg.maxAthDropPct}
+                onChange={e => { setCfg(c => ({ ...c, maxAthDropPct: Number(e.target.value) })); setDirty(true); }}
+                className="w-full px-2 py-1 border border-indigo-200 rounded text-xs font-mono" />
+            </label>
+            {([
+              ["requirePattern",       "caReqPattern"],
+              ["requireAllTfDown",     "caReqAllTf"],
+              ["requireBtcIndependent","caReqBtcInd"],
+            ] as const).map(([field, tk]) => (
+              <label key={field} className="flex items-center gap-1.5 cursor-pointer col-span-1">
+                <input type="checkbox" checked={cfg[field] as boolean}
+                  onChange={e => { setCfg(c => ({ ...c, [field]: e.target.checked })); setDirty(true); }}
+                  className="rounded" />
+                <span className="text-gray-600">{t[tk]}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Save/Reset */}
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={!dirty}
+              className="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-semibold disabled:opacity-40 hover:bg-indigo-700">
+              {t.caSave}
+            </button>
+            <button onClick={handleReset}
+              className="px-3 py-1 rounded-lg border border-gray-300 text-gray-600 text-xs hover:bg-gray-100">
+              {t.caReset}
+            </button>
+          </div>
+
+          {/* Hits */}
+          {cfg.enabled && hits.length > 0 && (
+            <div className="mt-1 pt-2 border-t border-indigo-200">
+              <p className="text-xs font-semibold text-red-700 mb-1.5">{t.caHits} ({hits.length})</p>
+              <div className="space-y-1">
+                {hits.map(c => (
+                  <div key={c.symbol} className="flex items-center gap-2 text-xs bg-white border border-red-200 rounded px-2 py-1">
+                    <span className="font-mono font-bold text-gray-800">{c.symbol.replace("_USDT","")}</span>
+                    <span style={scoreBadgeStyle(c.displayScore)}>{c.displayScore}</span>
+                    {c.chartPattern && <span className="text-sky-600">📐{c.chartPattern.type.replace("_"," ")}</span>}
+                    {c.trendMultiTF?.alignment === 3 && <span className="text-green-600 font-bold">🎯MTF</span>}
+                    {c.btcCorrelation < 0.3 && <span className="text-purple-600">₿✗</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {cfg.enabled && hits.length === 0 && (
+            <p className="text-xs text-gray-400 italic">条件に合う銘柄なし</p>
+          )}
         </div>
       )}
     </div>
@@ -1180,6 +1375,9 @@ export default function ShortScanner() {
 
       {/* Alerts */}
       <AlertPanel alerts={alerts} />
+
+      {/* Custom Alerts (施策6) */}
+      <CustomAlertPanel t={t} candidates={extended} />
 
       {/* Error */}
       {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">❌ {error}</div>}
