@@ -1597,6 +1597,66 @@ function BacktestPanel({
   );
 }
 
+// ─── Filter Presets (施策6) ───────────────────────────────────────────────────
+interface FilterPreset {
+  name: string; icon: string;
+  minDrop: number; maxVolRatio: number; minVol24k: number; maxDays: number; minOiK: number;
+}
+const DEFAULT_PRESETS: FilterPreset[] = [
+  { name: "presetStandard",    icon: "📊", minDrop: 30,  maxVolRatio: 70,  minVol24k: 100, maxDays: 365, minOiK: 0  },
+  { name: "presetStrict",      icon: "🎯", minDrop: 50,  maxVolRatio: 40,  minVol24k: 200, maxDays: 365, minOiK: 50 },
+  { name: "presetNewListing",  icon: "🆕", minDrop: 10,  maxVolRatio: 150, minVol24k: 10,  maxDays: 30,  minOiK: 0  },
+];
+const CUSTOM_PRESETS_KEY = "shortScanPresets";
+function loadCustomPresets(): FilterPreset[] {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_PRESETS_KEY) ?? "[]"); } catch { return []; }
+}
+function saveCustomPresets(presets: FilterPreset[]) {
+  localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(presets.slice(0, 5)));
+}
+
+function FilterPresets({ t, customPresets, onApply, onSaveCurrent, onDeleteCustom }: {
+  t: Translations;
+  customPresets: FilterPreset[];
+  onApply: (p: FilterPreset) => void;
+  onSaveCurrent: () => void;
+  onDeleteCustom: (idx: number) => void;
+}) {
+  const presetName = (p: FilterPreset) => {
+    if (p.name === "presetStandard")   return `${p.icon} ${t.presetStandard}`;
+    if (p.name === "presetStrict")     return `${p.icon} ${t.presetStrict}`;
+    if (p.name === "presetNewListing") return `${p.icon} ${t.presetNewListing}`;
+    return `${p.icon} ${p.name}`;
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="text-gray-500 font-semibold shrink-0">{t.presetsLabel}:</span>
+      {DEFAULT_PRESETS.map((p, i) => (
+        <button key={i} onClick={() => onApply(p)}
+          className="px-2.5 py-1 rounded-lg border border-gray-300 bg-white hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600 transition-colors">
+          {presetName(p)}
+        </button>
+      ))}
+      {customPresets.map((p, i) => (
+        <div key={`c${i}`} className="flex items-center">
+          <button onClick={() => onApply(p)}
+            className="px-2.5 py-1 rounded-l-lg border border-gray-300 bg-white hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600 transition-colors">
+            {presetName(p)}
+          </button>
+          <button onClick={() => onDeleteCustom(i)}
+            className="px-1.5 py-1 rounded-r-lg border border-l-0 border-gray-300 bg-white hover:bg-red-50 hover:text-red-500 text-gray-400 transition-colors">
+            ✕
+          </button>
+        </div>
+      ))}
+      <button onClick={onSaveCurrent}
+        className="px-2.5 py-1 rounded-lg border border-dashed border-gray-300 bg-white hover:bg-gray-50 text-gray-500 transition-colors">
+        {t.presetSave}
+      </button>
+    </div>
+  );
+}
+
 // ─── Shortcut Help Modal (施策3) ──────────────────────────────────────────────
 function ShortcutHelpModal({ t, onClose }: { t: Translations; onClose: () => void }) {
   const rows = [
@@ -1719,6 +1779,26 @@ export default function ShortScanner() {
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState<number>(-1);
   const filterInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Filter presets (施策6)
+  const [customPresets, setCustomPresets] = useState<FilterPreset[]>(() => typeof window !== "undefined" ? loadCustomPresets() : []);
+  function applyPreset(p: FilterPreset) {
+    setMinDrop(p.minDrop); setMaxVolRatio(p.maxVolRatio); setMinVol24k(p.minVol24k); setMaxDays(p.maxDays); setMinOiK(p.minOiK);
+  }
+  function saveCurrentPreset() {
+    const name = window.prompt(t.presetNamePrompt);
+    if (!name?.trim()) return;
+    const p: FilterPreset = { name: name.trim(), icon: "⭐", minDrop, maxVolRatio, minVol24k, maxDays, minOiK };
+    const next = [...customPresets, p].slice(0, 5);
+    setCustomPresets(next);
+    saveCustomPresets(next);
+  }
+  function deleteCustomPreset(idx: number) {
+    if (!window.confirm(t.presetDelConfirm)) return;
+    const next = customPresets.filter((_, i) => i !== idx);
+    setCustomPresets(next);
+    saveCustomPresets(next);
+  }
 
   // CoinGecko (施策7)
   const [cgMap,      setCgMap]      = useState<Map<string, CgMarketData>>(new Map());
@@ -2034,6 +2114,9 @@ export default function ShortScanner() {
           </button>
         </div>
       </div>
+
+      {/* Filter Presets (施策6) */}
+      <FilterPresets t={t} customPresets={customPresets} onApply={applyPreset} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
 
       {/* Filters */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 border border-gray-200 rounded-xl p-3 md:p-4">
