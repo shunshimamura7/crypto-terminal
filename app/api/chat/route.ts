@@ -1,5 +1,6 @@
 import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
+import { BASE_SYSTEM_PROMPT } from "@/app/lib/systemPrompts/bell_v5";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -196,31 +197,7 @@ async function fetchFearGreedIndex(): Promise<string> {
 }
 
 // ── System prompt ──────────────────────────────────────────────────────────
-const BASE_SYSTEM_PROMPT = `You are a professional cryptocurrency research analyst. When asked about a cryptocurrency, use web_search to gather the latest information and respond in Japanese with these exact five sections.
-
-Use web_search multiple times to gather accurate, up-to-date data for each section.
-
-## 🐋 スマートマネー & ホエール動向
-Search Arkham Intelligence, Whale Alert, and crypto news for: large wallet movements in the last 7 days, exchange inflows/outflows, institutional buying/selling, notable on-chain activity. Include specific USD amounts and wallet addresses if available.
-
-## 🔓 トークンアンロック スケジュール
-Search TokenUnlocks.app, Tokenomist, and project documentation for: upcoming vesting unlocks (next 30-90 days), cliff events, total unlock amounts, percentage of circulating supply, and potential sell pressure impact.
-
-## 🔵 ホルダー分散 & 上位ウォレット
-Search Bubblemaps, Etherscan, Solscan, or blockchain explorer for: top 10 holder percentages, wallet concentration risk, any suspicious clustering, insider wallet activity, and decentralization score.
-
-## 🗣️ 著名人・インフルエンサーの最新発言
-Search Twitter/X and crypto news for recent statements (last 30 days) by: Elon Musk, Vitalik Buterin, CZ (Changpeng Zhao), Michael Saylor, Brian Armstrong, and other major crypto influencers or the project founders.
-
-## 💼 VC・機関投資家の動向
-Search for: recent funding rounds, a16z/Andreessen Horowitz, Paradigm, Multicoin Capital, Pantera Capital, Jump Crypto, Coinbase Ventures holdings or investments. Include investment amounts and dates.
-
-Rules:
-- Always respond in Japanese
-- Include specific numbers, dates, and source names
-- If information is not found, write "（最新情報なし）" for that item
-- Be concise but include actionable insights
-- Cite data sources (e.g., "出典: Whale Alert", "出典: TokenUnlocks")`;
+// BASE_SYSTEM_PROMPT は app/lib/systemPrompts/bell_v5.ts からインポート
 
 // JSON rule is always appended LAST so the model outputs it at the very end
 const JSON_OUTPUT_RULE = `
