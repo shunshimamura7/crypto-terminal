@@ -1,6 +1,8 @@
 "use client";
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import type { BitgetShortCandidate, BitgetShortScoreBreakdown, TrendDir } from "@/app/lib/bitgetScorer";
+import type { BitgetBtRecord, BitgetBtStats } from "@/app/lib/bitgetBacktest";
+import { loadRecords, recordCandidates, settleRecords, resetRecords, exportCsv, calcStats } from "@/app/lib/bitgetBacktest";
 import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
 
 // ─── Bitget referral link ────────────────────────────────────────────────────
@@ -15,12 +17,11 @@ function bitgetUrl(sym: string) {
 const TEAL = "#00c9a7";
 const TEAL_DIM = "#00a98d";
 
-function scoreColor(score: number, max = 30): string {
-  const pct = score / max;
-  if (pct >= 0.75) return "#f87171"; // red — strong short signal
-  if (pct >= 0.55) return "#fb923c"; // orange
-  if (pct >= 0.35) return "#facc15"; // yellow
-  return "#94a3b8";
+function scoreColor(score: number): string {
+  if (score >= 18) return "#059669"; // emerald — strong
+  if (score >= 15) return "#d97706"; // amber — notable
+  if (score >= 12) return "#374151"; // gray-700
+  return "#9ca3af";                  // gray-400 — weak
 }
 
 function frColor(fr: number | null): string {
@@ -69,13 +70,13 @@ function ScoreBar({ value, max, color }: { value: number; max: number; color: st
 // ─── Breakdown row ────────────────────────────────────────────────────────────
 function BreakdownGrid({ bd }: { bd: BitgetShortScoreBreakdown }) {
   const items = [
-    { label: "ATH下落",     value: bd.dropScore,      max: 6 },
-    { label: "FR",          value: bd.frScore,         max: 6 },
-    { label: "FR偏り",      value: bd.frBiasScore,     max: 3 },
-    { label: "出来高枯渇",  value: bd.volumeDryScore,  max: 3 },
-    { label: "OI比率",      value: bd.oiScore,         max: 4 },
-    { label: "トレンド",    value: bd.trendScore,      max: 5 },
-    { label: "急騰度",      value: bd.pumpScore,       max: 3 },
+    { label: "ATH下落",    value: bd.dropScore,        max: 5 },
+    { label: "FR偏り",     value: bd.frScore,           max: 5 },
+    { label: "出来高枯渇", value: bd.volumeDryScore,    max: 4 },
+    { label: "OI比率",     value: bd.oiScore,           max: 4 },
+    { label: "トレンド",   value: bd.trendScore,        max: 6 },
+    { label: "急騰度",     value: bd.pumpScore,         max: 4 },
+    { label: "BTC非連動",  value: bd.btcNonCorrScore,   max: 2 },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
@@ -91,52 +92,89 @@ function BreakdownGrid({ bd }: { bd: BitgetShortScoreBreakdown }) {
 
 // ─── Trade setup card ─────────────────────────────────────────────────────────
 function TradeSetupCard({ c }: { c: BitgetShortCandidate }) {
-  const { tradeSetup, frWeeklyCost, recommendedLev } = c;
+  const { tradeSetup, frWeeklyCost, recommendedLev, fundingRate } = c;
   if (!tradeSetup) return null;
-  const { entry, sl, tp1, tp2, rrRatio, rrWarning } = tradeSetup;
+  const { entry, entryZone, sl, tp1, tp2, rrRatio, rrWarning } = tradeSetup;
+  const frPct8h      = fundingRate !== null ? fundingRate * 100 : null;
+  const weeklyAmount = -frWeeklyCost; // positive = shorts receive, negative = pay
+  const isReceiving  = weeklyAmount > 0;
   return (
     <div className="mt-3 p-3 rounded-lg border" style={{ borderColor: `${TEAL}40`, background: `${TEAL}08` }}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold" style={{ color: TEAL }}>📐 トレードセットアップ</span>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-bold" style={{ color: TEAL }}>⚔️ トレードセットアップ</span>
         <div className="flex items-center gap-2">
           <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ background: `${TEAL}20`, color: TEAL }}>
-            推奨レバレッジ {recommendedLev}x
+            推奨レバ {recommendedLev}x
           </span>
-          {rrWarning && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">R:R低⚠️</span>
-          )}
+          {rrWarning && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">R:R低⚠️</span>}
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-        <div className="bg-white rounded p-1.5 text-center">
-          <div className="text-gray-500">エントリー</div>
-          <div className="font-bold text-gray-800">{fmtPrice(entry)}</div>
-        </div>
-        <div className="bg-red-50 rounded p-1.5 text-center">
-          <div className="text-red-500">損切り SL</div>
-          <div className="font-bold text-red-600">{fmtPrice(sl)}</div>
-          <div className="text-red-400">{fmtPct((sl - entry) / entry * 100)}</div>
-        </div>
-        <div className="bg-green-50 rounded p-1.5 text-center">
-          <div className="text-green-500">TP1</div>
-          <div className="font-bold text-green-600">{fmtPrice(tp1)}</div>
-          <div className="text-green-400">{fmtPct((tp1 - entry) / entry * 100)}</div>
-        </div>
-        <div className="bg-emerald-50 rounded p-1.5 text-center">
-          <div className="text-emerald-500">TP2</div>
-          <div className="font-bold text-emerald-600">{fmtPrice(tp2)}</div>
-          <div className="text-emerald-400">{fmtPct((tp2 - entry) / entry * 100)}</div>
-        </div>
-      </div>
-      <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
-        <span>R:R <span className={`font-bold ${rrRatio >= 1.5 ? "text-green-600" : "text-amber-600"}`}>{rrRatio.toFixed(2)}</span></span>
-        <span>FR週次コスト
-          <span className={`font-bold ml-1 ${frWeeklyCost <= 0 ? "text-green-600" : "text-red-500"}`}>
-            {frWeeklyCost <= 0 ? "+" : ""}{(-frWeeklyCost).toFixed(3)}%
-            {frWeeklyCost <= 0 ? " 受取" : " 支払"}
+
+      {/* Price levels */}
+      <div className="space-y-1.5 text-xs mb-3">
+        <div className="flex justify-between items-center bg-white rounded px-2.5 py-1.5">
+          <span className="text-gray-500">エントリー</span>
+          <span className="font-bold text-gray-800">
+            {fmtPrice(entryZone?.low ?? entry)} 〜 {fmtPrice(entryZone?.high ?? entry)}
           </span>
-        </span>
+        </div>
+        <div className="flex justify-between items-center bg-red-50 rounded px-2.5 py-1.5">
+          <span className="text-red-500">損切り (SL)</span>
+          <span className="font-bold text-red-600">
+            {fmtPrice(sl)}<span className="text-red-400 font-normal ml-1">({fmtPct((sl - entry) / entry * 100)})</span>
+          </span>
+        </div>
+        <div className="flex justify-between items-center bg-green-50 rounded px-2.5 py-1.5">
+          <span className="text-green-600">TP1</span>
+          <span className="font-bold text-green-700">
+            {fmtPrice(tp1)}<span className="text-green-500 font-normal ml-1">({fmtPct((tp1 - entry) / entry * 100)})</span>
+          </span>
+        </div>
+        <div className="flex justify-between items-center bg-emerald-50 rounded px-2.5 py-1.5">
+          <span className="text-emerald-600">TP2</span>
+          <span className="font-bold text-emerald-700">
+            {fmtPrice(tp2)}<span className="text-emerald-500 font-normal ml-1">({fmtPct((tp2 - entry) / entry * 100)})</span>
+          </span>
+        </div>
+        <div className="flex justify-between items-center bg-gray-50 rounded px-2.5 py-1.5">
+          <span className="text-gray-500">R:R</span>
+          <span className={`font-bold ${rrRatio >= 1.5 ? "text-green-600" : "text-amber-600"}`}>
+            1 : {rrRatio.toFixed(2)}
+          </span>
+        </div>
       </div>
+
+      {/* FR cost section */}
+      <div className="border-t pt-2.5 mb-3" style={{ borderColor: `${TEAL}30` }}>
+        <div className="text-xs font-bold mb-2" style={{ color: TEAL }}>💸 FRコスト試算（1週間保有）</div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="bg-white rounded px-2.5 py-1.5">
+            <div className="text-gray-400 mb-0.5">現在FR/8h</div>
+            <div className={`font-semibold ${frPct8h !== null && frPct8h >= 0 ? "text-green-600" : "text-red-500"}`}>
+              {frPct8h !== null ? `${frPct8h >= 0 ? "+" : ""}${frPct8h.toFixed(4)}%` : "—"}
+            </div>
+          </div>
+          <div className="bg-white rounded px-2.5 py-1.5">
+            <div className="text-gray-400 mb-0.5">週間累積</div>
+            <div className={`font-semibold ${isReceiving ? "text-green-600" : "text-red-500"}`}>
+              {weeklyAmount >= 0 ? "+" : ""}{weeklyAmount.toFixed(3)}%
+              <span className="ml-1">{isReceiving ? "受取 🟢" : "支払 🔴"}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bitget link */}
+      <a
+        href={bitgetUrl(c.symbol)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-90"
+        style={{ background: TEAL_DIM }}
+      >
+        Bitgetで取引 ↗
+      </a>
     </div>
   );
 }
@@ -201,16 +239,30 @@ function ExpandedRow({ c }: { c: BitgetShortCandidate }) {
 // ─── Candidate row ────────────────────────────────────────────────────────────
 function CandidateRow({ c, rank }: { c: BitgetShortCandidate; rank: number }) {
   const [open, setOpen] = useState(false);
-  const col = scoreColor(c.shortScore, 30);
+  const col = scoreColor(c.shortScore);
+  const weeklyAmount = -c.frWeeklyCost; // positive = receive
+
+  const rowBg = c.shortScore >= 18
+    ? "bg-emerald-50"
+    : c.shortScore >= 15
+    ? "bg-yellow-50"
+    : "";
+  const rowStyle = c.shortScore >= 18
+    ? { borderLeft: "4px solid #10b981" }
+    : c.shortScore >= 15
+    ? { borderLeft: "4px solid #f59e0b" }
+    : undefined;
+  const rowOpacity = c.shortScore <= 11 ? "opacity-60" : "";
 
   return (
     <>
       <tr
-        className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+        className={`border-b border-gray-100 cursor-pointer transition-colors hover:brightness-95 ${rowBg} ${rowOpacity}`}
+        style={rowStyle}
         onClick={() => setOpen(o => !o)}
       >
-        <td className="px-3 py-2 text-xs text-gray-400 w-8">{rank}</td>
-        <td className="px-3 py-2">
+        <td className="px-2 py-2 text-xs text-gray-400 w-7 shrink-0">{rank}</td>
+        <td className="px-2 py-2 whitespace-nowrap">
           <a
             href={bitgetUrl(c.symbol)}
             target="_blank"
@@ -222,43 +274,150 @@ function CandidateRow({ c, rank }: { c: BitgetShortCandidate; rank: number }) {
             {c.symbol.replace("USDT", "")}
           </a>
         </td>
-        <td className="px-3 py-2 text-right">
-          <span className="text-sm font-bold" style={{ color: col }}>{c.shortScore}</span>
+        <td className="px-2 py-2 text-right whitespace-nowrap">
+          <span
+            className={`font-bold ${c.shortScore >= 18 ? "text-base font-black" : "text-sm"}`}
+            style={{ color: col }}
+          >{c.shortScore}</span>
           <span className="text-xs text-gray-400">/30</span>
         </td>
-        <td className="px-3 py-2 text-right text-sm">{fmtPrice(c.currentPrice)}</td>
-        <td className="px-3 py-2 text-right text-sm text-red-500 font-semibold">{c.athDropPct.toFixed(1)}%</td>
-        <td className="px-3 py-2 text-right text-xs" style={{ color: frColor(c.fundingRate) }}>
+        <td className="px-2 py-2 text-right text-xs whitespace-nowrap">{fmtPrice(c.currentPrice)}</td>
+        <td className={`px-2 py-2 text-right text-xs whitespace-nowrap font-semibold ${c.priceChange24h >= 0 ? "text-green-600" : "text-red-500"}`}>
+          {fmtPct(c.priceChange24h)}
+        </td>
+        <td className={`px-2 py-2 text-right text-xs whitespace-nowrap font-semibold ${c.priceChange7d >= 0 ? "text-green-600" : "text-red-500"}`}>
+          {fmtPct(c.priceChange7d)}
+        </td>
+        <td className="px-2 py-2 text-right text-xs whitespace-nowrap text-red-500 font-semibold">
+          {c.athDropPct.toFixed(1)}%
+        </td>
+        <td className="px-2 py-2 text-right text-xs whitespace-nowrap" style={{ color: frColor(c.fundingRate) }}>
           {c.fundingRate !== null ? (c.fundingRate * 100).toFixed(4) + "%" : "—"}
         </td>
-        <td className="px-3 py-2 text-right text-xs">
+        <td className={`px-2 py-2 text-right text-xs whitespace-nowrap font-semibold ${weeklyAmount >= 0 ? "text-green-600" : "text-red-500"}`}>
+          {weeklyAmount >= 0 ? "+" : ""}{weeklyAmount.toFixed(2)}%
+        </td>
+        <td className="px-2 py-2 text-right text-xs whitespace-nowrap text-gray-500">
+          {c.oiRatio.toFixed(1)}x
+        </td>
+        <td className="px-2 py-2 text-right text-xs whitespace-nowrap">
           {c.longRatio !== null ? (
             <span className={`font-semibold ${c.longRatio >= 0.65 ? "text-red-600" : "text-gray-600"}`}>
               {Math.round(c.longRatio * 100)}/{Math.round((1 - c.longRatio) * 100)}
             </span>
-          ) : (
-            <span className="text-gray-400">—</span>
-          )}
+          ) : <span className="text-gray-400">—</span>}
         </td>
-        <td className="px-3 py-2 text-right text-xs">
+        <td className="px-2 py-2 text-right text-xs whitespace-nowrap">
+          <span className="px-1.5 py-0.5 rounded text-xs font-bold" style={{ background: `${TEAL}20`, color: TEAL }}>
+            {c.recommendedLev}x
+          </span>
+        </td>
+        <td className="px-2 py-2 text-right text-xs whitespace-nowrap">
           <div className="flex justify-end gap-0.5">
             {([c.trendH1, c.trendH4, c.trendD1] as TrendDir[]).map((t, i) => (
-              <span key={i} className="text-xs">
-                {t === "DOWN" ? "🔴" : t === "UP" ? "🟢" : "⚪"}
-              </span>
+              <span key={i}>{t === "DOWN" ? "🔴" : t === "UP" ? "🟢" : "⚪"}</span>
             ))}
           </div>
         </td>
-        <td className="px-3 py-2 text-center text-xs text-gray-400">{open ? "▲" : "▼"}</td>
+        <td className="px-2 py-2 text-center text-xs text-gray-400">{open ? "▲" : "▼"}</td>
       </tr>
       {open && (
         <tr>
-          <td colSpan={9} className="p-0">
+          <td colSpan={14} className="p-0">
             <ExpandedRow c={c} />
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+// ─── Backtest panel ───────────────────────────────────────────────────────────
+function BacktestPanel({
+  records, stats, onReset, onCsv,
+}: {
+  records: BitgetBtRecord[];
+  stats:   BitgetBtStats;
+  onReset: () => void;
+  onCsv:   () => void;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-sm text-gray-800">📊 バックテスト成績</h3>
+        <div className="flex gap-2">
+          <button onClick={onCsv} disabled={records.length === 0}
+            className="text-xs px-2.5 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+            📋 CSV
+          </button>
+          <button onClick={onReset} disabled={records.length === 0}
+            className="text-xs px-2.5 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-40 transition-colors">
+            🗑️ リセット
+          </button>
+        </div>
+      </div>
+
+      {records.length < 5 ? (
+        <p className="text-xs text-gray-400 text-center py-4">
+          スキャンを繰り返すとバックテストデータが蓄積されます（現在 {records.length} 件）
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div className="text-center bg-gray-50 rounded-lg py-2">
+              <div className="text-xs text-gray-500">記録 / アクティブ</div>
+              <div className="text-lg font-bold text-gray-800">{stats.total}</div>
+              <div className="text-xs text-gray-400">アクティブ {stats.active} 件</div>
+            </div>
+            <div className="text-center bg-gray-50 rounded-lg py-2">
+              <div className="text-xs text-gray-500">勝率</div>
+              <div className={`text-lg font-bold ${stats.winRate >= 50 ? "text-green-600" : "text-red-500"}`}>
+                {stats.winRate.toFixed(1)}%
+              </div>
+              <div className="text-xs text-gray-400">{stats.wins}勝 {stats.losses}敗</div>
+            </div>
+            <div className="text-center bg-gray-50 rounded-lg py-2">
+              <div className="text-xs text-gray-500">平均 PnL</div>
+              <div className={`text-lg font-bold ${stats.avgPnl >= 0 ? "text-green-600" : "text-red-500"}`}>
+                {stats.avgPnl >= 0 ? "+" : ""}{stats.avgPnl.toFixed(1)}%
+              </div>
+              <div className="text-xs text-gray-400">解決済 {stats.resolved} 件</div>
+            </div>
+            <div className="text-center bg-gray-50 rounded-lg py-2">
+              <div className="text-xs text-gray-500">最高 / 最低</div>
+              <div className="text-sm font-bold text-green-600">+{stats.bestPnl.toFixed(1)}%</div>
+              <div className="text-sm font-bold text-red-500">{stats.worstPnl.toFixed(1)}%</div>
+            </div>
+          </div>
+
+          {stats.byScore.some(b => b.wins + b.losses > 0) && (
+            <div>
+              <div className="text-xs text-gray-500 mb-2">スコア別勝率</div>
+              <div className="space-y-1.5">
+                {stats.byScore.filter(b => b.wins + b.losses > 0).map(b => (
+                  <div key={b.range} className="flex items-center gap-2 text-xs">
+                    <span className="w-14 text-gray-600 font-mono shrink-0">{b.range}pt</span>
+                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${b.winRate}%`,
+                          background: b.winRate >= 60 ? TEAL : b.winRate >= 40 ? "#fb923c" : "#f87171",
+                        }}
+                      />
+                    </div>
+                    <span className={`w-10 text-right font-bold shrink-0 ${b.winRate >= 50 ? "text-green-600" : "text-red-500"}`}>
+                      {b.winRate.toFixed(0)}%
+                    </span>
+                    <span className="text-gray-400 w-16 shrink-0">{b.wins}勝 {b.losses}敗</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -274,6 +433,12 @@ export default function BitgetShortFinder() {
   const [scanMeta,    setScanMeta]    = useState<ScanMeta | null>(null);
   const [scanTime,    setScanTime]    = useState<string | null>(null);
   const [error,       setError]       = useState<string | null>(null);
+  const [btRecords,   setBtRecords]   = useState<BitgetBtRecord[]>([]);
+
+  // Load backtest records on mount
+  useEffect(() => { setBtRecords(loadRecords()); }, []);
+
+  const btStats = useMemo(() => calcStats(btRecords), [btRecords]);
 
   // Filters
   const [minScore,    setMinScore]    = useState(0);
@@ -289,15 +454,31 @@ export default function BitgetShortFinder() {
       const res = await fetch("/api/bitget-scan");
       const json = await res.json();
       if (!json.success) throw new Error(json.error ?? "スキャン失敗");
-      setCandidates(json.candidates ?? []);
+      const list: BitgetShortCandidate[] = json.candidates ?? [];
+      setCandidates(list);
       setScanMeta(json.meta ?? null);
       setScanTime(json.scanTime ?? null);
+      // Backtest: settle existing → record new candidates
+      const priceMap = new Map<string, number>(list.map(c => [c.symbol, c.currentPrice]));
+      settleRecords(priceMap);
+      const updated = recordCandidates(list);
+      setBtRecords(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
     } finally {
       setScanning(false);
     }
   }, []);
+
+  function handleBtReset() {
+    if (!window.confirm("バックテストデータをすべてリセットしますか？")) return;
+    resetRecords();
+    setBtRecords([]);
+  }
+
+  function handleBtCsv() {
+    exportCsv(btRecords);
+  }
 
   const filtered = useMemo(() => {
     return candidates.filter(c => {
@@ -322,7 +503,7 @@ export default function BitgetShortFinder() {
           <div>
             <h2 className="text-lg font-black" style={{ color: TEAL }}>⚡ Bitget Low-Lev Short Finder</h2>
             <p className="text-xs mt-0.5" style={{ color: "#a7f3d0" }}>
-              FR高騰 × L/S比率 × ATH下落 × マルチTFトレンドで低レバショート候補をスキャン
+              FR × ATH下落 × 出来高枯渇 × マルチTFトレンドで低レバショート候補をスキャン
             </p>
           </div>
           <button
@@ -409,22 +590,28 @@ export default function BitgetShortFinder() {
       {/* Table */}
       {!scanning && filtered.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">
-            {filtered.length} 件表示（行をクリックで詳細展開）
+          <div className="px-4 py-2 flex items-center justify-between border-b border-gray-100">
+            <span className="text-xs text-gray-500">{filtered.length} 件表示（行をクリックで詳細展開）</span>
+            <span className="text-xs text-gray-400">← 横スクロールで全列表示</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full text-sm" style={{ minWidth: "860px" }}>
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 uppercase">
-                  <th className="px-3 py-2 text-left w-8">#</th>
-                  <th className="px-3 py-2 text-left">銘柄</th>
-                  <th className="px-3 py-2 text-right">スコア</th>
-                  <th className="px-3 py-2 text-right">価格</th>
-                  <th className="px-3 py-2 text-right">ATH比</th>
-                  <th className="px-3 py-2 text-right">FR</th>
-                  <th className="px-3 py-2 text-right">L/S</th>
-                  <th className="px-3 py-2 text-center">TF</th>
-                  <th className="px-3 py-2 w-6"></th>
+                <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
+                  <th className="px-2 py-2 text-left w-7">#</th>
+                  <th className="px-2 py-2 text-left">銘柄</th>
+                  <th className="px-2 py-2 text-right">スコア</th>
+                  <th className="px-2 py-2 text-right">価格</th>
+                  <th className="px-2 py-2 text-right">24h</th>
+                  <th className="px-2 py-2 text-right">7d</th>
+                  <th className="px-2 py-2 text-right">ATH比</th>
+                  <th className="px-2 py-2 text-right">FR</th>
+                  <th className="px-2 py-2 text-right">FR/週</th>
+                  <th className="px-2 py-2 text-right">OI</th>
+                  <th className="px-2 py-2 text-right">L/S</th>
+                  <th className="px-2 py-2 text-right">レバ</th>
+                  <th className="px-2 py-2 text-center">TF</th>
+                  <th className="px-2 py-2 w-6"></th>
                 </tr>
               </thead>
               <tbody>
@@ -436,6 +623,14 @@ export default function BitgetShortFinder() {
           </div>
         </div>
       )}
+
+      {/* Backtest stats */}
+      <BacktestPanel
+        records={btRecords}
+        stats={btStats}
+        onReset={handleBtReset}
+        onCsv={handleBtCsv}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   calcBitgetShortScore,
   calcBitgetTradeSetup,
+  calcBtcCorrelation,
   calcFrWeeklyCost,
   calcRecommendedLev,
   calcTrendDir,
@@ -113,7 +114,7 @@ interface CandidateMeta {
   change24h: number;   // %
 }
 
-async function analyzeCandidate(meta: CandidateMeta): Promise<BitgetShortCandidate | null> {
+async function analyzeCandidate(meta: CandidateMeta, btcCloses: number[]): Promise<BitgetShortCandidate | null> {
   const { symbol, price, vol24h, fr, oi, change24h } = meta;
 
   const [r4h, r1h, r1d] = await Promise.allSettled([
@@ -146,9 +147,10 @@ async function analyzeCandidate(meta: CandidateMeta): Promise<BitgetShortCandida
   const trendH1: TrendDir = calcTrendDir(kline1h.closes);
   const trendH4: TrendDir = calcTrendDir(kline4h.closes);
   const trendD1: TrendDir = calcTrendDir(kline1d.closes);
+  const btcCorr           = btcCloses.length > 0 ? calcBtcCorrelation(kline1d.closes, btcCloses) : 0.5;
 
   const { score, breakdown, trendAlignment } = calcBitgetShortScore(
-    athDropPct, fr, volumeChangeRatio, oiRatio, trendH1, trendH4, trendD1, priceChange7d,
+    athDropPct, fr, volumeChangeRatio, oiRatio, trendH1, trendH4, trendD1, priceChange7d, btcCorr,
   );
 
   const tradeSetup     = calcBitgetTradeSetup(price, kline4h.highs, kline4h.lows);
@@ -185,6 +187,18 @@ export async function GET(_req: NextRequest) {
 
   const totalPairs = (tickers as unknown[]).length;
   console.log(`[bitget-scan] Stage0: ${totalPairs} tickers`);
+
+  // ── Stage 0.5: BTC 1D klines for correlation (cached) ────────────────────
+  let btcCloses: number[] = getCached("bitget:btcCloses") ?? [];
+  if (btcCloses.length === 0) {
+    const btcRes = await bitgetGet(
+      `/api/v2/mix/market/candles?symbol=BTCUSDT&productType=${PRODUCT}&granularity=1D&limit=15`, 8000,
+    );
+    if (btcRes?.data) {
+      btcCloses = parseKlines(btcRes.data as string[][]).closes;
+      setCached("bitget:btcCloses", btcCloses);
+    }
+  }
 
   // ── Stage 1: volume + major filter ────────────────────────────────────────
   const PRE_FILTER_VOL = 100_000;
@@ -230,7 +244,7 @@ export async function GET(_req: NextRequest) {
       break;
     }
     const batch   = targets.slice(i, i + BATCH);
-    const settled = await Promise.allSettled(batch.map(meta => analyzeCandidate(meta)));
+    const settled = await Promise.allSettled(batch.map(meta => analyzeCandidate(meta, btcCloses)));
     for (const r of settled) {
       if (r.status === "fulfilled") { fetched++; if (r.value) results.push(r.value); }
       else failed++;

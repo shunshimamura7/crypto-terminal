@@ -18,6 +18,7 @@ import { addToWatchlist, isInWatchlist } from "@/app/lib/watchlist";
 import RankAlert from "./RankAlert";
 import ShortScanner from "./ShortScanner";
 import BitgetShortFinder from "./BitgetShortFinder";
+import HolderAnalysis from "./HolderAnalysis";
 
 // ─────────────────────────────────────────────
 // Types
@@ -588,8 +589,9 @@ function SkeletonCard({ lines = 4 }: { lines?: number }) {
 // ─────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────
-type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan" | "bitgetshort";
-const TAB_CONFIG: { id: Tab; label: string }[] = [
+type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan" | "bitgetshort" | "holders";
+interface TabEntry { id: string; label: string; href?: string }
+const TAB_CONFIG: TabEntry[] = [
   { id: "chat",        label: "💬 個別分析" },
   { id: "sector",      label: "📊 セクター分析" },
   { id: "batch",       label: "📋 バッチ分析" },
@@ -598,7 +600,33 @@ const TAB_CONFIG: { id: Tab; label: string }[] = [
   { id: "portfolio",   label: "💼 ポートフォリオ" },
   { id: "shortscan",   label: "🎯 Short Scanner" },
   { id: "bitgetshort", label: "⚡ Bitget Short" },
+  { id: "holders",     label: "👥 ホルダー分析" },
+  { id: "trades",      label: "📊 トレード履歴", href: "/trades" },
 ];
+
+// ─── Tab preference helpers ───────────────────
+interface TabPrefs { order: string[]; hidden: string[] }
+
+function defaultTabPrefs(): TabPrefs {
+  return { order: TAB_CONFIG.map(t => t.id), hidden: [] };
+}
+
+function loadTabPrefs(): TabPrefs {
+  try {
+    const raw = localStorage.getItem("tabOrder");
+    if (!raw) return defaultTabPrefs();
+    const saved = JSON.parse(raw) as TabPrefs;
+    const allIds = TAB_CONFIG.map(t => t.id);
+    const savedSet = new Set(saved.order);
+    const missing = allIds.filter(id => !savedSet.has(id));
+    return {
+      order: [...saved.order.filter(id => allIds.includes(id)), ...missing],
+      hidden: saved.hidden.filter(id => allIds.includes(id)),
+    };
+  } catch {
+    return defaultTabPrefs();
+  }
+}
 
 export default function CryptoSearch() {
   const [activeTab, setActiveTab] = useState<Tab>("chat");
@@ -612,11 +640,33 @@ export default function CryptoSearch() {
   const [watchlisted, setWatchlisted] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [scoreData, setScoreData] = useState<any>(null);
+  const [tabPrefs, setTabPrefs] = useState<TabPrefs>(() => defaultTabPrefs());
+  const [showTabSettings, setShowTabSettings] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (result?.query) setWatchlisted(isInWatchlist(result.query));
   }, [result?.query]);
+
+  useEffect(() => {
+    const prefs = loadTabPrefs();
+    setTabPrefs(prefs);
+    setPrefsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    localStorage.setItem("tabOrder", JSON.stringify(tabPrefs));
+  }, [tabPrefs, prefsLoaded]);
+
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    if (tabPrefs.hidden.includes(activeTab)) {
+      const firstVisible = tabPrefs.order.find(id => !tabPrefs.hidden.includes(id));
+      if (firstVisible) setActiveTab(firstVisible as Tab);
+    }
+  }, [tabPrefs, prefsLoaded, activeTab]);
 
   // Extract scoreData from streaming AI text as soon as JSON block is detected
   useEffect(() => {
@@ -630,6 +680,33 @@ export default function CryptoSearch() {
       } catch { /* ignore */ }
     }
   }, [result?.aiAnalysis]);
+
+  const visibleTabs = useMemo(
+    () => tabPrefs.order
+      .map(id => TAB_CONFIG.find(t => t.id === id))
+      .filter((t): t is TabEntry => !!t && !tabPrefs.hidden.includes(t.id)),
+    [tabPrefs],
+  );
+
+  function moveTab(id: string, dir: -1 | 1) {
+    setTabPrefs(prev => {
+      const arr = [...prev.order];
+      const idx = arr.indexOf(id);
+      const next = idx + dir;
+      if (next < 0 || next >= arr.length) return prev;
+      [arr[idx], arr[next]] = [arr[next], arr[idx]];
+      return { ...prev, order: arr };
+    });
+  }
+
+  function toggleHidden(id: string) {
+    setTabPrefs(prev => ({
+      ...prev,
+      hidden: prev.hidden.includes(id)
+        ? prev.hidden.filter(h => h !== id)
+        : [...prev.hidden, id],
+    }));
+  }
 
   function handleBatchFromWatchlist(items: string[]) {
     setBatchPrefill(items.join("\n")); setActiveTab("batch");
@@ -757,28 +834,38 @@ export default function CryptoSearch() {
       {/* Tab bar */}
       <div className="overflow-x-auto bg-white border-b border-[#e2e8f0]">
         <div className="max-w-[800px] mx-auto px-4 flex min-w-max">
-          {TAB_CONFIG.map((tab, idx) => (
+          {visibleTabs.map((tab, idx) => (
             <React.Fragment key={tab.id}>
               {idx > 0 && <div className="w-px bg-[#e2e8f0] my-2" />}
-              <button
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? "border-[#0ea5e9] text-[#0ea5e9]"
-                    : "border-transparent text-[#64748b] hover:text-[#0f172a]"
-                }`}
-              >
-                {tab.label}
-              </button>
+              {tab.href ? (
+                <Link
+                  href={tab.href}
+                  className="px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-[#64748b] hover:text-[#0f172a] transition-colors whitespace-nowrap"
+                >
+                  {tab.label}
+                </Link>
+              ) : (
+                <button
+                  onClick={() => setActiveTab(tab.id as Tab)}
+                  className={`px-4 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? "border-[#0ea5e9] text-[#0ea5e9]"
+                      : "border-transparent text-[#64748b] hover:text-[#0f172a]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              )}
             </React.Fragment>
           ))}
           <div className="w-px bg-[#e2e8f0] my-2" />
-          <Link
-            href="/trades"
-            className="px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-[#64748b] hover:text-[#0f172a] transition-colors whitespace-nowrap"
+          <button
+            onClick={() => setShowTabSettings(true)}
+            className="px-3 py-3 text-sm text-[#94a3b8] hover:text-[#0f172a] transition-colors whitespace-nowrap"
+            title="タブをカスタマイズ"
           >
-            📊 トレード履歴
-          </Link>
+            ⚙️
+          </button>
         </div>
       </div>
 
@@ -790,6 +877,7 @@ export default function CryptoSearch() {
         {activeTab === "portfolio" && <PortfolioTabContent onGoToBatch={() => setActiveTab("batch")} />}
         {activeTab === "shortscan"   && <ShortScanner />}
         {activeTab === "bitgetshort" && <BitgetShortFinder />}
+        {activeTab === "holders"     && <HolderAnalysis />}
 
         {activeTab === "chat" && <>
           {/* Search */}
@@ -905,6 +993,55 @@ export default function CryptoSearch() {
           データ提供: CoinGecko · DEXScreener · GeckoTerminal · AI分析: Anthropic Claude
         </div>
       </footer>
+
+      {/* Tab settings modal */}
+      {showTabSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowTabSettings(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[340px] max-w-[90vw] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#e2e8f0] flex items-center justify-between">
+              <h2 className="font-bold text-[#0f172a] text-base">⚙️ タブカスタマイズ</h2>
+              <button onClick={() => setShowTabSettings(false)} className="text-[#94a3b8] hover:text-[#0f172a] text-xl leading-none">×</button>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              {tabPrefs.order.map((id, idx) => {
+                const tab = TAB_CONFIG.find(t => t.id === id);
+                if (!tab) return null;
+                const isHidden = tabPrefs.hidden.includes(id);
+                return (
+                  <div key={id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isHidden ? "bg-[#f8fafc] border-[#e2e8f0] opacity-50" : "bg-white border-[#e2e8f0]"}`}>
+                    <span className="flex-1 text-sm font-medium text-[#0f172a]">{tab.label}</span>
+                    <button
+                      onClick={() => moveTab(id, -1)}
+                      disabled={idx === 0}
+                      className="w-7 h-7 flex items-center justify-center text-xs rounded hover:bg-[#f1f5f9] disabled:opacity-20 text-[#64748b]"
+                    >▲</button>
+                    <button
+                      onClick={() => moveTab(id, 1)}
+                      disabled={idx === tabPrefs.order.length - 1}
+                      className="w-7 h-7 flex items-center justify-center text-xs rounded hover:bg-[#f1f5f9] disabled:opacity-20 text-[#64748b]"
+                    >▼</button>
+                    <button
+                      onClick={() => toggleHidden(id)}
+                      className={`w-7 h-7 flex items-center justify-center text-sm rounded transition-colors ${isHidden ? "text-[#94a3b8] hover:bg-[#f1f5f9]" : "text-[#0ea5e9] hover:bg-sky-50"}`}
+                      title={isHidden ? "表示する" : "非表示にする"}
+                    >👁</button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-4 border-t border-[#e2e8f0] flex items-center justify-between">
+              <button
+                onClick={() => setTabPrefs(defaultTabPrefs())}
+                className="text-xs text-[#64748b] hover:text-[#0f172a] underline"
+              >デフォルトに戻す</button>
+              <button
+                onClick={() => setShowTabSettings(false)}
+                className="px-4 py-1.5 bg-[#0ea5e9] text-white rounded-lg text-sm font-bold hover:bg-[#0284c7] transition-colors"
+              >閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
