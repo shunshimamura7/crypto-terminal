@@ -81,8 +81,9 @@ function parseKlines(rows: string[][]): {
   return { closes, highs, lows, quoteVols };
 }
 
-// Stage 3: fetch long/short position ratio (0-1 range)
-// longShortPositionRatio is a ratio (e.g. 1.5 = long60% / short40%)
+// Stage 3: fetch long/short position ratio
+// API returns longPositionRatio as decimal 0-1 (e.g. "0.4427" = 44.27% long)
+// Array is oldest-first; take the last element for the most recent data point
 async function fetchLongShortRatio(symbol: string): Promise<number | null> {
   try {
     const res = await fetchWithTimeout(
@@ -93,10 +94,11 @@ async function fetchLongShortRatio(symbol: string): Promise<number | null> {
     const json = await res.json();
     if (json.code !== "00000" || !Array.isArray(json.data) || json.data.length === 0) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const latest = json.data[0] as any;
-    const ratio = parseFloat(latest.longShortPositionRatio ?? latest.longShortRatio ?? "0");
-    if (!ratio || isNaN(ratio) || ratio <= 0) return null;
-    return ratio / (1 + ratio); // convert ratio → 0-1 (long%)
+    const latest = json.data[json.data.length - 1] as any;
+    const longRatio = parseFloat(latest.longPositionRatio ?? "0");
+    console.log(`[bitget-scan] L/S raw ${symbol}: longPositionRatio=${latest.longPositionRatio} shortPositionRatio=${latest.shortPositionRatio}`);
+    if (!longRatio || isNaN(longRatio) || longRatio <= 0) return null;
+    return longRatio; // already 0-1 range
   } catch {
     return null;
   }
@@ -244,17 +246,23 @@ export async function GET(_req: NextRequest) {
   const top30 = top50.slice(0, LS_TOP_N);
   let lsFetched = 0;
 
+  console.log(`[bitget-scan] Stage3: fetching L/S for ${top30.length} symbols`);
+
   for (let i = 0; i < top30.length; i += LS_BATCH) {
     const batch   = top30.slice(i, i + LS_BATCH);
     const settled = await Promise.allSettled(batch.map(c => fetchLongShortRatio(c.symbol)));
     for (let j = 0; j < batch.length; j++) {
       const r = settled[j];
+      const sym = batch[j].symbol;
       if (r.status === "fulfilled" && r.value !== null) {
         const lsScore = calcLongShortScore(r.value);
-        batch[j].longRatio              = r.value;
+        batch[j].longRatio               = r.value;
         batch[j].breakdown.longShortRatio = lsScore;
-        batch[j].shortScore             += lsScore;
+        batch[j].shortScore              += lsScore;
         lsFetched++;
+        console.log(`[bitget-scan] L/S ${sym}: longRatio=${r.value.toFixed(4)} score+=${lsScore}`);
+      } else {
+        console.log(`[bitget-scan] L/S ${sym}: ${r.status === "rejected" ? "rejected" : "null"}`);
       }
     }
     if (i + LS_BATCH < top30.length) await sleep(LS_DELAY);
