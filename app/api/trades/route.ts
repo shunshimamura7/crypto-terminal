@@ -1,12 +1,57 @@
 import { NextRequest } from "next/server";
 import { saveTradeLog, getTradeLogs, getTradeLogsByTicker, deleteTradeLog } from "@/app/lib/kv";
 import type { TradeLog, TradeAction, TradeDirection } from "@/app/types/trade";
+import { sendDiscordAlert } from "@/app/lib/discord";
+import type { DiscordColor } from "@/app/lib/discord";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 function uuid(): string {
   return crypto.randomUUID();
+}
+
+// ── Discord 通知ビルダー ───────────────────────────────────────────────────────
+function notifyTrade(log: TradeLog): void {
+  const sym  = log.ticker.replace(/USDT?$/, "");
+  const dir  = log.direction === "long" ? "LONG 🟢" : "SHORT 🔴";
+  const px   = `$${log.price.toLocaleString("en-US", { maximumFractionDigits: 6 })}`;
+  const sz   = log.size_pct > 0 ? ` | ${log.size_pct}%` : "";
+  const rank = log.bell_rank_at_entry ? ` | ランク ${log.bell_rank_at_entry}` : "";
+
+  let title: string;
+  let description: string;
+  let color: DiscordColor;
+
+  switch (log.action) {
+    case "entry":
+      title       = `${log.direction === "long" ? "🟢" : "🔴"} ${dir} Entry: ${sym} ${px}`;
+      description = `サイズ: ${log.size_pct > 0 ? `${log.size_pct}%` : "—"}${rank}${log.notes ? `\n📝 ${log.notes}` : ""}`;
+      color       = log.direction === "long" ? "green" : "red";
+      break;
+    case "exit_tp":
+      title       = `✅ TP Hit: ${sym} ${px}`;
+      description = `方向: ${dir}${sz}${log.notes ? `\n📝 ${log.notes}` : ""}`;
+      color       = "green";
+      break;
+    case "exit_sl":
+      title       = `🔴 SL Hit: ${sym} ${px}`;
+      description = `方向: ${dir}${sz}${log.notes ? `\n📝 ${log.notes}` : ""}`;
+      color       = "red";
+      break;
+    case "exit_manual":
+      title       = `📌 手動決済: ${sym} ${px}`;
+      description = `方向: ${dir}${sz}${log.notes ? `\n📝 ${log.notes}` : ""}`;
+      color       = "yellow";
+      break;
+  }
+
+  sendDiscordAlert({
+    title,
+    description,
+    color,
+    footer: `ベル Crypto Terminal | ${new Date(log.timestamp).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })} JST`,
+  });
 }
 
 // ── GET /api/trades?limit=20&ticker=BTC ──────────────────────────────────────
@@ -82,6 +127,9 @@ export async function POST(req: NextRequest) {
       { status: 503 }
     );
   }
+
+  // fire-and-forget: 通知失敗でもレスポンスには影響しない
+  notifyTrade(log);
 
   return Response.json({ success: true, log }, { status: 201 });
 }
