@@ -1,15 +1,15 @@
 // Bitget Low-Lev Short Finder — scoring logic
-// Max total: 6+6+6+4+5+3 = 30pt
+// Stage2 max: 6+6+4+5+3 = 24pt  Stage3 adds longShortRatio 0-3 → total max 27pt
 
 export type TrendDir = "UP" | "DOWN" | "NEUTRAL";
 
 export interface BitgetShortScoreBreakdown {
-  dropScore:    number; // 0-6: ATH14d drop depth
-  frScore:      number; // 0-6: Funding rate (positive FR = shorts get paid)
-  lsRatioScore: number; // 0-6: Long/Short account ratio (more longs = short-favored)
-  oiScore:      number; // 0-4: OI / vol24h ratio
-  trendScore:   number; // 0-5: Multi-TF downtrend alignment
-  pumpScore:    number; // 0-3: 7d pump (dead-cat setup)
+  dropScore:       number; // 0-6: ATH14d drop depth
+  frScore:         number; // 0-6: Funding rate (positive FR = shorts get paid)
+  longShortRatio:  number; // 0-3: Long% from position data (Stage 3, starts at 0)
+  oiScore:         number; // 0-4: OI / vol24h ratio
+  trendScore:      number; // 0-5: Multi-TF downtrend alignment
+  pumpScore:       number; // 0-3: 7d pump (dead-cat setup)
 }
 
 export interface BitgetTradeSetup {
@@ -31,14 +31,14 @@ export interface BitgetShortCandidate {
   fundingRate:    number | null;
   openInterest:   number;  // USDT value
   oiRatio:        number;  // OI / vol24h
-  lsRatio:        number | null; // long accounts / short accounts
+  longRatio:      number | null; // 0-1: long position ratio (e.g. 0.65 = 65% long), from Stage 3
   priceChange24h: number;  // %
   priceChange7d:  number;  // %
   trendH1:        TrendDir;
   trendH4:        TrendDir;
   trendD1:        TrendDir;
   trendAlignment: number;  // count of DOWN timeframes (0-3)
-  shortScore:     number;  // 0-30
+  shortScore:     number;  // 0-27 (Stage3 longShortRatio adds up to 3)
   breakdown:      BitgetShortScoreBreakdown;
   tradeSetup:     BitgetTradeSetup | null;
   frWeeklyCost:   number;  // % weekly: negative = earning, positive = paying
@@ -91,15 +91,13 @@ export function calcFrScore(fr: number | null): number {
   return 0; // very negative FR = shorts pay = penalize
 }
 
-// lsRatio = longAccounts / shortAccounts; > 1 = more longs = better short
-export function calcLsRatioScore(lsRatio: number | null): number {
-  if (lsRatio === null) return 3; // neutral default when data unavailable
-  if (lsRatio >= 2.0) return 6;
-  if (lsRatio >= 1.5) return 5;
-  if (lsRatio >= 1.2) return 4;
-  if (lsRatio >= 1.0) return 3;
-  if (lsRatio >= 0.8) return 2;
-  if (lsRatio >= 0.6) return 1;
+// longRatio: 0-1 range (e.g. 0.65 = 65% long positions)
+// Returns 0-3; starts at 0 in Stage 2, updated in Stage 3
+export function calcLongShortScore(longRatio: number): number {
+  const longPct = longRatio * 100;
+  if (longPct >= 70) return 3;
+  if (longPct >= 65) return 2;
+  if (longPct >= 60) return 1;
   return 0;
 }
 
@@ -161,28 +159,26 @@ export function calcBitgetTradeSetup(
   return { entry: currentPrice, sl, tp1, tp2, rrRatio, rrWarning: rrRatio < 1.5 };
 }
 
-// ─── Composite score ──────────────────────────────────────────────────────────
+// ─── Composite score (Stage 2 only — longShortRatio starts at 0) ─────────────
 
 export function calcBitgetShortScore(
   athDropPct:    number,
   fr:            number | null,
-  lsRatio:       number | null,
   oiRatio:       number,
   h1:            TrendDir,
   h4:            TrendDir,
   d1:            TrendDir,
   priceChange7d: number,
 ): { score: number; breakdown: BitgetShortScoreBreakdown; trendAlignment: number } {
-  const dropScore    = calcDropScore(athDropPct);
-  const frScore      = calcFrScore(fr);
-  const lsRatioScore = calcLsRatioScore(lsRatio);
-  const oiScore      = calcOiScore(oiRatio);
+  const dropScore   = calcDropScore(athDropPct);
+  const frScore     = calcFrScore(fr);
+  const oiScore     = calcOiScore(oiRatio);
   const { score: trendScore, alignment: trendAlignment } = calcTrendScore(h1, h4, d1);
-  const pumpScore    = calcPumpScore(priceChange7d);
+  const pumpScore   = calcPumpScore(priceChange7d);
 
   return {
-    score: dropScore + frScore + lsRatioScore + oiScore + trendScore + pumpScore,
-    breakdown: { dropScore, frScore, lsRatioScore, oiScore, trendScore, pumpScore },
+    score: dropScore + frScore + oiScore + trendScore + pumpScore,
+    breakdown: { dropScore, frScore, longShortRatio: 0, oiScore, trendScore, pumpScore },
     trendAlignment,
   };
 }

@@ -15,7 +15,7 @@ function bitgetUrl(sym: string) {
 const TEAL = "#00c9a7";
 const TEAL_DIM = "#00a98d";
 
-function scoreColor(score: number, max = 30): string {
+function scoreColor(score: number, max = 27): string {
   const pct = score / max;
   if (pct >= 0.75) return "#f87171"; // red — strong short signal
   if (pct >= 0.55) return "#fb923c"; // orange
@@ -69,12 +69,12 @@ function ScoreBar({ value, max, color }: { value: number; max: number; color: st
 // ─── Breakdown row ────────────────────────────────────────────────────────────
 function BreakdownGrid({ bd }: { bd: BitgetShortScoreBreakdown }) {
   const items = [
-    { label: "ATH下落", value: bd.dropScore,    max: 6 },
-    { label: "FR",      value: bd.frScore,      max: 6 },
-    { label: "L/S比率", value: bd.lsRatioScore, max: 6 },
-    { label: "OI比率",  value: bd.oiScore,      max: 4 },
-    { label: "トレンド", value: bd.trendScore,  max: 5 },
-    { label: "急騰度",  value: bd.pumpScore,    max: 3 },
+    { label: "ATH下落",  value: bd.dropScore,      max: 6 },
+    { label: "FR",       value: bd.frScore,         max: 6 },
+    { label: "L/S比率",  value: bd.longShortRatio,  max: 3 },
+    { label: "OI比率",   value: bd.oiScore,         max: 4 },
+    { label: "トレンド", value: bd.trendScore,       max: 5 },
+    { label: "急騰度",   value: bd.pumpScore,        max: 3 },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
@@ -170,9 +170,11 @@ function ExpandedRow({ c }: { c: BitgetShortCandidate }) {
           <div className={`font-semibold ${c.priceChange24h >= 0 ? "text-green-600" : "text-red-500"}`}>{fmtPct(c.priceChange24h)}</div>
         </div>
         <div>
-          <div className="text-gray-500">L/S比率</div>
-          <div className={`font-semibold ${c.lsRatio !== null && c.lsRatio > 1 ? "text-red-500" : "text-blue-500"}`}>
-            {c.lsRatio !== null ? c.lsRatio.toFixed(2) : "—"}
+          <div className="text-gray-500">ロング/ショート</div>
+          <div className={`font-semibold ${c.longRatio !== null && c.longRatio >= 0.60 ? "text-red-500" : "text-blue-500"}`}>
+            {c.longRatio !== null
+              ? `${Math.round(c.longRatio * 100)}/${Math.round((1 - c.longRatio) * 100)}`
+              : "—"}
           </div>
         </div>
         <div>
@@ -221,7 +223,7 @@ function CandidateRow({ c, rank }: { c: BitgetShortCandidate; rank: number }) {
         </td>
         <td className="px-3 py-2 text-right">
           <span className="text-sm font-bold" style={{ color: col }}>{c.shortScore}</span>
-          <span className="text-xs text-gray-400">/30</span>
+          <span className="text-xs text-gray-400">/27</span>
         </td>
         <td className="px-3 py-2 text-right text-sm">{fmtPrice(c.currentPrice)}</td>
         <td className="px-3 py-2 text-right text-sm text-red-500 font-semibold">{c.athDropPct.toFixed(1)}%</td>
@@ -229,9 +231,13 @@ function CandidateRow({ c, rank }: { c: BitgetShortCandidate; rank: number }) {
           {c.fundingRate !== null ? (c.fundingRate * 100).toFixed(4) + "%" : "—"}
         </td>
         <td className="px-3 py-2 text-right text-xs">
-          <span className={`font-semibold ${c.lsRatio !== null && c.lsRatio > 1.2 ? "text-red-500" : "text-gray-600"}`}>
-            {c.lsRatio !== null ? c.lsRatio.toFixed(2) : "—"}
-          </span>
+          {c.longRatio !== null ? (
+            <span className={`font-semibold ${c.longRatio >= 0.65 ? "text-red-600" : "text-gray-600"}`}>
+              {Math.round(c.longRatio * 100)}/{Math.round((1 - c.longRatio) * 100)}
+            </span>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
         </td>
         <td className="px-3 py-2 text-right text-xs">
           <div className="flex justify-end gap-0.5">
@@ -346,7 +352,7 @@ export default function BitgetShortFinder() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <label className="text-xs text-gray-500">最低スコア ({minScore})</label>
-              <input type="range" min={0} max={30} value={minScore} onChange={e => setMinScore(+e.target.value)}
+              <input type="range" min={0} max={27} value={minScore} onChange={e => setMinScore(+e.target.value)}
                 className="w-full mt-1" style={{ accentColor: TEAL }} />
             </div>
             <div>

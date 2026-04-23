@@ -3,16 +3,17 @@ import {
   calcBitgetShortScore,
   calcBitgetTradeSetup,
   calcFrWeeklyCost,
+  calcLongShortScore,
   calcRecommendedLev,
   calcTrendDir,
 } from "@/app/lib/bitgetScorer";
 import type { BitgetShortCandidate, TrendDir } from "@/app/lib/bitgetScorer";
 
-export const runtime   = "nodejs";
+export const runtime     = "nodejs";
 export const maxDuration = 120;
 
-const BITGET = "https://api.bitget.com";
-const PRODUCT = "USDT-FUTURES";
+const BITGET   = "https://api.bitget.com";
+const PRODUCT  = "USDT-FUTURES";
 
 // ─── In-memory cache (5-min TTL) ─────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,7 +40,9 @@ const MAJORS = new Set([
 const BATCH       = 10;
 const BATCH_DELAY = 300;
 const MAX_TARGETS = 200;
-const LS_TOP_N    = 20; // only fetch L/S ratio for top candidates by pre-score
+const LS_TOP_N    = 30; // Stage 3: fetch L/S ratio for top 30
+const LS_BATCH    = 5;
+const LS_DELAY    = 200;
 
 async function fetchWithTimeout(url: string, ms = 10_000): Promise<Response | null> {
   const ctrl = new AbortController();
@@ -78,78 +81,75 @@ function parseKlines(rows: string[][]): {
   return { closes, highs, lows, quoteVols };
 }
 
-interface CandidateMeta {
-  symbol:     string;
-  preScore:   number;
-  price:      number;
-  vol24h:     number;
-  fr:         number | null;
-  oi:         number;  // USDT
-  change24h:  number;  // %
+// Stage 3: fetch long/short position ratio (0-1 range)
+// longShortPositionRatio is a ratio (e.g. 1.5 = long60% / short40%)
+async function fetchLongShortRatio(symbol: string): Promise<number | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `${BITGET}/api/v2/mix/market/position-long-short?symbol=${symbol}&productType=usdt-futures`,
+      5000,
+    );
+    if (!res?.ok) return null;
+    const json = await res.json();
+    if (json.code !== "00000" || !Array.isArray(json.data) || json.data.length === 0) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const latest = json.data[0] as any;
+    const ratio = parseFloat(latest.longShortPositionRatio ?? latest.longShortRatio ?? "0");
+    if (!ratio || isNaN(ratio) || ratio <= 0) return null;
+    return ratio / (1 + ratio); // convert ratio → 0-1 (long%)
+  } catch {
+    return null;
+  }
 }
 
-async function analyzeCandidate(
-  meta:        CandidateMeta,
-  fetchLsRatio: boolean,
-): Promise<BitgetShortCandidate | null> {
+interface CandidateMeta {
+  symbol:    string;
+  preScore:  number;
+  price:     number;
+  vol24h:    number;
+  fr:        number | null;
+  oi:        number;   // USDT
+  change24h: number;   // %
+}
+
+async function analyzeCandidate(meta: CandidateMeta): Promise<BitgetShortCandidate | null> {
   const { symbol, price, vol24h, fr, oi, change24h } = meta;
 
-  const limit4h = 84;  // ~14 days of 4H candles
-  const limit1h = 48;  // 2 days of 1H
-  const limit1d = 14;  // 14 days of 1D
-
-  const [r4h, r1h, r1d, rLs] = await Promise.allSettled([
-    bitgetGet(`/api/v2/mix/market/candles?symbol=${symbol}&productType=${PRODUCT}&granularity=4H&limit=${limit4h}`, 8000),
-    bitgetGet(`/api/v2/mix/market/candles?symbol=${symbol}&productType=${PRODUCT}&granularity=1H&limit=${limit1h}`, 7000),
-    bitgetGet(`/api/v2/mix/market/candles?symbol=${symbol}&productType=${PRODUCT}&granularity=1D&limit=${limit1d}`, 7000),
-    fetchLsRatio
-      ? bitgetGet(`/api/v2/mix/market/long-short-ratio?symbol=${symbol}&productType=${PRODUCT}&period=1d&limit=1`, 6000)
-      : Promise.resolve(null),
+  const [r4h, r1h, r1d] = await Promise.allSettled([
+    bitgetGet(`/api/v2/mix/market/candles?symbol=${symbol}&productType=${PRODUCT}&granularity=4H&limit=84`, 8000),
+    bitgetGet(`/api/v2/mix/market/candles?symbol=${symbol}&productType=${PRODUCT}&granularity=1H&limit=48`, 7000),
+    bitgetGet(`/api/v2/mix/market/candles?symbol=${symbol}&productType=${PRODUCT}&granularity=1D&limit=14`, 7000),
   ]);
 
   const kline4h = r4h.status === "fulfilled" && r4h.value?.data ? parseKlines(r4h.value.data as string[][]) : { closes: [], highs: [], lows: [], quoteVols: [] };
   const kline1h = r1h.status === "fulfilled" && r1h.value?.data ? parseKlines(r1h.value.data as string[][]) : { closes: [], highs: [], lows: [], quoteVols: [] };
   const kline1d = r1d.status === "fulfilled" && r1d.value?.data ? parseKlines(r1d.value.data as string[][]) : { closes: [], highs: [], lows: [], quoteVols: [] };
 
-  // ATH14d from 4H highs
-  const ath14d = kline4h.highs.length > 0 ? Math.max(price, ...kline4h.highs) : price;
+  const ath14d     = kline4h.highs.length > 0 ? Math.max(price, ...kline4h.highs) : price;
   const athDropPct = ath14d > 0 ? (price - ath14d) / ath14d * 100 : 0;
 
-  // 7d volume avg from 1D
   let volumeAvg7d = vol24h;
   if (kline1d.quoteVols.length > 0) {
     const vals = kline1d.quoteVols.filter(v => v > 0);
     if (vals.length > 0) volumeAvg7d = vals.reduce((a, b) => a + b, 0) / vals.length;
   }
 
-  // 7d price change
   let priceChange7d = 0;
   if (kline1d.closes.length >= 2) {
     const oldest = kline1d.closes[0];
     if (oldest > 0) priceChange7d = (price - oldest) / oldest * 100;
   }
 
-  const oiRatio    = vol24h > 0 ? oi / vol24h : 0;
+  const oiRatio  = vol24h > 0 ? oi / vol24h : 0;
   const trendH1: TrendDir = calcTrendDir(kline1h.closes);
   const trendH4: TrendDir = calcTrendDir(kline4h.closes);
   const trendD1: TrendDir = calcTrendDir(kline1d.closes);
 
-  // Long/Short ratio
-  let lsRatio: number | null = null;
-  if (rLs.status === "fulfilled" && rLs.value?.data) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const latest = (rLs.value.data as any[])[0];
-    if (latest?.longShortRatio) {
-      const v = parseFloat(String(latest.longShortRatio));
-      if (!isNaN(v)) lsRatio = v;
-    }
-  }
-
   const { score, breakdown, trendAlignment } = calcBitgetShortScore(
-    athDropPct, fr, lsRatio, oiRatio, trendH1, trendH4, trendD1, priceChange7d,
+    athDropPct, fr, oiRatio, trendH1, trendH4, trendD1, priceChange7d,
   );
 
-  const tradeSetup = calcBitgetTradeSetup(price, kline4h.highs, kline4h.lows);
+  const tradeSetup     = calcBitgetTradeSetup(price, kline4h.highs, kline4h.lows);
   const frWeeklyCost   = calcFrWeeklyCost(fr);
   const recommendedLev = calcRecommendedLev(athDropPct, trendAlignment, fr);
 
@@ -158,7 +158,7 @@ async function analyzeCandidate(
     ath14d, athDropPct,
     volume24h: vol24h, volumeAvg7d,
     fundingRate: fr, openInterest: oi, oiRatio,
-    lsRatio,
+    longRatio: null,  // populated in Stage 3
     priceChange24h: change24h, priceChange7d,
     trendH1, trendH4, trendD1, trendAlignment,
     shortScore: score, breakdown,
@@ -185,9 +185,9 @@ export async function GET(_req: NextRequest) {
   console.log(`[bitget-scan] Stage0: ${totalPairs} tickers`);
 
   // ── Stage 1: volume + major filter ────────────────────────────────────────
-  const PRE_FILTER_VOL = 100_000; // $100k USDT/24h
-
+  const PRE_FILTER_VOL = 100_000;
   const metas: CandidateMeta[] = [];
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const t of tickers as any[]) {
     const sym = String(t.symbol ?? "");
@@ -200,23 +200,19 @@ export async function GET(_req: NextRequest) {
     const vol24h = parseFloat(t.usdtVolume || t.quoteVolume || "0");
     if (vol24h < PRE_FILTER_VOL) continue;
 
-    const fr = t.fundingRate != null ? parseFloat(String(t.fundingRate)) : null;
-    const oiBase = parseFloat(t.openInterest || "0");
-    const oi = oiBase * price;
-
+    const fr      = t.fundingRate != null ? parseFloat(String(t.fundingRate)) : null;
+    const oiBase  = parseFloat(t.openInterest || "0");
+    const oi      = oiBase * price;
     const changeRaw = parseFloat(t.change24h || t.chgUtc || "0");
-    // Bitget change24h is decimal (0.05 = +5%)
     const change24h = Math.abs(changeRaw) > 1 ? changeRaw : changeRaw * 100;
 
-    // quick pre-score (no klines) to prioritize LS ratio fetches
     const quickOiRatio = vol24h > 0 ? oi / vol24h : 0;
-    const quickScore = (fr !== null && fr > 0 ? 3 : 0) + (quickOiRatio > 1.5 ? 2 : 0);
+    const quickScore   = (fr !== null && fr > 0 ? 3 : 0) + (quickOiRatio > 1.5 ? 2 : 0);
 
     metas.push({ symbol: sym, preScore: quickScore, price, vol24h, fr, oi, change24h });
   }
 
   const stage1Passed = metas.length;
-  // Sort by pre-score so top candidates get LS ratio data
   metas.sort((a, b) => b.preScore - a.preScore);
   const targets = metas.slice(0, MAX_TARGETS);
   console.log(`[bitget-scan] Stage1: ${stage1Passed} → ${targets.length} targets`);
@@ -224,40 +220,54 @@ export async function GET(_req: NextRequest) {
   // ── Stage 2: kline analysis in batches ───────────────────────────────────
   const results: BitgetShortCandidate[] = [];
   let fetched = 0, failed = 0;
-  const DEADLINE = Date.now() + 110_000;
+  const DEADLINE = Date.now() + 100_000; // reserve 10s for Stage 3
 
   for (let i = 0; i < targets.length; i += BATCH) {
     if (Date.now() >= DEADLINE) {
-      console.warn(`[bitget-scan] deadline at batch ${i}/${targets.length}`);
+      console.warn(`[bitget-scan] Stage2 deadline at ${i}/${targets.length}`);
       break;
     }
-
-    const batch = targets.slice(i, i + BATCH);
-    const settled = await Promise.allSettled(
-      batch.map((meta, bIdx) => analyzeCandidate(meta, i + bIdx < LS_TOP_N))
-    );
-
+    const batch   = targets.slice(i, i + BATCH);
+    const settled = await Promise.allSettled(batch.map(meta => analyzeCandidate(meta)));
     for (const r of settled) {
-      if (r.status === "fulfilled") {
-        fetched++;
-        if (r.value) results.push(r.value);
-      } else {
-        failed++;
-      }
+      if (r.status === "fulfilled") { fetched++; if (r.value) results.push(r.value); }
+      else failed++;
     }
-
     if (i + BATCH < targets.length) await sleep(BATCH_DELAY);
   }
 
   const sorted = results.sort((a, b) => b.shortScore - a.shortScore);
   const top50  = sorted.slice(0, 50);
-
   console.log(`[bitget-scan] Stage2: fetched=${fetched}, failed=${failed}, passed=${results.length}, returned=${top50.length}`);
+
+  // ── Stage 3: L/S ratio for top 30 (5-parallel, 200ms interval) ───────────
+  const top30 = top50.slice(0, LS_TOP_N);
+  let lsFetched = 0;
+
+  for (let i = 0; i < top30.length; i += LS_BATCH) {
+    const batch   = top30.slice(i, i + LS_BATCH);
+    const settled = await Promise.allSettled(batch.map(c => fetchLongShortRatio(c.symbol)));
+    for (let j = 0; j < batch.length; j++) {
+      const r = settled[j];
+      if (r.status === "fulfilled" && r.value !== null) {
+        const lsScore = calcLongShortScore(r.value);
+        batch[j].longRatio              = r.value;
+        batch[j].breakdown.longShortRatio = lsScore;
+        batch[j].shortScore             += lsScore;
+        lsFetched++;
+      }
+    }
+    if (i + LS_BATCH < top30.length) await sleep(LS_DELAY);
+  }
+
+  // Re-sort after Stage 3 score updates
+  top50.sort((a, b) => b.shortScore - a.shortScore);
+  console.log(`[bitget-scan] Stage3: L/S fetched=${lsFetched}/${top30.length}`);
 
   return NextResponse.json({
     success: true,
     scanTime: new Date().toISOString(),
     candidates: top50,
-    meta: { totalPairs, stage1Passed, fetched, failed, filtered: results.length },
+    meta: { totalPairs, stage1Passed, fetched, failed, filtered: results.length, lsFetched },
   });
 }
