@@ -44,10 +44,16 @@ export function sendDiscordAlert(opts: DiscordAlertOptions): void {
     ],
   };
 
+  const body = JSON.stringify(payload);
+  const encoded = new TextEncoder().encode(body);
+
   fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Length": String(encoded.byteLength),
+    },
+    body,
   }).catch((err) => {
     console.warn("[discord] Webhook 送信失敗:", err instanceof Error ? err.message : err);
   });
