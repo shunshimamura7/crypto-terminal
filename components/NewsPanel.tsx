@@ -41,13 +41,14 @@ export default function NewsPanel({ highlightTicker = "" }: { highlightTicker?: 
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-2.5 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
-        <span>📰</span>
-        <h3 className="font-bold text-blue-800 text-sm">最新ニュース</h3>
+      <div className="px-4 py-2.5 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
+        <span>🔥</span>
+        <h3 className="font-bold text-orange-800 text-sm">今日の注目ニュース</h3>
+        <span className="text-[10px] text-orange-400 ml-1">CoinPost他</span>
         <button
           onClick={load}
           disabled={loading}
-          className="ml-auto text-xs border border-blue-200 rounded px-2 py-0.5 text-blue-600 hover:bg-blue-100 disabled:opacity-50"
+          className="ml-auto text-xs border border-orange-200 rounded px-2 py-0.5 text-orange-600 hover:bg-orange-100 disabled:opacity-50"
         >
           {loading ? "⏳" : "🔄"} 更新
         </button>
@@ -60,7 +61,7 @@ export default function NewsPanel({ highlightTicker = "" }: { highlightTicker?: 
           ))}
         </div>
       ) : (
-        <ul className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+        <ul className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
           {items.map(item => {
             const hi = highlightTicker &&
               item.title.toUpperCase().includes(highlightTicker.toUpperCase());
@@ -87,7 +88,7 @@ export default function NewsPanel({ highlightTicker = "" }: { highlightTicker?: 
             );
           })}
           {items.length === 0 && !loading && (
-            <li className="px-4 py-6 text-center text-xs text-gray-700">ニュースを取得できませんでした</li>
+            <li className="px-4 py-6 text-center text-xs text-gray-700">ニュースを取得できませんでした。しばらく後にお試しください。</li>
           )}
         </ul>
       )}

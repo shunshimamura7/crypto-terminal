@@ -14,6 +14,7 @@ import { getRecords, clearRecords } from "@/app/lib/backtestStorage";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import { calculateStats } from "@/app/lib/backtestStats";
 import type { BacktestStats } from "@/app/lib/backtestStats";
+import type { BinanceFuturesData } from "@/app/types/binanceFutures";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -221,6 +222,13 @@ const T = {
     toastCsvDone: "📄 CSVをダウンロードしました",
     toastBtRecord: "件の銘柄を自動記録しました",
     toastScanError: "スキャンに失敗しました",
+    // Binance Futures 分析パネル
+    analyzeBtn: "分析実行",
+    reanalyzeBtn: "再分析",
+    analyzingLabel: "分析中...",
+    binanceFuturesSection: "📡 Binance Futures 分析",
+    binanceNotListed: "Binance未上場 — MEXC独占銘柄の可能性",
+    aiAnalysis: "🤖 AI分析:",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -409,6 +417,13 @@ const T = {
     toastCsvDone: "📄 CSV downloaded",
     toastBtRecord: "symbols auto-recorded",
     toastScanError: "Scan failed",
+    // Binance Futures analysis panel
+    analyzeBtn: "Run Analysis",
+    reanalyzeBtn: "Re-analyze",
+    analyzingLabel: "Analyzing...",
+    binanceFuturesSection: "📡 Binance Futures Analysis",
+    binanceNotListed: "Not on Binance — possibly MEXC exclusive",
+    aiAnalysis: "🤖 AI Analysis:",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -429,6 +444,13 @@ interface ScanResponse {
   success: boolean; scanTime: string; candidates: ShortCandidate[];
   meta: { totalTickerPairs?: number; totalScanned?: number; filtered: number; stage1Passed?: number; stage2Fetched?: number; stage2Failed?: number };
   error?: string; mode?: string;
+}
+
+interface AnalyzeResult {
+  symbol: string;
+  binance: BinanceFuturesData | null;
+  analysis: string;
+  isBinanceListed: boolean;
 }
 
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
@@ -453,6 +475,25 @@ function fmtVol(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 function fmtPct(n: number): string { return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`; }
+
+// ─── Binance FR signal helpers ────────────────────────────────────────────────
+function frSignalColor(sig: string): string {
+  if (sig === "short_favorable") return "text-green-600";
+  if (sig === "danger_squeeze")  return "text-red-600";
+  if (sig === "extreme_long")    return "text-orange-600";
+  return "text-gray-700";
+}
+function frSignalBadgeCls(sig: string): string {
+  if (sig === "short_favorable") return "bg-green-100 text-green-700 border-green-300";
+  if (sig === "danger_squeeze")  return "bg-red-100 text-red-700 border-red-300";
+  if (sig === "extreme_long")    return "bg-orange-100 text-orange-700 border-orange-300";
+  return "bg-gray-100 text-gray-600 border-gray-200";
+}
+function liqRiskBadgeCls(risk: string): string {
+  if (risk === "high")   return "bg-red-100 text-red-700 border-red-300";
+  if (risk === "medium") return "bg-orange-100 text-orange-700 border-orange-300";
+  return "bg-gray-100 text-gray-600 border-gray-200";
+}
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 interface Toast { id: string; message: string; type: "success"|"info"|"warning"|"error"; leaving?: boolean; }
@@ -566,6 +607,29 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
   const diff = getDiffSummary(c.symbol, c, snapshots);
   const symAlerts = alerts.filter(a => a.symbol === c.symbol);
   const colSpan = HAS_CG ? 15 : 12;
+
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisData, setAnalysisData]       = useState<AnalyzeResult | null>(null);
+  const [analysisError, setAnalysisError]     = useState<string | null>(null);
+
+  async function runAnalysis() {
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: c.symbol }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: AnalyzeResult = await res.json();
+      setAnalysisData(data);
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : "エラー");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }
 
   return (
     <tr>
@@ -764,14 +828,14 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
         {HAS_CG && c.cgData && (() => {
           const cg = c.cgData!;
           const snsTotal = (cg.twitterFollowers ?? 0) + (cg.telegramMembers ?? 0);
-          const futuresRatio = cg.spotVolume ? (c.volume24h / cg.spotVolume) * 100 : null;
+          const futuresRatio = (cg.spotVolume && cg.spotVolume >= 1000) ? (c.volume24h / cg.spotVolume) * 100 : null;
           return (
             <div className="mt-2 pt-2 border-t border-gray-200">
               <p className="text-xs font-semibold text-violet-700 mb-2">{t.cgSection}</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600">
                 <div>MC: <span className="font-mono font-semibold text-gray-800">{cg.marketCap ? fmtVol(cg.marketCap) : "N/A"}</span></div>
                 <div>現物Vol: <span className="font-mono font-semibold text-gray-800">{cg.spotVolume ? fmtVol(cg.spotVolume) : "N/A"}</span></div>
-                <div>先物/現物: <span className={`font-mono font-semibold ${futuresRatio && futuresRatio > 500 ? "text-red-600" : futuresRatio && futuresRatio > 200 ? "text-orange-500" : "text-gray-800"}`}>{futuresRatio != null ? `${futuresRatio.toFixed(0)}%` : "N/A"}</span></div>
+                <div>先物/現物: <span className={`font-mono font-semibold ${futuresRatio && futuresRatio > 500 ? "text-red-600" : futuresRatio && futuresRatio > 200 ? "text-orange-500" : "text-gray-800"}`}>{futuresRatio == null ? "—" : futuresRatio > 9999 ? ">9999%" : `${futuresRatio.toFixed(0)}%`}</span></div>
                 {cg.mexcSharePct != null && <div>MEXC集中: <span className={`font-mono font-semibold ${cg.mexcSharePct >= 90 ? "text-red-600" : "text-gray-800"}`}>{cg.mexcSharePct.toFixed(1)}%</span></div>}
                 <div>Twitter: <span className="font-mono text-gray-800">{cg.twitterFollowers != null ? cg.twitterFollowers.toLocaleString() : "N/A"}</span></div>
                 <div>SNS合計: <span className="font-mono text-gray-800">{snsTotal > 0 ? snsTotal.toLocaleString() : "N/A"}</span></div>
@@ -788,6 +852,89 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
             {diff.frDiff !== null && <div>{t.frChange}: <span className={`font-semibold ${diff.frDiff > 0 ? "text-purple-600" : "text-gray-600"}`}>{diff.frDiff > 0 ? "+" : ""}{diff.frDiff.toFixed(4)}%</span></div>}
           </div>
         )}
+
+        {/* Binance Futures 分析パネル */}
+        <div className="mt-2 pt-2 border-t border-gray-200">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="text-xs font-semibold text-blue-700">{t.binanceFuturesSection}</span>
+            <button
+              onClick={e => { e.stopPropagation(); runAnalysis(); }}
+              disabled={analysisLoading}
+              className="text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200 disabled:opacity-50 transition-colors"
+            >
+              {analysisLoading
+                ? t.analyzingLabel
+                : analysisData ? t.reanalyzeBtn : t.analyzeBtn}
+            </button>
+          </div>
+
+          {analysisData && (
+            <>
+              {!analysisData.isBinanceListed ? (
+                <div className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2 py-1.5 mb-2">
+                  ⚠️ {t.binanceNotListed}
+                </div>
+              ) : analysisData.binance && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-gray-600 mb-2">
+                  <div>
+                    FR:&nbsp;
+                    <span className={`font-mono font-bold ${frSignalColor(analysisData.binance.frSignal)}`}>
+                      {analysisData.binance.fundingRate >= 0 ? "+" : ""}{(analysisData.binance.fundingRate * 100).toFixed(4)}%
+                    </span>
+                    &nbsp;
+                    <span className={`text-[9px] px-1 rounded border ${frSignalBadgeCls(analysisData.binance.frSignal)}`}>
+                      {analysisData.binance.frSignal}
+                    </span>
+                  </div>
+                  <div>
+                    OI:&nbsp;
+                    <span className="font-mono font-semibold text-gray-800">
+                      {fmtVol(analysisData.binance.openInterestUsdt)}
+                    </span>
+                  </div>
+                  <div>
+                    OI&nbsp;24h:&nbsp;
+                    <span className={`font-mono font-semibold ${(analysisData.binance.oiChange24h ?? 0) > 0 ? "text-orange-600" : "text-green-600"}`}>
+                      {analysisData.binance.oiChange24h !== null
+                        ? `${analysisData.binance.oiChange24h >= 0 ? "+" : ""}${analysisData.binance.oiChange24h.toFixed(1)}%`
+                        : "N/A"}
+                    </span>
+                  </div>
+                  <div>
+                    OI&nbsp;7d:&nbsp;
+                    <span className={`font-mono font-semibold ${(analysisData.binance.oiChange7d ?? 0) > 0 ? "text-orange-600" : "text-green-600"}`}>
+                      {analysisData.binance.oiChange7d !== null
+                        ? `${analysisData.binance.oiChange7d >= 0 ? "+" : ""}${analysisData.binance.oiChange7d.toFixed(1)}%`
+                        : "N/A"}
+                    </span>
+                  </div>
+                  <div>
+                    清算リスク:&nbsp;
+                    <span className={`text-[10px] px-1 rounded border font-bold ${liqRiskBadgeCls(analysisData.binance.liquidationRisk)}`}>
+                      {analysisData.binance.liquidationRisk.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    MEXC推定FR:&nbsp;
+                    <span className="font-mono text-gray-700">
+                      {(analysisData.binance.mexcFrEstMin * 100).toFixed(4)}〜{(analysisData.binance.mexcFrEstMax * 100).toFixed(4)}%
+                    </span>
+                  </div>
+                </div>
+              )}
+              {analysisData.analysis && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded p-2 text-xs text-gray-700 leading-relaxed">
+                  <span className="font-semibold text-indigo-700 mr-1">{t.aiAnalysis}</span>
+                  {analysisData.analysis}
+                </div>
+              )}
+            </>
+          )}
+
+          {analysisError && (
+            <div className="text-xs text-red-500 mt-1">{analysisError}</div>
+          )}
+        </div>
 
         {/* Share this candidate (E) */}
         <div className="mt-2 flex gap-2">
@@ -1630,8 +1777,8 @@ interface FilterPreset {
   minDrop: number; maxVolRatio: number; minVol24k: number; maxDays: number; minOiK: number;
 }
 const DEFAULT_PRESETS: FilterPreset[] = [
-  { name: "presetStandard",    icon: "📊", minDrop: 30,  maxVolRatio: 70,  minVol24k: 100, maxDays: 365, minOiK: 0  },
-  { name: "presetStrict",      icon: "🎯", minDrop: 50,  maxVolRatio: 40,  minVol24k: 200, maxDays: 365, minOiK: 50 },
+  { name: "presetStandard",    icon: "📊", minDrop: 10,  maxVolRatio: 150, minVol24k: 50,  maxDays: 9999, minOiK: 0  },
+  { name: "presetStrict",      icon: "🎯", minDrop: 40,  maxVolRatio: 50,  minVol24k: 200, maxDays: 365,  minOiK: 50 },
   { name: "presetNewListing",  icon: "🆕", minDrop: 10,  maxVolRatio: 150, minVol24k: 10,  maxDays: 30,  minOiK: 0  },
 ];
 const CUSTOM_PRESETS_KEY = "shortScanPresets";
@@ -1814,7 +1961,10 @@ export default function ShortScanner() {
   // Keyboard shortcuts (施策3)
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState<number>(-1);
-  const filterInputRef = useRef<HTMLInputElement | null>(null);
+  const filterInputRef   = useRef<HTMLInputElement | null>(null);
+  const tableScrollRef   = useRef<HTMLDivElement | null>(null);
+  const topScrollRef     = useRef<HTMLDivElement | null>(null);
+  const topScrollInnerRef = useRef<HTMLDivElement | null>(null);
 
   // Filter presets (施策6)
   const [customPresets, setCustomPresets] = useState<FilterPreset[]>(() => typeof window !== "undefined" ? loadCustomPresets() : []);
@@ -2124,6 +2274,28 @@ export default function ShortScanner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Dual scrollbar sync: top mirror bar ↔ table container
+  useEffect(() => {
+    const tableEl = tableScrollRef.current;
+    const innerEl = topScrollInnerRef.current;
+    if (!tableEl || !innerEl) return;
+    const update = () => { innerEl.style.width = tableEl.scrollWidth + "px"; };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(tableEl);
+    return () => ro.disconnect();
+  }, [viewMode, extended]);
+
+  const onTableScroll = useCallback(() => {
+    if (topScrollRef.current && tableScrollRef.current)
+      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+  }, []);
+
+  const onTopScroll = useCallback(() => {
+    if (tableScrollRef.current && topScrollRef.current)
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+  }, []);
+
   function exportCSV() {
     if (!extended.length) return;
     const hdr = ["Symbol","DisplayScore","BaseScore","ATH Drop%","Vol Ratio","24h%","7d%","FR","Vol24h","Avg7d Vol","List Days","OI","OI/Vol","Exclusivity","FRBonus","OnBinance","OnBybit"].join(",");
@@ -2366,7 +2538,8 @@ export default function ShortScanner() {
           )}
 
           {/* Table view */}
-          {viewMode === "table" && <div className="overflow-x-auto"><table className="w-full text-sm min-w-[600px]">
+          {viewMode === "table" && <div ref={topScrollRef} onScroll={onTopScroll} className="overflow-x-scroll overflow-y-hidden border-b border-gray-100" style={{height:14}}><div ref={topScrollInnerRef} style={{height:1}} /></div>}
+          {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll} className="overflow-x-auto"><table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="bg-white border-b border-gray-200 text-xs font-semibold text-gray-600">
                   <th className="px-2 md:px-3 py-2.5 text-left sticky left-0 bg-white z-10">{t.colSymbol}</th>
@@ -2533,9 +2706,13 @@ export default function ShortScanner() {
                         {/* CG F/S ratio */}
                         {HAS_CG && (() => {
                           const sp = c.cgData?.spotVolume;
-                          const ratio = sp ? (c.volume24h / sp) * 100 : null;
+                          const ratio = (sp && sp >= 1000) ? (c.volume24h / sp) * 100 : null;
                           return <td className={`px-2 md:px-3 py-2 text-right text-xs font-mono hidden xl:table-cell ${ratio && ratio>500?"text-red-600 font-bold":ratio && ratio>200?"text-orange-500":"text-gray-500"}`}>
-                            {ratio ? `${ratio.toFixed(0)}%` : <span className="text-gray-300">—</span>}
+                            {ratio == null
+                              ? <span className="text-gray-300">—</span>
+                              : ratio > 9999
+                                ? <span className="text-red-600 font-bold">&gt;9999%</span>
+                                : `${ratio.toFixed(0)}%`}
                           </td>;
                         })()}
 

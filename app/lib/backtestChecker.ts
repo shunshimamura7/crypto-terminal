@@ -5,7 +5,7 @@ import { getRecords, saveRecords } from "./backtestStorage";
 import type { BacktestRecord } from "./backtestStorage";
 
 const EXPIRE_DAYS = 14;
-const SCORE_THRESHOLD = 8;
+const SCORE_THRESHOLD = 10;
 
 // Step 1: check existing active records against current scan prices
 export function checkAndUpdateRecords(candidates: ShortCandidate[]): void {

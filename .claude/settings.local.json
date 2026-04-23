@@ -27,7 +27,10 @@
       "Bash(npx tsc *)",
       "Bash(git commit *)",
       "Bash(git checkout *)",
-      "Bash(python -m json.tool)"
+      "Bash(python -m json.tool)",
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(npx next *)",
+      "Bash(git push *)"
     ]
   }
 }

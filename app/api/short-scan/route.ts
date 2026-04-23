@@ -49,9 +49,10 @@ const MAJOR_PAIRS = new Set([
   "JUP_USDT","WLD_USDT","PEPE_USDT","WIF_USDT","BONK_USDT","FLOKI_USDT","SHIB_USDT",
 ]);
 
-// Stage 2 concurrency (速度最適化: 30並列 / 50ms delay)
-const BATCH = 30;
-const BATCH_DELAY = 50;
+// Stage 2 concurrency (速度最適化: 40並列 / 30ms delay)
+const MAX_KLINE_TARGETS = 300;
+const BATCH = 40;
+const BATCH_DELAY = 30;
 
 async function fetchWithTimeout(url: string, ms = 10000): Promise<Response | null> {
   const ctrl = new AbortController();
@@ -361,7 +362,8 @@ export async function GET(req: NextRequest) {
   }
 
   const stage1Passed = candidates.length;
-  console.log(`[short-scan] ── Stage1 ── passed: ${stage1Passed} (vol≥$${PRE_FILTER_VOL_USD.toLocaleString()}${isNew30 ? ", listed≤30d" : ""})`);
+  const klineTargets = candidates.slice(0, MAX_KLINE_TARGETS);
+  console.log(`[short-scan] ── Stage1 ── passed: ${stage1Passed} (vol≥$${PRE_FILTER_VOL_USD.toLocaleString()}${isNew30 ? ", listed≤30d" : ""}), kline targets: ${klineTargets.length}/${MAX_KLINE_TARGETS}`);
 
   // ── Stage 2: fetch klines + FR ───────────────────────────────────────────────
   const results: ShortCandidate[] = [];
@@ -370,13 +372,13 @@ export async function GET(req: NextRequest) {
 
   const DEADLINE = Date.now() + 110_000;
 
-  for (let i = 0; i < candidates.length; i += BATCH) {
+  for (let i = 0; i < klineTargets.length; i += BATCH) {
     if (Date.now() >= DEADLINE) {
-      console.warn(`[short-scan] deadline reached at batch ${i}/${candidates.length}`);
+      console.warn(`[short-scan] deadline reached at batch ${i}/${klineTargets.length}`);
       break;
     }
 
-    const batch = candidates.slice(i, i + BATCH);
+    const batch = klineTargets.slice(i, i + BATCH);
     const settled = await Promise.allSettled(
       batch.map(meta =>
         analyzeCandidate(meta, tickerMap[meta.symbol], day14AgoSec, day7AgoSec, nowSec, isNew30, btcReturns)
@@ -393,7 +395,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (i + BATCH < candidates.length) await sleep(BATCH_DELAY);
+    if (i + BATCH < klineTargets.length) await sleep(BATCH_DELAY);
   }
 
   const sorted = results.sort((a, b) => b.shortScore - a.shortScore);
