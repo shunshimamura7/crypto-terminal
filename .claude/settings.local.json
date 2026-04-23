@@ -30,7 +30,8 @@
       "Bash(python -m json.tool)",
       "Bash(grep -E \"\\\\.ts$\")",
       "Bash(npx next *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(npm uninstall *)"
     ]
   }
 }
