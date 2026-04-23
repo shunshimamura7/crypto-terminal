@@ -15,7 +15,7 @@ function bitgetUrl(sym: string) {
 const TEAL = "#00c9a7";
 const TEAL_DIM = "#00a98d";
 
-function scoreColor(score: number, max = 27): string {
+function scoreColor(score: number, max = 30): string {
   const pct = score / max;
   if (pct >= 0.75) return "#f87171"; // red — strong short signal
   if (pct >= 0.55) return "#fb923c"; // orange
@@ -69,12 +69,13 @@ function ScoreBar({ value, max, color }: { value: number; max: number; color: st
 // ─── Breakdown row ────────────────────────────────────────────────────────────
 function BreakdownGrid({ bd }: { bd: BitgetShortScoreBreakdown }) {
   const items = [
-    { label: "ATH下落",  value: bd.dropScore,      max: 6 },
-    { label: "FR",       value: bd.frScore,         max: 6 },
-    { label: "L/S比率",  value: bd.longShortRatio,  max: 3 },
-    { label: "OI比率",   value: bd.oiScore,         max: 4 },
-    { label: "トレンド", value: bd.trendScore,       max: 5 },
-    { label: "急騰度",   value: bd.pumpScore,        max: 3 },
+    { label: "ATH下落",     value: bd.dropScore,      max: 6 },
+    { label: "FR",          value: bd.frScore,         max: 6 },
+    { label: "FR偏り",      value: bd.frBiasScore,     max: 3 },
+    { label: "出来高枯渇",  value: bd.volumeDryScore,  max: 3 },
+    { label: "OI比率",      value: bd.oiScore,         max: 4 },
+    { label: "トレンド",    value: bd.trendScore,      max: 5 },
+    { label: "急騰度",      value: bd.pumpScore,       max: 3 },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
@@ -223,7 +224,7 @@ function CandidateRow({ c, rank }: { c: BitgetShortCandidate; rank: number }) {
         </td>
         <td className="px-3 py-2 text-right">
           <span className="text-sm font-bold" style={{ color: col }}>{c.shortScore}</span>
-          <span className="text-xs text-gray-400">/27</span>
+          <span className="text-xs text-gray-400">/30</span>
         </td>
         <td className="px-3 py-2 text-right text-sm">{fmtPrice(c.currentPrice)}</td>
         <td className="px-3 py-2 text-right text-sm text-red-500 font-semibold">{c.athDropPct.toFixed(1)}%</td>
@@ -352,7 +353,7 @@ export default function BitgetShortFinder() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <label className="text-xs text-gray-500">最低スコア ({minScore})</label>
-              <input type="range" min={0} max={27} value={minScore} onChange={e => setMinScore(+e.target.value)}
+              <input type="range" min={0} max={30} value={minScore} onChange={e => setMinScore(+e.target.value)}
                 className="w-full mt-1" style={{ accentColor: TEAL }} />
             </div>
             <div>

@@ -3,7 +3,6 @@ import {
   calcBitgetShortScore,
   calcBitgetTradeSetup,
   calcFrWeeklyCost,
-  calcLongShortScore,
   calcRecommendedLev,
   calcTrendDir,
 } from "@/app/lib/bitgetScorer";
@@ -142,13 +141,14 @@ async function analyzeCandidate(meta: CandidateMeta): Promise<BitgetShortCandida
     if (oldest > 0) priceChange7d = (price - oldest) / oldest * 100;
   }
 
-  const oiRatio  = vol24h > 0 ? oi / vol24h : 0;
+  const oiRatio           = vol24h > 0 ? oi / vol24h : 0;
+  const volumeChangeRatio = volumeAvg7d > 0 ? vol24h / volumeAvg7d : 1;
   const trendH1: TrendDir = calcTrendDir(kline1h.closes);
   const trendH4: TrendDir = calcTrendDir(kline4h.closes);
   const trendD1: TrendDir = calcTrendDir(kline1d.closes);
 
   const { score, breakdown, trendAlignment } = calcBitgetShortScore(
-    athDropPct, fr, oiRatio, trendH1, trendH4, trendD1, priceChange7d,
+    athDropPct, fr, volumeChangeRatio, oiRatio, trendH1, trendH4, trendD1, priceChange7d,
   );
 
   const tradeSetup     = calcBitgetTradeSetup(price, kline4h.highs, kline4h.lows);
@@ -158,9 +158,9 @@ async function analyzeCandidate(meta: CandidateMeta): Promise<BitgetShortCandida
   return {
     symbol, currentPrice: price,
     ath14d, athDropPct,
-    volume24h: vol24h, volumeAvg7d,
+    volume24h: vol24h, volumeAvg7d, volumeChangeRatio,
     fundingRate: fr, openInterest: oi, oiRatio,
-    longRatio: null,  // populated in Stage 3
+    longRatio: null,  // populated in Stage 3 (display only)
     priceChange24h: change24h, priceChange7d,
     trendH1, trendH4, trendD1, trendAlignment,
     shortScore: score, breakdown,
@@ -255,21 +255,17 @@ export async function GET(_req: NextRequest) {
       const r = settled[j];
       const sym = batch[j].symbol;
       if (r.status === "fulfilled" && r.value !== null) {
-        const lsScore = calcLongShortScore(r.value);
-        batch[j].longRatio               = r.value;
-        batch[j].breakdown.longShortRatio = lsScore;
-        batch[j].shortScore              += lsScore;
+        batch[j].longRatio = r.value;  // display only, does not affect score
         lsFetched++;
-        console.log(`[bitget-scan] L/S ${sym}: longRatio=${r.value.toFixed(4)} score+=${lsScore}`);
+        console.log(`[bitget-scan] L/S ${sym}: longRatio=${r.value.toFixed(4)}`);
       } else {
-        console.log(`[bitget-scan] L/S ${sym}: ${r.status === "rejected" ? "rejected" : "null"}`);
+        console.log(`[bitget-scan] L/S ${sym}: no data (code 40054 or timeout)`);
       }
     }
     if (i + LS_BATCH < top30.length) await sleep(LS_DELAY);
   }
 
-  // Re-sort after Stage 3 score updates
-  top50.sort((a, b) => b.shortScore - a.shortScore);
+  // Stage 3 does not affect scores; sort is already stable from Stage 2
   console.log(`[bitget-scan] Stage3: L/S fetched=${lsFetched}/${top30.length}`);
 
   return NextResponse.json({
