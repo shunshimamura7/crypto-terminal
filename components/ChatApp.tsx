@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import Link from "next/link";
 import SectorAnalyzer from "./SectorAnalyzer";
 import BatchAnalyzer from "./BatchAnalyzer";
 import WatchList from "./WatchList";
@@ -769,6 +770,13 @@ export default function CryptoSearch() {
               </button>
             </React.Fragment>
           ))}
+          <div className="w-px bg-[#e2e8f0] my-2" />
+          <Link
+            href="/trades"
+            className="px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-[#64748b] hover:text-[#0f172a] transition-colors whitespace-nowrap"
+          >
+            📊 トレード履歴
+          </Link>
         </div>
       </div>
 
