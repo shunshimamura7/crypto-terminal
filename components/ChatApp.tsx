@@ -17,6 +17,7 @@ import type { RankChange } from "@/app/lib/scoreHistory";
 import { addToWatchlist, isInWatchlist } from "@/app/lib/watchlist";
 import RankAlert from "./RankAlert";
 import ShortScanner from "./ShortScanner";
+import BitgetShortFinder from "./BitgetShortFinder";
 
 // ─────────────────────────────────────────────
 // Types
@@ -587,15 +588,16 @@ function SkeletonCard({ lines = 4 }: { lines?: number }) {
 // ─────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────
-type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan";
+type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan" | "bitgetshort";
 const TAB_CONFIG: { id: Tab; label: string }[] = [
-  { id: "chat",      label: "💬 個別分析" },
-  { id: "sector",    label: "📊 セクター分析" },
-  { id: "batch",     label: "📋 バッチ分析" },
-  { id: "watchlist", label: "⭐ ウォッチリスト" },
-  { id: "history",   label: "📈 履歴" },
-  { id: "portfolio", label: "💼 ポートフォリオ" },
-  { id: "shortscan", label: "🎯 Short Scanner" },
+  { id: "chat",        label: "💬 個別分析" },
+  { id: "sector",      label: "📊 セクター分析" },
+  { id: "batch",       label: "📋 バッチ分析" },
+  { id: "watchlist",   label: "⭐ ウォッチリスト" },
+  { id: "history",     label: "📈 履歴" },
+  { id: "portfolio",   label: "💼 ポートフォリオ" },
+  { id: "shortscan",   label: "🎯 Short Scanner" },
+  { id: "bitgetshort", label: "⚡ Bitget Short" },
 ];
 
 export default function CryptoSearch() {
@@ -786,7 +788,8 @@ export default function CryptoSearch() {
         {activeTab === "watchlist" && <WatchList onBatchAnalyze={handleBatchFromWatchlist} onAnalyze={handleAnalyzeFromWidget} />}
         {activeTab === "history"   && <HistoryView />}
         {activeTab === "portfolio" && <PortfolioTabContent onGoToBatch={() => setActiveTab("batch")} />}
-        {activeTab === "shortscan" && <ShortScanner />}
+        {activeTab === "shortscan"   && <ShortScanner />}
+        {activeTab === "bitgetshort" && <BitgetShortFinder />}
 
         {activeTab === "chat" && <>
           {/* Search */}
