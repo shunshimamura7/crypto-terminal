@@ -111,6 +111,7 @@ export interface ShortCandidate {
   volume24h: number;
   volumeAvg7d: number;
   volumeChangeRatio: number;
+  vol7dFromKline: boolean;  // true when volumeAvg7d was computed from actual kline data
   fundingRate: number | null;
   openInterest: number;
   oiRatio: number;

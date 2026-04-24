@@ -158,6 +158,7 @@ async function analyzeCandidate(
 
   // 7-day avg daily volume + 7d price change + 施策2: closes1d
   let volumeAvg7d = vol24h;
+  let vol7dFromKline = false;
   let priceChange7d = 0;
   let initialPrice: number | null = null;
   const closes1d: number[] = [];
@@ -169,6 +170,7 @@ async function analyzeCandidate(
     if (nums.length > 0) {
       const vals = useAmount ? nums : nums.map(v => v * price);
       volumeAvg7d = vals.reduce((a, b) => a + b, 0) / vals.length;
+      vol7dFromKline = true;
     }
     for (const c of (kd.close || []) as string[]) {
       const n = parseFloat(c);
@@ -239,6 +241,7 @@ async function analyzeCandidate(
     volume24h: vol24h,
     volumeAvg7d,
     volumeChangeRatio,
+    vol7dFromKline,
     fundingRate,
     openInterest,
     oiRatio,
@@ -406,12 +409,23 @@ export async function GET(req: NextRequest) {
     if (i + BATCH < klineTargets.length) await sleep(BATCH_DELAY);
   }
 
+  // ── Diagnostic log: filter breakdown ────────────────────────────────────────
+  if (!isNew30) {
+    const noKline  = results.filter(r => !r.vol7dFromKline).length;
+    const passAth  = results.filter(r => Math.abs(r.athDropPct) >= qMinDrop).length;
+    const passVol  = results.filter(r => !r.vol7dFromKline || r.volumeChangeRatio * 100 <= qMaxVolRatio).length;
+    const passVol24 = results.filter(r => r.volume24h >= qMinVol24k * 1_000).length;
+    console.log(`[short-scan] filter diag: total=${results.length}, noKlineData=${noKline}, passAthDrop=${passAth}, passVolRatio=${passVol}, passVol24h=${passVol24}, params=${JSON.stringify({ qMinDrop, qMaxVolRatio, qMinVol24k, qMaxDays, qMinOiK })}`);
+  }
+
   // Apply client slider params as filter for normal mode (new30 already filtered in analyzeCandidate)
+  // vol7dFromKline=false means kline data unavailable → volumeChangeRatio defaults to 1.0 (fallback)
+  // In that case skip the volumeChangeRatio condition to avoid false negatives
   const filteredResults = isNew30
     ? results
     : results.filter(c =>
         Math.abs(c.athDropPct) >= qMinDrop &&
-        c.volumeChangeRatio * 100 <= qMaxVolRatio &&
+        (!c.vol7dFromKline || c.volumeChangeRatio * 100 <= qMaxVolRatio) &&
         c.volume24h >= qMinVol24k * 1_000 &&
         c.listedDaysAgo <= qMaxDays &&
         c.openInterest >= qMinOiK * 1_000
