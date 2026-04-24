@@ -1,13 +1,13 @@
 {
   "functions": {
-    "app/api/chat/route.ts": {
-      "maxDuration": 60
-    },
-    "app/api/short-scan/route.ts": {
-      "maxDuration": 120
-    },
-    "app/api/bitget-scan/route.ts": {
-      "maxDuration": 120
+    "app/api/chat/route.ts": { "maxDuration": 60 },
+    "app/api/short-scan/route.ts": { "maxDuration": 120 },
+    "app/api/bitget-scan/route.ts": { "maxDuration": 120 }
+  },
+  "crons": [
+    {
+      "path": "/api/tg-monitor",
+      "schedule": "0 0 * * *"
     }
-  }
+  ]
 }
