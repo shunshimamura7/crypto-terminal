@@ -50,10 +50,11 @@ const MAJOR_PAIRS = new Set([
   "JUP_USDT","WLD_USDT","PEPE_USDT","WIF_USDT","BONK_USDT","FLOKI_USDT","SHIB_USDT",
 ]);
 
-// Stage 2 concurrency (40→20: reduce concurrent MEXC requests to avoid rate limiting)
+// Stage 2 concurrency: 40 parallel / 30ms delay
+// 40 × 4 requests = 160 concurrent; 8 batches × ~7s = ~56s well within 120s deadline
 const MAX_KLINE_TARGETS = 300;
-const BATCH = 20;
-const BATCH_DELAY = 50;
+const BATCH = 40;
+const BATCH_DELAY = 30;
 
 async function fetchWithTimeout(url: string, ms = 10000): Promise<Response | null> {
   const ctrl = new AbortController();
@@ -207,8 +208,9 @@ async function analyzeCandidate(
     }
   }
 
-  // Fallback: derive volumeAvg7d from already-fetched kline4h when kline1d is unavailable
-  // kline4h has 14d × 6 bars/day; last 42 bars ≈ last 7 days of volume in contracts
+  // Improve volumeAvg7d accuracy using kline4h when kline1d is unavailable.
+  // vol7dFromKline stays false so the volumeChangeRatio filter is skipped for these coins.
+  // Filter for kline1d-missing coins = ATH drop + vol24h only (no volRatio condition).
   if (!vol7dFromKline && kVols4h.length >= 6) {
     const BARS_PER_DAY = 6;
     const last7dBars = kVols4h.slice(-(7 * BARS_PER_DAY));
@@ -216,7 +218,8 @@ async function analyzeCandidate(
     if (totalContractVol > 0) {
       const days = last7dBars.length / BARS_PER_DAY;
       volumeAvg7d = (totalContractVol * price) / days;
-      vol7dFromKline = true;
+      // intentionally not setting vol7dFromKline=true here:
+      // kline4h-derived data improves score accuracy but does not trigger the volRatio filter
     }
   }
 
