@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import Link from "next/link";
 import SectorAnalyzer from "./SectorAnalyzer";
 import BatchAnalyzer from "./BatchAnalyzer";
 import WatchList from "./WatchList";
@@ -593,7 +592,7 @@ function SkeletonCard({ lines = 4 }: { lines?: number }) {
 // Main Component
 // ─────────────────────────────────────────────
 type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan" | "bitgetlong" | "holders" | "technical";
-interface TabEntry { id: string; label: string; href?: string }
+interface TabEntry { id: string; label: string }
 const TAB_CONFIG: TabEntry[] = [
   { id: "chat",        label: "💬 個別分析" },
   { id: "sector",      label: "📊 セクター分析" },
@@ -605,7 +604,6 @@ const TAB_CONFIG: TabEntry[] = [
   { id: "bitgetlong",  label: "⚡ Bitget Long" },
   { id: "holders",     label: "👥 ホルダー分析" },
   { id: "technical",   label: "📐 テクニカル分析" },
-  { id: "trades",      label: "📊 トレード履歴", href: "/trades" },
 ];
 
 // ─── Tab preference helpers ───────────────────
@@ -926,15 +924,7 @@ export default function CryptoSearch() {
           {visibleTabs.map((tab, idx) => (
             <React.Fragment key={tab.id}>
               {idx > 0 && <div className="w-px bg-[var(--border)] my-2" />}
-              {tab.href ? (
-                <Link
-                  href={tab.href}
-                  className="px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-colors whitespace-nowrap"
-                >
-                  {tab.label}
-                </Link>
-              ) : (
-                <button
+              <button
                   onClick={() => setActiveTab(tab.id as Tab)}
                   className={`px-4 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === tab.id
@@ -944,7 +934,6 @@ export default function CryptoSearch() {
                 >
                   {tab.label}
                 </button>
-              )}
             </React.Fragment>
           ))}
           <div className="w-px bg-[var(--border)] my-2" />
