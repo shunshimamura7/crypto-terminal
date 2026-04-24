@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone } from "@/app/lib/shortScorer";
+import { calcShortScore, passesFilterNew30, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone } from "@/app/lib/shortScorer";
 import type { ShortCandidate, VolumeProfile, TradeSetup } from "@/app/lib/shortScorer";
 import { fetchGtDexData } from "@/app/lib/geckoTerminal";
 
@@ -263,6 +263,13 @@ export async function GET(req: NextRequest) {
   const mode    = req.nextUrl.searchParams.get("mode") ?? "";
   const isNew30 = mode === "new30";
 
+  // Filter params sent by client sliders (normal mode only; new30 uses passesFilterNew30)
+  const qMinDrop     = Number(req.nextUrl.searchParams.get("minDrop")     ?? "30");
+  const qMaxVolRatio = Number(req.nextUrl.searchParams.get("maxVolRatio") ?? "70");
+  const qMinVol24k   = Number(req.nextUrl.searchParams.get("minVol24k")   ?? "100");
+  const qMaxDays     = Number(req.nextUrl.searchParams.get("maxDays")     ?? "9999");
+  const qMinOiK      = Number(req.nextUrl.searchParams.get("minOiK")     ?? "0");
+
   // Stage 1 volume threshold: looser for new30
   const PRE_FILTER_VOL_USD = isNew30 ? 10_000 : 50_000;
 
@@ -399,10 +406,16 @@ export async function GET(req: NextRequest) {
     if (i + BATCH < klineTargets.length) await sleep(BATCH_DELAY);
   }
 
-  // Apply passesFilter for normal mode (new30 already filtered in analyzeCandidate)
+  // Apply client slider params as filter for normal mode (new30 already filtered in analyzeCandidate)
   const filteredResults = isNew30
     ? results
-    : results.filter(c => passesFilter(c.athDropPct, c.volumeChangeRatio, c.volume24h));
+    : results.filter(c =>
+        Math.abs(c.athDropPct) >= qMinDrop &&
+        c.volumeChangeRatio * 100 <= qMaxVolRatio &&
+        c.volume24h >= qMinVol24k * 1_000 &&
+        c.listedDaysAgo <= qMaxDays &&
+        c.openInterest >= qMinOiK * 1_000
+      );
 
   const sorted = filteredResults.sort((a, b) => b.shortScore - a.shortScore);
 

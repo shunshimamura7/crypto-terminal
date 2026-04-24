@@ -2074,10 +2074,22 @@ export default function ShortScanner() {
       setElapsed(Math.floor((Date.now() - start) / 1000));
     }, 1000);
 
-    if (mode === "new30") { setMinDrop(10); setMaxVolRatio(150); setMinVol24k(10); setMaxDays(30); setMinOiK(0); }
-
     try {
-      const url = mode === "new30" ? "/api/short-scan?mode=new30" : "/api/short-scan";
+      // new30: server uses passesFilterNew30 (fixed thresholds); sliders not changed to avoid contamination
+      // normal: pass current slider values as filter params to server
+      let url: string;
+      if (mode === "new30") {
+        url = "/api/short-scan?mode=new30";
+      } else {
+        const params = new URLSearchParams({
+          minDrop: String(minDrop),
+          maxVolRatio: String(maxVolRatio),
+          minVol24k: String(minVol24k),
+          maxDays: String(maxDays),
+          minOiK: String(minOiK),
+        });
+        url = `/api/short-scan?${params}`;
+      }
       const res = await fetch(url);
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error((b as { error?: string }).error || `HTTP ${res.status}`); }
       const json: ScanResponse = await res.json();
@@ -2173,17 +2185,10 @@ export default function ShortScanner() {
     setShowAutoMenu(false);
   }
 
-  // Extended candidates
+  // Extended candidates — server already applied filter params; no client-side re-filter
   const extended = useMemo((): ExtendedCandidate[] => {
     if (!data?.candidates) return [];
-    const filtered = data.candidates.filter(c =>
-      Math.abs(c.athDropPct) >= minDrop &&
-      c.volumeChangeRatio * 100 <= maxVolRatio &&
-      c.listedDaysAgo <= maxDays &&
-      c.volume24h >= minVol24k * 1_000 &&
-      c.openInterest >= minOiK * 1_000
-    );
-    const mapped: ExtendedCandidate[] = filtered.map(c => {
+    const mapped: ExtendedCandidate[] = data.candidates.map(c => {
       const base = c.symbol.replace(/_USDT$/, "");
       const listedOnBinance  = binanceSyms.has(base);
       const listedOnBybit    = bybitSyms.has(base);
@@ -2215,7 +2220,7 @@ export default function ShortScanner() {
       case "spike":   return sorted.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral");
       default:        return sorted;
     }
-  }, [data, minDrop, maxVolRatio, maxDays, minVol24k, minOiK, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter]);
+  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter]);
 
   const alerts = useMemo(() => detectAlerts(data?.candidates ?? [], snapshots), [data, snapshots]);
 
