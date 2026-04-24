@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { calcShortScore, passesFilter, passesFilterNew30, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone } from "@/app/lib/shortScorer";
 import type { ShortCandidate, VolumeProfile, TradeSetup } from "@/app/lib/shortScorer";
+import { fetchGtDexData } from "@/app/lib/geckoTerminal";
 
 // ─── BTC相関計算 (施策1) ──────────────────────────────────────────────────────
 function priceToReturns(closes: number[]): number[] {
@@ -399,6 +400,25 @@ export async function GET(req: NextRequest) {
   }
 
   const sorted = results.sort((a, b) => b.shortScore - a.shortScore);
+
+  // ── Stage 3: GeckoTerminal DEX liquidity for top 20 ─────────────────────────
+  const top20ForDex = sorted.slice(0, 20);
+  await Promise.allSettled(
+    top20ForDex.map(async c => {
+      try {
+        const dex = await fetchGtDexData(c.symbol);
+        if (dex) {
+          c.dex = dex;
+          if (dex.liquidityMcRatio !== null && dex.liquidityMcRatio < 5) {
+            c.shortScore += 1;
+          }
+        }
+      } catch { /* ignore – don't let DEX failures break the scan */ }
+    })
+  );
+  // Re-sort after potential score updates
+  sorted.sort((a, b) => b.shortScore - a.shortScore);
+
   const top100 = sorted.slice(0, 100);
 
   // ATH下落率の分布ログ

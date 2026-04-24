@@ -826,6 +826,28 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
           );
         })()}
 
+        {/* DEX流動性 (GeckoTerminal) */}
+        {c.dex && (() => {
+          const dex = c.dex!;
+          const lowLMC = dex.liquidityMcRatio !== null && dex.liquidityMcRatio < 5;
+          return (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="text-xs font-semibold text-cyan-700">💧 DEX流動性</span>
+                {lowLMC && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded border font-bold bg-red-100 text-red-700 border-red-300">⚠️ L/MC低い (+1pt)</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600">
+                <div>DEX流動性: <span className={`font-mono font-semibold ${lowLMC ? "text-red-600" : "text-gray-800"}`}>{dex.liquidity ? fmtVol(dex.liquidity) : "N/A"}</span></div>
+                <div>L/MC比率: <span className={`font-mono font-semibold ${lowLMC ? "text-red-600" : "text-gray-800"}`}>{dex.liquidityMcRatio !== null ? `${dex.liquidityMcRatio.toFixed(2)}%` : "N/A"}</span></div>
+                <div>主要ペア: <span className="font-mono font-semibold text-gray-800 text-[10px]">{dex.topPair ?? "N/A"}</span></div>
+                <div>DEX出来高: <span className="font-mono font-semibold text-gray-800">{dex.dexVolume24h ? fmtVol(dex.dexVolume24h) : "N/A"}</span></div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* CoinGecko (施策7) */}
         {HAS_CG && c.cgData && (() => {
           const cg = c.cgData!;
