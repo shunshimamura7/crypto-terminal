@@ -277,7 +277,11 @@ D = Alpha<40 かつ Risk<50
 E = Risk>70
 F = Risk>85 またはScam疑い
 
-重要: 必ずレスポンスの最後にJSONブロックを出力すること。JSONブロックは必ず完結させること。途中で切れないよう、テキスト分析は簡潔にまとめてJSONのためのトークンを残すこと。`;
+重要: 必ずレスポンスの最後にJSONブロックを出力すること。JSONブロックは必ず完結させること。途中で切れないよう、テキスト分析は簡潔にまとめてJSONのためのトークンを残すこと。
+
+分析テキストは各セクション2-3行に絞って簡潔にすること。JSONブロックの生成を最優先にすること。テキストが長くなりそうな場合は省略してJSONを必ず出力すること。
+
+web_searchは使用しないこと。知識ベースのみで回答し、必ず最後にJSONブロックを出力すること。`;
 
 function buildSystemPrompt(
   goPlusData: string = "",
@@ -336,8 +340,8 @@ export async function POST(request: NextRequest) {
   const systemPrompt = buildSystemPrompt(goPlusData, defiLlamaData, fearGreedData);
 
   const userMessage = isContract
-    ? `コントラクトアドレス「${query}」について、web_searchで重要な情報を最大2回検索し、全セクションを簡潔に日本語で報告してください。`
-    : `「${coinName}」（入力: "${query}"）について、web_searchで重要な情報を最大2回検索し、全セクションを簡潔に日本語で報告してください。`;
+    ? `コントラクトアドレス「${query}」について、知識ベースの情報をもとに全セクションを簡潔に日本語で報告してください。`
+    : `「${coinName}」（入力: "${query}"）について、知識ベースの情報をもとに全セクションを簡潔に日本語で報告してください。`;
 
   const encoder = new TextEncoder();
   // 1行目: JSONメタデータ（UIが dataSources / coin / remainingCount を読む）
@@ -359,36 +363,20 @@ export async function POST(request: NextRequest) {
         });
 
         const messages: Anthropic.MessageParam[] = [{ role: "user", content: userMessage }];
-        const MAX_ITERATIONS = 3;
         let fullText = "";
 
-        for (let i = 0; i < MAX_ITERATIONS; i++) {
-          const msgStream = client.messages.stream({
-            model: "claude-sonnet-4-6",
-            max_tokens: 2500,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }] as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 1 } as any],
-            messages,
-          });
-
-          const response = await msgStream
-            .on("text", (text) => {
-              fullText += text;
-              try { controller.enqueue(encoder.encode(text)); } catch { /* closed */ }
-            })
-            .finalMessage();
-
-          if (response.stop_reason === "end_turn") break;
-
-          if (response.stop_reason === "pause_turn" || response.stop_reason === "tool_use") {
-            messages.push({ role: "assistant", content: response.content });
-            if (response.stop_reason === "pause_turn") continue;
-          } else {
-            break;
-          }
-        }
+        await client.messages.stream({
+          model: "claude-sonnet-4-6",
+          max_tokens: 6000,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }] as any,
+          messages,
+        })
+          .on("text", (text) => {
+            fullText += text;
+            try { controller.enqueue(encoder.encode(text)); } catch { /* closed */ }
+          })
+          .finalMessage();
 
         // Fallback: if the AI didn't output a JSON block, extract scores via regex
         // and append a properly-formatted block that the client's extractJson will find.
