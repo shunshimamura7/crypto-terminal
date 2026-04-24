@@ -275,7 +275,9 @@ B = Alpha≥55 かつ Risk≤60
 C = Alpha≥40
 D = Alpha<40 かつ Risk<50
 E = Risk>70
-F = Risk>85 またはScam疑い`;
+F = Risk>85 またはScam疑い
+
+重要: 必ずレスポンスの最後にJSONブロックを出力すること。JSONブロックは必ず完結させること。途中で切れないよう、テキスト分析は簡潔にまとめてJSONのためのトークンを残すこと。`;
 
 function buildSystemPrompt(
   goPlusData: string = "",
@@ -357,17 +359,17 @@ export async function POST(request: NextRequest) {
         });
 
         const messages: Anthropic.MessageParam[] = [{ role: "user", content: userMessage }];
-        const MAX_ITERATIONS = 4;
+        const MAX_ITERATIONS = 3;
         let fullText = "";
 
         for (let i = 0; i < MAX_ITERATIONS; i++) {
           const msgStream = client.messages.stream({
             model: "claude-sonnet-4-6",
-            max_tokens: 3000,
+            max_tokens: 2500,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }] as any,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 2 } as any],
+            tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 1 } as any],
             messages,
           });
 
