@@ -24,15 +24,29 @@ async function fetchYahoo(symbol: string): Promise<YahooResult> {
   try {
     const res = await fetch(
       `${YAHOO}/${encodeURIComponent(symbol)}?range=1d&interval=1d`,
-      { next: { revalidate: 300 } },
+      {
+        next: { revalidate: 300 },
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Accept": "application/json, text/plain, */*",
+        },
+      },
     );
     if (!res.ok) return { price: null, changePercent: null };
     const j = await res.json();
     const meta = j?.chart?.result?.[0]?.meta;
-    return {
-      price:         (meta?.regularMarketPrice        as number) ?? null,
-      changePercent: (meta?.regularMarketChangePercent as number) ?? null,
-    };
+    if (!meta) return { price: null, changePercent: null };
+
+    const price = (meta.regularMarketPrice as number) ?? null;
+
+    // regularMarketChangePercent is the canonical field; fall back to manual calc
+    let changePercent: number | null = (meta.regularMarketChangePercent as number) ?? null;
+    if (changePercent == null && price != null && meta.chartPreviousClose) {
+      const prev = meta.chartPreviousClose as number;
+      if (prev !== 0) changePercent = ((price - prev) / prev) * 100;
+    }
+
+    return { price, changePercent };
   } catch {
     return { price: null, changePercent: null };
   }
