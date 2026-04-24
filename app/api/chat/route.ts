@@ -392,10 +392,14 @@ export async function POST(request: NextRequest) {
         // and append a properly-formatted block that the client's extractJson will find.
         // stripJson on the client removes it from the display automatically.
         const hasJsonBlock = /```json[\s\S]*?```/.test(fullText);
+        console.log(`[chat] fullText.length=${fullText.length} hasJsonBlock=${hasJsonBlock}`);
+        console.log(`[chat] fullText[:500]=${fullText.slice(0, 500)}`);
         if (!hasJsonBlock && fullText.trim()) {
           const fallback = extractScoreRegex(fullText, coinName || query);
+          console.log(`[chat] extractScoreRegex result=`, JSON.stringify(fallback));
           if (fallback) {
             const block = `\n\`\`\`json\n${JSON.stringify(fallback, null, 2)}\n\`\`\``;
+            console.log(`[chat] appending fallback block`);
             try { controller.enqueue(encoder.encode(block)); } catch { /* closed */ }
           }
         }
