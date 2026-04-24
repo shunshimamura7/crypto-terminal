@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { BitgetLongCandidate, BitgetLongScoreBreakdown, TrendDir } from "@/app/lib/bitgetLongScorer";
-import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
 
 // ─── Bitget referral link ────────────────────────────────────────────────────
 const BG_REF = process.env.NEXT_PUBLIC_BITGET_REFERRAL_CODE ?? "";
@@ -381,8 +380,6 @@ export default function BitgetLongFinder() {
 
   return (
     <div className="space-y-4">
-      <MarketEnvironmentPanel />
-
       {/* Header */}
       <div className="rounded-xl p-4 text-white" style={{ background: "linear-gradient(135deg, #052e16 0%, #166534 100%)" }}>
         <div className="flex items-center justify-between flex-wrap gap-2">

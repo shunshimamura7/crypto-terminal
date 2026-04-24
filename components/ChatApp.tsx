@@ -17,7 +17,6 @@ import type { RankChange } from "@/app/lib/scoreHistory";
 import { addToWatchlist, isInWatchlist } from "@/app/lib/watchlist";
 import RankAlert from "./RankAlert";
 import ShortScanner from "./ShortScanner";
-import BitgetShortFinder from "./BitgetShortFinder";
 import BitgetLongFinder from "./BitgetLongFinder";
 import HolderAnalysis from "./HolderAnalysis";
 import TechnicalAnalysis from "./TechnicalAnalysis";
@@ -591,7 +590,7 @@ function SkeletonCard({ lines = 4 }: { lines?: number }) {
 // ─────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────
-type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan" | "bitgetshort" | "bitgetlong" | "holders" | "technical";
+type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan" | "bitgetlong" | "holders" | "technical";
 interface TabEntry { id: string; label: string; href?: string }
 const TAB_CONFIG: TabEntry[] = [
   { id: "chat",        label: "💬 個別分析" },
@@ -601,7 +600,6 @@ const TAB_CONFIG: TabEntry[] = [
   { id: "history",     label: "📈 履歴" },
   { id: "portfolio",   label: "💼 ポートフォリオ" },
   { id: "shortscan",   label: "🎯 Short Scanner" },
-  { id: "bitgetshort", label: "⚡ Bitget Short" },
   { id: "bitgetlong",  label: "⚡ Bitget Long" },
   { id: "holders",     label: "👥 ホルダー分析" },
   { id: "technical",   label: "📐 テクニカル分析" },
@@ -899,7 +897,6 @@ export default function CryptoSearch() {
         {activeTab === "history"   && <HistoryView />}
         {activeTab === "portfolio" && <PortfolioTabContent onGoToBatch={() => setActiveTab("batch")} />}
         {activeTab === "shortscan"   && <ShortScanner />}
-        {activeTab === "bitgetshort" && <BitgetShortFinder />}
         {activeTab === "bitgetlong"  && <BitgetLongFinder />}
         {activeTab === "holders"     && <HolderAnalysis />}
         {activeTab === "technical"   && <TechnicalAnalysis />}
