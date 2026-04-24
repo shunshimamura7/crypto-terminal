@@ -823,6 +823,24 @@ export default function CryptoSearch() {
             <span className="font-black text-[#0f172a] text-base tracking-wide">Crypto Terminal</span>
             <span className="ml-2 text-xs text-[#0ea5e9] font-bold hidden sm:inline">Pro Edition</span>
           </div>
+          <div className="ml-auto flex items-center gap-1.5">
+            {[
+              { label: "CoinGecko",          href: "https://www.coingecko.com" },
+              { label: "GeckoTerminal",       href: "https://www.geckoterminal.com" },
+              { label: "TradingView",         href: "https://www.tradingview.com" },
+              { label: "DEXScreener",         href: "https://dexscreener.com" },
+            ].map(({ label, href }) => (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:text-[#0ea5e9] hover:border-[#0ea5e9] transition-colors whitespace-nowrap"
+              >
+                {label}
+              </a>
+            ))}
+          </div>
         </div>
       </header>
 
