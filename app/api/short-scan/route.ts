@@ -50,10 +50,10 @@ const MAJOR_PAIRS = new Set([
   "JUP_USDT","WLD_USDT","PEPE_USDT","WIF_USDT","BONK_USDT","FLOKI_USDT","SHIB_USDT",
 ]);
 
-// Stage 2 concurrency (速度最適化: 40並列 / 30ms delay)
+// Stage 2 concurrency (40→20: reduce concurrent MEXC requests to avoid rate limiting)
 const MAX_KLINE_TARGETS = 300;
-const BATCH = 40;
-const BATCH_DELAY = 30;
+const BATCH = 20;
+const BATCH_DELAY = 50;
 
 async function fetchWithTimeout(url: string, ms = 10000): Promise<Response | null> {
   const ctrl = new AbortController();
@@ -204,6 +204,19 @@ async function analyzeCandidate(
     if (fr != null) {
       const parsed = parseFloat(String(fr));
       if (!isNaN(parsed)) fundingRate = parsed;
+    }
+  }
+
+  // Fallback: derive volumeAvg7d from already-fetched kline4h when kline1d is unavailable
+  // kline4h has 14d × 6 bars/day; last 42 bars ≈ last 7 days of volume in contracts
+  if (!vol7dFromKline && kVols4h.length >= 6) {
+    const BARS_PER_DAY = 6;
+    const last7dBars = kVols4h.slice(-(7 * BARS_PER_DAY));
+    const totalContractVol = last7dBars.reduce((a, b) => a + b, 0);
+    if (totalContractVol > 0) {
+      const days = last7dBars.length / BARS_PER_DAY;
+      volumeAvg7d = (totalContractVol * price) / days;
+      vol7dFromKline = true;
     }
   }
 
@@ -409,13 +422,22 @@ export async function GET(req: NextRequest) {
     if (i + BATCH < klineTargets.length) await sleep(BATCH_DELAY);
   }
 
-  // ── Diagnostic log: filter breakdown ────────────────────────────────────────
+  // ── Diagnostic log: kline success rate + filter breakdown ───────────────────
   if (!isNew30) {
-    const noKline  = results.filter(r => !r.vol7dFromKline).length;
-    const passAth  = results.filter(r => Math.abs(r.athDropPct) >= qMinDrop).length;
-    const passVol  = results.filter(r => !r.vol7dFromKline || r.volumeChangeRatio * 100 <= qMaxVolRatio).length;
+    const withKline = results.filter(r => r.vol7dFromKline).length;
+    const noKline   = results.filter(r => !r.vol7dFromKline).length;
+    const passAth   = results.filter(r => Math.abs(r.athDropPct) >= qMinDrop).length;
+    const passVol   = results.filter(r => !r.vol7dFromKline || r.volumeChangeRatio * 100 <= qMaxVolRatio).length;
     const passVol24 = results.filter(r => r.volume24h >= qMinVol24k * 1_000).length;
-    console.log(`[short-scan] filter diag: total=${results.length}, noKlineData=${noKline}, passAthDrop=${passAth}, passVolRatio=${passVol}, passVol24h=${passVol24}, params=${JSON.stringify({ qMinDrop, qMaxVolRatio, qMinVol24k, qMaxDays, qMinOiK })}`);
+    // volumeChangeRatio distribution (only for symbols with actual kline data)
+    const withKlineResults = results.filter(r => r.vol7dFromKline);
+    const vr0_3  = withKlineResults.filter(r => r.volumeChangeRatio < 0.3).length;
+    const vr3_7  = withKlineResults.filter(r => r.volumeChangeRatio >= 0.3 && r.volumeChangeRatio < 0.7).length;
+    const vr7_1  = withKlineResults.filter(r => r.volumeChangeRatio >= 0.7 && r.volumeChangeRatio < 1.0).length;
+    const vr1p   = withKlineResults.filter(r => r.volumeChangeRatio >= 1.0).length;
+    console.log(`[short-scan] kline: withData=${withKline}/${results.length} (${Math.round(withKline/results.length*100)}%), noData=${noKline}`);
+    console.log(`[short-scan] volRatio (kline only): <0.3=${vr0_3}, 0.3-0.7=${vr3_7}, 0.7-1.0=${vr7_1}, ≥1.0=${vr1p}`);
+    console.log(`[short-scan] filter: passAth=${passAth}, passVolRatio=${passVol}, passVol24h=${passVol24}, params=${JSON.stringify({ qMinDrop, qMaxVolRatio, qMinVol24k, qMaxDays, qMinOiK })}`);
   }
 
   // Apply client slider params as filter for normal mode (new30 already filtered in analyzeCandidate)
