@@ -14,6 +14,8 @@ import PortfolioCalc from "./PortfolioCalc";
 import type { PortfolioResult } from "./PortfolioCalc";
 import { saveScore, detectRankChange } from "@/app/lib/scoreHistory";
 import type { RankChange } from "@/app/lib/scoreHistory";
+import { saveAnalysis } from "@/app/lib/analysisHistory";
+import AnalysisHistoryPanel from "./AnalysisHistoryPanel";
 import { addToWatchlist, isInWatchlist } from "@/app/lib/watchlist";
 import RankAlert from "./RankAlert";
 import ShortScanner from "./ShortScanner";
@@ -645,6 +647,7 @@ export default function CryptoSearch() {
   const [tabPrefs, setTabPrefs] = useState<TabPrefs>(() => defaultTabPrefs());
   const [showTabSettings, setShowTabSettings] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -803,6 +806,10 @@ export default function CryptoSearch() {
       }
 
       setResult(prev => prev ? { ...prev, aiAnalysis: aiText, scoreData, aiLoading: false } : null);
+      if (aiText) {
+        saveAnalysis({ type: "individual", title: q, summary: aiText.slice(0, 150), fullText: aiText });
+        setHistoryKey(k => k + 1);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "通信エラーが発生しました";
       setResult(prev => prev ? { ...prev, error: msg, aiLoading: false } : null);
@@ -995,6 +1002,8 @@ export default function CryptoSearch() {
               )}
             </div>
           )}
+
+          <AnalysisHistoryPanel type="individual" label="個別分析" refreshKey={historyKey} />
 
           <div className="mt-6">
             <MarketTicker />

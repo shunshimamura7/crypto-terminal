@@ -1,5 +1,7 @@
 "use client";
 import React, { useState } from "react";
+import { saveAnalysis } from "@/app/lib/analysisHistory";
+import AnalysisHistoryPanel from "./AnalysisHistoryPanel";
 
 const SECTORS = ["AI","RWA","DeFi","GameFi","DePIN","L1","L2","Meme","Privacy"];
 
@@ -377,6 +379,7 @@ export default function SectorAnalyzer({ onAnalyze }: { onAnalyze?: (ticker: str
   const [sector, setSector] = useState("AI");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
+  const [historyKey, setHistoryKey] = useState(0);
 
   async function analyze() {
     setLoading(true);
@@ -391,7 +394,10 @@ export default function SectorAnalyzer({ onAnalyze }: { onAnalyze?: (ticker: str
       if (!res.ok) {
         setResult(`エラー: ${data.detail || data.error || `HTTP ${res.status}`}`);
       } else {
-        setResult(data.result || data.error || "エラー");
+        const text = data.result || data.error || "エラー";
+        setResult(text);
+        saveAnalysis({ type: "sector", title: sector, summary: text.slice(0, 150), fullText: text });
+        setHistoryKey(k => k + 1);
       }
     } catch (e) {
       setResult(`通信エラー: ${e instanceof Error ? e.message : String(e)}`);
@@ -441,6 +447,8 @@ export default function SectorAnalyzer({ onAnalyze }: { onAnalyze?: (ticker: str
         ))}
         <span className="text-xs text-gray-700 ml-1">← ランク凡例</span>
       </div>
+
+      <AnalysisHistoryPanel type="sector" label="セクター分析" refreshKey={historyKey} />
     </div>
   );
 }

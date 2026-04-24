@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { saveAnalysis } from "@/app/lib/analysisHistory";
+import AnalysisHistoryPanel from "./AnalysisHistoryPanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -192,6 +194,7 @@ export default function TechnicalAnalysis() {
   const [loading,    setLoading]    = useState(false);
   const [indicators, setIndicators] = useState<Indicators | null>(null);
   const [analysis,   setAnalysis]   = useState("");
+  const [historyKey, setHistoryKey] = useState(0);
 
   const analyze = async () => {
     const sym = input.trim().toUpperCase().replace(/USDT$/i, "");
@@ -234,6 +237,10 @@ export default function TechnicalAnalysis() {
           aiText += chunk;
           setAnalysis(aiText);
         }
+      }
+      if (aiText) {
+        saveAnalysis({ type: "technical", title: sym, summary: aiText.slice(0, 150), fullText: aiText });
+        setHistoryKey(k => k + 1);
       }
     } catch {
       setAnalysis("データ取得エラーが発生しました。銘柄名を確認して再試行してください。");
@@ -315,6 +322,8 @@ export default function TechnicalAnalysis() {
           <p className="text-xs mt-1 text-gray-300">例: BTC, ETH, SOL, PEPE</p>
         </div>
       )}
+
+      <AnalysisHistoryPanel type="technical" label="テクニカル分析" refreshKey={historyKey} />
     </div>
   );
 }
