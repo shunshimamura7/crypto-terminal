@@ -131,9 +131,9 @@ function MarkdownTable({ tableLines }: { tableLines: string[] }) {
     <div className="overflow-x-auto mb-4">
       <table className="w-full text-xs border-collapse">
         <thead>
-          <tr className="bg-[#f8fafc]">
+          <tr className="bg-[var(--background)]">
             {headers.map((h, i) => (
-              <th key={i} className="px-2 py-2 text-left text-[#0ea5e9] border border-[#e2e8f0] font-semibold">
+              <th key={i} className="px-2 py-2 text-left text-[var(--accent)] border border-[var(--border)] font-semibold">
                 {h}
               </th>
             ))}
@@ -141,12 +141,12 @@ function MarkdownTable({ tableLines }: { tableLines: string[] }) {
         </thead>
         <tbody>
           {dataRows.map((row, ri) => (
-            <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-[#f8fafc]"}>
+            <tr key={ri} className={ri % 2 === 0 ? "bg-[var(--card-bg)]" : "bg-[var(--background)]"}>
               {row.map((cell, ci) => {
                 const isRank = /^[SABCDEF][+-]?$/.test(cell.trim());
                 const base = cell.trim()[0];
                 return (
-                  <td key={ci} className="px-2 py-1.5 border border-[#e2e8f0] text-[#334155]">
+                  <td key={ci} className="px-2 py-1.5 border border-[var(--border)] text-[var(--text-secondary)]">
                     {isRank ? (
                       <span className={`inline-block px-1.5 py-0.5 rounded font-bold text-xs ${TABLE_RANK_COLORS[base] ?? "bg-gray-400 text-white"}`}>
                         {cell}
@@ -187,20 +187,20 @@ function SectorTextRenderer({ text }: { text: string }) {
 
     if (trimmed.startsWith("## ")) {
       elements.push(
-        <div key={elements.length} className="text-[#0ea5e9] font-bold text-base border-b border-[#e2e8f0] pb-1 mb-2 mt-5 first:mt-0">
+        <div key={elements.length} className="text-[var(--accent)] font-bold text-base border-b border-[var(--border)] pb-1 mb-2 mt-5 first:mt-0">
           {renderInline(trimmed.slice(3))}
         </div>
       );
     } else if (trimmed.startsWith("### ")) {
       elements.push(
-        <div key={elements.length} className="text-[#334155] font-semibold text-sm mb-1 mt-3">
+        <div key={elements.length} className="text-[var(--text-secondary)] font-semibold text-sm mb-1 mt-3">
           {renderInline(trimmed.slice(4))}
         </div>
       );
     } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       elements.push(
-        <div key={elements.length} className="flex gap-2 text-[#334155] text-sm leading-relaxed py-0.5">
-          <span className="text-[#0ea5e9] shrink-0 mt-0.5">•</span>
+        <div key={elements.length} className="flex gap-2 text-[var(--text-secondary)] text-sm leading-relaxed py-0.5">
+          <span className="text-[var(--accent)] shrink-0 mt-0.5">•</span>
           <span>{renderInline(trimmed.slice(2))}</span>
         </div>
       );
@@ -208,7 +208,7 @@ function SectorTextRenderer({ text }: { text: string }) {
       elements.push(<div key={elements.length} className="mb-2" />);
     } else {
       elements.push(
-        <div key={elements.length} className="text-[#334155] text-sm leading-relaxed whitespace-pre-wrap">
+        <div key={elements.length} className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">
           {renderInline(line)}
         </div>
       );
@@ -254,10 +254,10 @@ function GemsTable({ gems, onAnalyze }: { gems: SectorGem[]; onAnalyze?: (ticker
   return (
     <div className="mb-4">
       <h3 className="text-sm font-bold text-cyan-400 mb-2">💎 Gems Top{gems.length}</h3>
-      <div className="overflow-x-auto rounded-lg border border-[#e2e8f0] shadow-sm">
+      <div className="overflow-x-auto rounded-lg border border-[var(--border)] shadow-sm">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-[#f8fafc] border-b border-[#e2e8f0] text-[#475569]">
+            <tr className="bg-[var(--background)] border-b border-[var(--border)] text-[var(--text-secondary)]">
               <th className="px-2 py-2 text-left font-medium w-7">#</th>
               <th className="px-2 py-2 text-left font-medium">銘柄</th>
               <th className="px-2 py-2 text-right font-medium">Alpha</th>
@@ -278,7 +278,7 @@ function GemsTable({ gems, onAnalyze }: { gems: SectorGem[]; onAnalyze?: (ticker
               return (
                 <tr
                   key={i}
-                  className="border-b border-[#e2e8f0] hover:bg-[#f0f9ff] cursor-pointer transition-colors"
+                  className="border-b border-[var(--border)] hover:bg-[#f0f9ff] cursor-pointer transition-colors"
                   style={accentStyle}
                   onClick={() => onAnalyze?.(gem.ticker)}
                 >
@@ -304,19 +304,19 @@ function WarningsTable({ warnings }: { warnings: SectorWarning[] }) {
   return (
     <div className="mb-4">
       <h3 className="text-sm font-bold text-red-600 mb-2">⚠️ Warning Top{warnings.length}</h3>
-      <div className="overflow-x-auto rounded-lg border border-[#e2e8f0] shadow-sm">
+      <div className="overflow-x-auto rounded-lg border border-[var(--border)] shadow-sm">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-[#f8fafc] border-b border-[#e2e8f0] text-[#475569]">
+            <tr className="bg-[var(--background)] border-b border-[var(--border)] text-[var(--text-secondary)]">
               <th className="px-2 py-2 text-left font-medium whitespace-nowrap">銘柄</th>
               <th className="px-2 py-2 text-left font-medium">リスク理由</th>
             </tr>
           </thead>
           <tbody>
             {warnings.map((w, i) => (
-              <tr key={i} className="border-b border-[#e2e8f0] hover:bg-orange-50">
+              <tr key={i} className="border-b border-[var(--border)] hover:bg-orange-50">
                 <td className="px-2 py-2 font-mono font-semibold text-orange-600 whitespace-nowrap">⚠️ {w.ticker}</td>
-                <td className="px-2 py-2 text-[#475569] text-[11px] leading-snug">{w.risk_reason}</td>
+                <td className="px-2 py-2 text-[var(--text-secondary)] text-[11px] leading-snug">{w.risk_reason}</td>
               </tr>
             ))}
           </tbody>
@@ -352,12 +352,12 @@ function StructuredResult({ sector, data, fearGreed, rawText, onAnalyze }: {
       {data.action_plan && <ActionPlanCard plan={data.action_plan} />}
       <button
         onClick={() => setShowRaw(v => !v)}
-        className="text-xs text-[#64748b] hover:text-[#0f172a] border border-[#e2e8f0] rounded px-2 py-1 transition-colors mb-2"
+        className="text-xs text-[var(--text-secondary)] hover:text-[#0f172a] border border-[var(--border)] rounded px-2 py-1 transition-colors mb-2"
       >
         {showRaw ? "▲ 全文を隠す" : "▼ AIレスポンス全文を見る"}
       </button>
       {showRaw && (
-        <div className="p-3 bg-[#f8fafc] border border-[#e2e8f0] rounded max-h-[500px] overflow-y-auto">
+        <div className="p-3 bg-[var(--background)] border border-[var(--border)] rounded max-h-[500px] overflow-y-auto">
           <SectorTextRenderer text={rawText} />
         </div>
       )}
@@ -368,7 +368,7 @@ function StructuredResult({ sector, data, fearGreed, rawText, onAnalyze }: {
 // ─── JSON失敗時: リッチテキスト表示
 function FallbackResult({ text }: { text: string }) {
   return (
-    <div className="p-3 bg-[#f8fafc] border border-[#e2e8f0] rounded max-h-[700px] overflow-y-auto">
+    <div className="p-3 bg-[var(--background)] border border-[var(--border)] rounded max-h-[700px] overflow-y-auto">
       <SectorTextRenderer text={text} />
     </div>
   );
@@ -414,20 +414,20 @@ export default function SectorAnalyzer({ onAnalyze }: { onAnalyze?: (ticker: str
     : null;
 
   return (
-    <div className="p-4 border border-[#e2e8f0] rounded-lg bg-white shadow-sm">
-      <h2 className="text-lg font-bold mb-3 text-[#0ea5e9]">🔍 セクター分析モード</h2>
+    <div className="p-4 border border-[var(--border)] rounded-lg bg-[var(--card-bg)] shadow-sm">
+      <h2 className="text-lg font-bold mb-3 text-[var(--accent)]">🔍 セクター分析モード</h2>
       <div className="flex gap-2 mb-4 flex-wrap">
         {SECTORS.map(s => (
           <button key={s} onClick={() => setSector(s)}
             className={`px-3 py-1 rounded text-sm font-medium transition-colors border ${
-              sector === s ? "bg-[#0ea5e9] text-white border-[#0ea5e9]" : "bg-[#f8fafc] text-[#475569] border-[#e2e8f0] hover:bg-sky-50 hover:text-[#0ea5e9]"
+              sector === s ? "bg-[var(--accent)] text-white border-[var(--accent)]" : "bg-[var(--background)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-sky-50 hover:text-[var(--accent)]"
             }`}>
             {s}
           </button>
         ))}
       </div>
       <button onClick={analyze} disabled={loading}
-        className="w-full py-2 bg-[#0ea5e9] hover:bg-[#0284c7] disabled:bg-[#e2e8f0] disabled:text-[#94a3b8] text-white rounded font-bold transition-colors">
+        className="w-full py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--border)] disabled:text-[var(--text-muted)] text-white rounded font-bold transition-colors">
         {loading ? "🔄 分析中（30〜60秒）..." : `${sector}セクターを分析`}
       </button>
 

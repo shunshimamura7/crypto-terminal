@@ -36,7 +36,7 @@ function fmtPct(v: number | null): string {
 
 // ─── TradingView chart with studies ──────────────────────────────────────────
 
-function TvTechChart({ symbol, isFullscreen }: { symbol: string; isFullscreen?: boolean }) {
+function TvTechChart({ symbol, isFullscreen, isDark }: { symbol: string; isFullscreen?: boolean; isDark?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ function TvTechChart({ symbol, isFullscreen }: { symbol: string; isFullscreen?: 
       symbol:            `BINANCE:${symbol}USDT`,
       interval:          "240",
       timezone:          "Asia/Tokyo",
-      theme:             "light",
+      theme:             isDark ? "dark" : "light",
       style:             "1",
       locale:            "ja",
       enable_publishing: false,
@@ -84,21 +84,21 @@ function TvTechChart({ symbol, isFullscreen }: { symbol: string; isFullscreen?: 
 
 function IndicatorPanel({ ind }: { ind: Indicators }) {
   const maColor = (ma: number | null) =>
-    ma == null ? "text-gray-400"
+    ma == null ? "text-gray-400 dark:text-slate-500"
     : ind.price > ma ? "text-green-600" : "text-red-500";
 
-  const rsiColor = ind.rsi14 == null ? "text-gray-400"
+  const rsiColor = ind.rsi14 == null ? "text-gray-400 dark:text-slate-500"
     : ind.rsi14 >= 70 ? "text-red-500"
     : ind.rsi14 <= 30 ? "text-blue-500"
-    : "text-gray-700";
+    : "text-gray-700 dark:text-slate-300";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-xs">
-      <h3 className="text-sm font-bold text-gray-700 mb-3">📊 インジケーター</h3>
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-4 text-xs">
+      <h3 className="text-sm font-bold text-gray-700 dark:text-slate-300 mb-3">📊 インジケーター</h3>
 
       <div className="space-y-1.5">
         {/* Price */}
-        <Row label="価格" value={`$${fmtNum(ind.price)}`} valueClass="font-bold text-gray-800" />
+        <Row label="価格" value={`$${fmtNum(ind.price)}`} valueClass="font-bold text-gray-800 dark:text-slate-200" />
         <Row
           label="24h"
           value={fmtPct(ind.priceChange24h)}
@@ -136,15 +136,15 @@ function IndicatorPanel({ ind }: { ind: Indicators }) {
         <SectionLabel>MACD 12,26,9（4h）</SectionLabel>
         {ind.macd ? (
           <>
-            <Row label="MACD"    value={fmtNum(ind.macd.macdLine)} valueClass="font-semibold text-gray-700" />
-            <Row label="シグナル" value={fmtNum(ind.macd.signal)}   valueClass="font-semibold text-gray-700" />
+            <Row label="MACD"    value={fmtNum(ind.macd.macdLine)} valueClass="font-semibold text-gray-700 dark:text-slate-300" />
+            <Row label="シグナル" value={fmtNum(ind.macd.signal)}   valueClass="font-semibold text-gray-700 dark:text-slate-300" />
             <Row
               label="ヒスト"
               value={fmtNum(ind.macd.histogram)}
               valueClass={`font-bold ${ind.macd.histogram >= 0 ? "text-green-600" : "text-red-500"}`}
             />
           </>
-        ) : <span className="text-gray-400">データ不足</span>}
+        ) : <span className="text-gray-400 dark:text-slate-500">データ不足</span>}
 
         <Divider />
 
@@ -152,16 +152,16 @@ function IndicatorPanel({ ind }: { ind: Indicators }) {
         <SectionLabel>ボリンジャー 20,2（4h）</SectionLabel>
         {ind.bb ? (
           <>
-            <Row label="上限" value={fmtNum(ind.bb.upper)}  valueClass="font-semibold text-gray-700" />
-            <Row label="中央" value={fmtNum(ind.bb.middle)} valueClass="font-semibold text-gray-700" />
-            <Row label="下限" value={fmtNum(ind.bb.lower)}  valueClass="font-semibold text-gray-700" />
+            <Row label="上限" value={fmtNum(ind.bb.upper)}  valueClass="font-semibold text-gray-700 dark:text-slate-300" />
+            <Row label="中央" value={fmtNum(ind.bb.middle)} valueClass="font-semibold text-gray-700 dark:text-slate-300" />
+            <Row label="下限" value={fmtNum(ind.bb.lower)}  valueClass="font-semibold text-gray-700 dark:text-slate-300" />
             <Row
               label="位置"
               value={ind.price > ind.bb.upper ? "上限突破" : ind.price < ind.bb.lower ? "下限割れ" : "バンド内"}
               valueClass={`font-semibold ${ind.price > ind.bb.upper || ind.price < ind.bb.lower ? "text-amber-600" : "text-green-600"}`}
             />
           </>
-        ) : <span className="text-gray-400">データ不足</span>}
+        ) : <span className="text-gray-400 dark:text-slate-500">データ不足</span>}
       </div>
     </div>
   );
@@ -172,7 +172,7 @@ function Row({ label, value, valueClass, badge, badgeClass }: {
 }) {
   return (
     <div className="flex justify-between items-center gap-2">
-      <span className="text-gray-500 shrink-0">{label}</span>
+      <span className="text-gray-500 dark:text-slate-400 shrink-0">{label}</span>
       <div className="flex items-center gap-1">
         {badge && <span className={`text-[10px] px-1 py-0.5 rounded ${badgeClass}`}>{badge}</span>}
         <span className={valueClass}>{value}</span>
@@ -183,7 +183,7 @@ function Row({ label, value, valueClass, badge, badgeClass }: {
 
 function Divider() { return <hr className="border-gray-100 my-1" />; }
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">{children}</p>;
+  return <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mt-1">{children}</p>;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -196,6 +196,7 @@ export default function TechnicalAnalysis() {
   const [analysis,     setAnalysis]     = useState("");
   const [historyKey,   setHistoryKey]   = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDark,       setIsDark]       = useState(false);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -203,6 +204,14 @@ export default function TechnicalAnalysis() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  useEffect(() => {
+    const update = () => setIsDark(document.documentElement.classList.contains("dark"));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
 
   const analyze = async () => {
@@ -268,7 +277,7 @@ export default function TechnicalAnalysis() {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !loading && analyze()}
           placeholder="銘柄を入力（例: BTC, ETH, SOL）"
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-100"
         />
         <button
           onClick={analyze}
@@ -284,13 +293,13 @@ export default function TechnicalAnalysis() {
           {/* Chart */}
           <div className={`relative ${
             isFullscreen
-              ? "fixed inset-0 z-50 bg-white"
-              : "rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-4"
+              ? "fixed inset-0 z-50 bg-white dark:bg-slate-900"
+              : "rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden mb-4"
           }`}>
-            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-              <span className="text-sm font-bold text-gray-700">{symbol}/USDT</span>
-              <span className="text-xs text-gray-400">4時間足 · TradingView</span>
-              <span className="ml-auto text-xs text-gray-400">MA / RSI / MACD / BB</span>
+            <div className="px-4 py-2.5 bg-gray-50 dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 flex items-center gap-2">
+              <span className="text-sm font-bold text-gray-700 dark:text-slate-300">{symbol}/USDT</span>
+              <span className="text-xs text-gray-400 dark:text-slate-500">4時間足 · TradingView</span>
+              <span className="ml-auto text-xs text-gray-400 dark:text-slate-500">MA / RSI / MACD / BB</span>
             </div>
             <button
               onClick={() => setIsFullscreen(v => !v)}
@@ -298,7 +307,7 @@ export default function TechnicalAnalysis() {
             >
               {isFullscreen ? "✕ 閉じる" : "⛶ 全画面"}
             </button>
-            <TvTechChart symbol={symbol} isFullscreen={isFullscreen} />
+            <TvTechChart symbol={symbol} isFullscreen={isFullscreen} isDark={isDark} />
           </div>
 
           {/* Indicators + AI analysis */}
@@ -311,17 +320,17 @@ export default function TechnicalAnalysis() {
               )}
 
               <div className={indicators ? "lg:col-span-3" : "lg:col-span-4"}>
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 h-full">
-                  <h3 className="text-sm font-bold text-gray-700 mb-3">🤖 AIテクニカル解説</h3>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-4 h-full">
+                  <h3 className="text-sm font-bold text-gray-700 dark:text-slate-300 mb-3">🤖 AIテクニカル解説</h3>
 
                   {loading && !analysis && (
-                    <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
+                    <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-slate-500 py-4">
                       <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                       AIが分析中…
                     </div>
                   )}
 
-                  <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed prose prose-sm max-w-none">
+                  <div className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed prose prose-sm max-w-none">
                     {analysis.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
                       /^\*\*[^*]+\*\*$/.test(part)
                         ? <strong key={i}>{part.slice(2, -2)}</strong>
@@ -335,7 +344,7 @@ export default function TechnicalAnalysis() {
           )}
         </>
       ) : (
-        <div className="text-center py-20 text-gray-400">
+        <div className="text-center py-20 text-gray-400 dark:text-slate-500">
           <div className="text-6xl mb-4">📐</div>
           <p className="text-sm">銘柄を入力して分析を開始してください</p>
           <p className="text-xs mt-1 text-gray-300">例: BTC, ETH, SOL, PEPE</p>

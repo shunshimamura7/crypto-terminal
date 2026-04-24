@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* class-based dark mode for Tailwind v4 */
+@custom-variant dark (&:is(.dark, .dark *));
+
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
@@ -8,6 +11,22 @@
   --accent: #0ea5e9;
   --up: #16a34a;
   --down: #dc2626;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --accent-hover: #0284c7;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --card-bg: #1e293b;
+  --border: #334155;
+  --accent: #38bdf8;
+  --up: #4ade80;
+  --down: #f87171;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-hover: #0ea5e9;
 }
 
 @theme inline {

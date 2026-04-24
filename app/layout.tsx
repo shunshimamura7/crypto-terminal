@@ -20,13 +20,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja" className={`${notoSansJP.variable} h-full`}>
+    <html lang="ja" className={`${notoSansJP.variable} h-full`} suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#ef4444" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body className="min-h-full bg-white text-gray-800">
+      <body className="min-h-full">
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||((!t)&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`}} />
         {children}
         <script dangerouslySetInnerHTML={{ __html: `
           if ('serviceWorker' in navigator) {

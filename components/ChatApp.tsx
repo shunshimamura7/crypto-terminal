@@ -151,19 +151,19 @@ function numValNonZero(v: unknown): number | undefined {
 // ─────────────────────────────────────────────
 // ScoreBar
 // ─────────────────────────────────────────────
-function ScoreBar({ label, value, colorClass, cardClass = "bg-white border-[#e2e8f0]" }: {
+function ScoreBar({ label, value, colorClass, cardClass = "bg-[var(--card-bg)] border-[var(--border)]" }: {
   label: string; value: number; colorClass: string; cardClass?: string;
 }) {
   const pct = Math.min(100, Math.max(0, value));
   return (
     <div className={`rounded-lg p-3 border shadow-sm cursor-default ${cardClass}`}>
       <div className="flex justify-between items-baseline mb-2">
-        <span className="text-xs text-[#475569]">{label}</span>
-        <span className="text-3xl font-black text-[#0f172a] leading-none">
-          {value}<span className="text-xs text-[#475569] font-normal">/100</span>
+        <span className="text-xs text-[var(--text-secondary)]">{label}</span>
+        <span className="text-3xl font-black text-[var(--foreground)] leading-none">
+          {value}<span className="text-xs text-[var(--text-secondary)] font-normal">/100</span>
         </span>
       </div>
-      <div className="h-3 bg-[#f1f5f9] rounded-full overflow-hidden">
+      <div className="h-3 bg-[var(--background)] rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${colorClass}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -215,10 +215,10 @@ function InvestmentBanner({ scoreData }: { scoreData: ScoreData }) {
         </div>
       </div>
       {decision && (
-        <div className="mt-2 text-sm font-semibold text-[#0f172a]">{decision}</div>
+        <div className="mt-2 text-sm font-semibold text-[var(--foreground)]">{decision}</div>
       )}
       {summaryParts.length > 0 && (
-        <div className="text-xs text-[#475569] mt-2 leading-relaxed">
+        <div className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed">
           {summaryParts.join(" ｜ ")}
         </div>
       )}
@@ -273,14 +273,14 @@ function ActionPlanCard({ scoreData }: { scoreData: ScoreData }) {
   if (items.length === 0) return null;
   return (
     <div className="bg-sky-50 rounded-xl p-4 border border-sky-200 shadow-sm">
-      <div className="text-xs font-bold text-[#0ea5e9] uppercase tracking-widest mb-3">💡 アクションプラン</div>
+      <div className="text-xs font-bold text-[var(--accent)] uppercase tracking-widest mb-3">💡 アクションプラン</div>
       <div className="space-y-2.5">
         {items.map(item => (
           <div key={item.label} className="flex gap-3 items-start">
             <span className="text-base shrink-0 w-6 mt-0.5">{item.icon}</span>
             <div>
-              <span className="text-xs text-[#64748b]">{item.label}: </span>
-              <span className="text-sm text-[#0f172a] font-medium">{item.value}</span>
+              <span className="text-xs text-[var(--text-secondary)]">{item.label}: </span>
+              <span className="text-sm text-[var(--foreground)] font-medium">{item.value}</span>
             </div>
           </div>
         ))}
@@ -322,8 +322,8 @@ function renderMarkdown(raw: string): React.ReactElement {
       /^\d+[\.．]\s/.test(line)
     ) {
       elements.push(
-        <div key={i} className="mt-4 mb-1 font-bold text-[#0ea5e9] text-sm border-l-2 border-[#0ea5e9] pl-2"
-          dangerouslySetInnerHTML={{ __html: line.replace(/〖(.*?)〗/g, "<strong class='text-[#0f172a]'>$1</strong>") }}
+        <div key={i} className="mt-4 mb-1 font-bold text-[var(--accent)] text-sm border-l-2 border-[var(--accent)] pl-2"
+          dangerouslySetInnerHTML={{ __html: line.replace(/〖(.*?)〗/g, "<strong class='text-[var(--foreground)]'>$1</strong>") }}
         />
       );
       i++; continue;
@@ -338,9 +338,9 @@ function renderMarkdown(raw: string): React.ReactElement {
       elements.push(
         <ul key={`ul-${i}`} className="my-2 space-y-1 pl-2">
           {bullets.map((b, j) => (
-            <li key={j} className="flex gap-2 text-sm text-[#334155]">
-              <span className="text-[#0ea5e9] mt-0.5 shrink-0">•</span>
-              <span dangerouslySetInnerHTML={{ __html: b.replace(/〖(.*?)〗/g, "<strong class='text-[#0f172a] font-semibold'>$1</strong>") }} />
+            <li key={j} className="flex gap-2 text-sm text-[var(--text-secondary)]">
+              <span className="text-[var(--accent)] mt-0.5 shrink-0">•</span>
+              <span dangerouslySetInnerHTML={{ __html: b.replace(/〖(.*?)〗/g, "<strong class='text-[var(--foreground)] font-semibold'>$1</strong>") }} />
             </li>
           ))}
         </ul>
@@ -349,8 +349,8 @@ function renderMarkdown(raw: string): React.ReactElement {
     }
 
     elements.push(
-      <p key={i} className="text-sm text-[#334155] leading-relaxed my-0.5"
-        dangerouslySetInnerHTML={{ __html: line.replace(/〖(.*?)〗/g, "<strong class='text-[#0f172a] font-semibold'>$1</strong>") }}
+      <p key={i} className="text-sm text-[var(--text-secondary)] leading-relaxed my-0.5"
+        dangerouslySetInnerHTML={{ __html: line.replace(/〖(.*?)〗/g, "<strong class='text-[var(--foreground)] font-semibold'>$1</strong>") }}
       />
     );
     i++;
@@ -379,12 +379,12 @@ function AiAnalysisCard({ analysis, scoreData }: { analysis: string; scoreData: 
 
       {/* 4. AI分析テキスト */}
       {displayText && (
-        <details open className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden shadow-sm">
-          <summary className="px-4 py-3 cursor-pointer text-[#475569] text-sm font-medium hover:bg-[#f8fafc] select-none list-none flex items-center gap-2 transition-colors">
+        <details open className="bg-[var(--card-bg)] border border-[var(--border)] rounded-xl overflow-hidden shadow-sm">
+          <summary className="px-4 py-3 cursor-pointer text-[var(--text-secondary)] text-sm font-medium hover:bg-[var(--background)] select-none list-none flex items-center gap-2 transition-colors">
             <span>📄</span><span>詳細分析</span>
-            <span className="ml-auto text-[#94a3b8] text-xs">▼</span>
+            <span className="ml-auto text-[var(--text-muted)] text-xs">▼</span>
           </summary>
-          <div className="px-4 py-4 border-t border-[#e2e8f0]">
+          <div className="px-4 py-4 border-t border-[var(--border)]">
             {renderMarkdown(displayText)}
           </div>
         </details>
@@ -392,12 +392,12 @@ function AiAnalysisCard({ analysis, scoreData }: { analysis: string; scoreData: 
 
       {/* 5. JSON raw (collapsed) */}
       {scoreData && (
-        <details className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl overflow-hidden">
-          <summary className="px-4 py-3 cursor-pointer text-[#64748b] text-xs font-mono hover:bg-white select-none list-none flex items-center gap-2 transition-colors">
+        <details className="bg-[var(--background)] border border-[var(--border)] rounded-xl overflow-hidden">
+          <summary className="px-4 py-3 cursor-pointer text-[var(--text-secondary)] text-xs font-mono hover:bg-[var(--card-bg)] select-none list-none flex items-center gap-2 transition-colors">
             <span>{"{ }"}</span><span>JSONデータ</span>
-            <span className="ml-auto text-[#94a3b8] text-xs">▶</span>
+            <span className="ml-auto text-[var(--text-muted)] text-xs">▶</span>
           </summary>
-          <pre className="px-4 py-4 text-xs text-[#64748b] overflow-x-auto leading-relaxed border-t border-[#e2e8f0]">
+          <pre className="px-4 py-4 text-xs text-[var(--text-secondary)] overflow-x-auto leading-relaxed border-t border-[var(--border)]">
             {JSON.stringify(scoreData, null, 2)}
           </pre>
         </details>
@@ -418,10 +418,10 @@ function DataSourcesPanel({ sources }: { sources: DataSource[] }) {
   }
   const availableCount = sources.filter(s => s.status === "available").length;
   return (
-    <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden">
-      <div className="px-4 py-2.5 bg-[#f8fafc] flex items-center gap-2 border-b border-[#e2e8f0]">
+    <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+      <div className="px-4 py-2.5 bg-[var(--background)] flex items-center gap-2 border-b border-[var(--border)]">
         <span className="text-base">🔗</span>
-        <h3 className="font-semibold text-[#0f172a] text-sm">データソース</h3>
+        <h3 className="font-semibold text-[var(--foreground)] text-sm">データソース</h3>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-medium border border-green-200">
             ✅ {availableCount}件取得済み
@@ -440,7 +440,7 @@ function DataSourcesPanel({ sources }: { sources: DataSource[] }) {
             <div key={cat}>
               <div className="flex items-center gap-1.5 mb-2">
                 <span className="text-xs">{cfg.icon}</span>
-                <span className="text-xs font-semibold text-[#64748b] uppercase tracking-wide">{cat}</span>
+                <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{cat}</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {catSources.map(src =>
@@ -476,10 +476,10 @@ function CoinCard({ coin, dexLink, scoreData }: { coin: CoinData; dexLink?: stri
   const stopPct   = scoreData ? numValNonZero(scoreData.stop_loss_pct)   : undefined;
   const stopPrice = scoreData ? numValNonZero(scoreData.stop_loss_price) : undefined;
   return (
-    <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden">
-      <div className="px-4 py-2.5 flex items-center gap-2 border-b border-[#e2e8f0] bg-[#f8fafc]">
+    <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+      <div className="px-4 py-2.5 flex items-center gap-2 border-b border-[var(--border)] bg-[var(--background)]">
         <span className="text-base">📊</span>
-        <h3 className="font-semibold text-[#0f172a] text-sm">価格 &amp; マーケット情報</h3>
+        <h3 className="font-semibold text-[var(--foreground)] text-sm">価格 &amp; マーケット情報</h3>
         <div className="ml-auto flex items-center gap-2">
           {dexLink && (
             <a href={dexLink} target="_blank" rel="noopener noreferrer"
@@ -487,15 +487,15 @@ function CoinCard({ coin, dexLink, scoreData }: { coin: CoinData; dexLink?: stri
               📈 チャートを見る ↗
             </a>
           )}
-          <span className="text-xs text-[#94a3b8]">出典: CoinGecko</span>
+          <span className="text-xs text-[var(--text-muted)]">出典: CoinGecko</span>
         </div>
       </div>
       <div className="px-4 py-4">
         <div className="flex items-start justify-between mb-4 gap-2">
           <div>
-            <div className="text-2xl font-black text-[#0f172a]">{coin.name}</div>
+            <div className="text-2xl font-black text-[var(--foreground)]">{coin.name}</div>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm text-[#475569] font-mono">{coin.symbol}</span>
+              <span className="text-sm text-[var(--text-secondary)] font-mono">{coin.symbol}</span>
               <span className="text-xs bg-sky-50 text-sky-600 px-2 py-0.5 rounded font-bold border border-sky-200">
                 #{coin.rank}
               </span>
@@ -518,7 +518,7 @@ function CoinCard({ coin, dexLink, scoreData }: { coin: CoinData; dexLink?: stri
                   {rank}
                 </div>
               )}
-              <div className="text-4xl font-black text-[#0f172a] leading-none">{fmtPrice(coin.price)}</div>
+              <div className="text-4xl font-black text-[var(--foreground)] leading-none">{fmtPrice(coin.price)}</div>
             </div>
             <div className="flex gap-2 mt-2 justify-end flex-wrap">
               <span className={`px-2.5 py-1 rounded text-sm font-bold ${up24 ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
@@ -541,9 +541,9 @@ function CoinCard({ coin, dexLink, scoreData }: { coin: CoinData; dexLink?: stri
             { label: "流通供給量", value: fmtSupply(coin.circulatingSupply) },
             { label: "総供給量",   value: coin.totalSupply ? fmtSupply(coin.totalSupply) : "∞" },
           ].map(({ label, value }) => (
-            <div key={label} className="bg-[#f8fafc] rounded-lg px-3 py-2 border border-[#e2e8f0]">
-              <div className="text-xs text-[#64748b] mb-0.5">{label}</div>
-              <div className="text-sm font-bold text-[#0f172a]">{value}</div>
+            <div key={label} className="bg-[var(--background)] rounded-lg px-3 py-2 border border-[var(--border)]">
+              <div className="text-xs text-[var(--text-secondary)] mb-0.5">{label}</div>
+              <div className="text-sm font-bold text-[var(--foreground)]">{value}</div>
             </div>
           ))}
         </div>
@@ -578,11 +578,11 @@ function CoinCard({ coin, dexLink, scoreData }: { coin: CoinData; dexLink?: stri
 // ─────────────────────────────────────────────
 function SkeletonCard({ lines = 4 }: { lines?: number }) {
   return (
-    <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden animate-pulse">
-      <div className="px-4 py-2.5 bg-[#f8fafc] h-9 border-b border-[#e2e8f0]" />
+    <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden animate-pulse">
+      <div className="px-4 py-2.5 bg-[var(--background)] h-9 border-b border-[var(--border)]" />
       <div className="px-4 py-4 space-y-3">
         {Array.from({ length: lines }).map((_, i) => (
-          <div key={i} className="h-3 bg-[#e2e8f0] rounded" style={{ width: `${70 + (i % 3) * 10}%` }} />
+          <div key={i} className="h-3 bg-[var(--border)] rounded" style={{ width: `${70 + (i % 3) * 10}%` }} />
         ))}
       </div>
     </div>
@@ -632,6 +632,34 @@ function loadTabPrefs(): TabPrefs {
   }
 }
 
+// ─── Rate limit helpers (client-side localStorage) ───────────────────────────
+const RATE_LIMIT_KEY = "rateLimit";
+const CLIENT_DAILY_LIMIT = 20;
+
+function getTodayJST(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+}
+function readClientLimit(): { count: number; date: string } {
+  try {
+    const raw = localStorage.getItem(RATE_LIMIT_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { count: 0, date: getTodayJST() };
+}
+function incrementClientLimit(): number {
+  const today = getTodayJST();
+  const cur = readClientLimit();
+  const newCount = cur.date === today ? cur.count + 1 : 1;
+  try { localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify({ count: newCount, date: today })); } catch { /* ignore */ }
+  return newCount;
+}
+function getClientRemaining(): number {
+  const today = getTodayJST();
+  const cur = readClientLimit();
+  if (cur.date !== today) return CLIENT_DAILY_LIMIT;
+  return Math.max(0, CLIENT_DAILY_LIMIT - cur.count);
+}
+
 export default function CryptoSearch() {
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [batchPrefill, setBatchPrefill] = useState("");
@@ -648,6 +676,7 @@ export default function CryptoSearch() {
   const [showTabSettings, setShowTabSettings] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+  const [isDark, setIsDark] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -686,6 +715,20 @@ export default function CryptoSearch() {
     }
   }, [result?.aiAnalysis]);
 
+  useEffect(() => {
+    setRemainingCount(getClientRemaining());
+    setDailyLimit(CLIENT_DAILY_LIMIT);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("theme");
+      const dark = saved === "dark" || (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      setIsDark(dark);
+      document.documentElement.classList.toggle("dark", dark);
+    } catch { /* ignore */ }
+  }, []);
+
   const visibleTabs = useMemo(
     () => tabPrefs.order
       .map(id => TAB_CONFIG.find(t => t.id === id))
@@ -720,9 +763,22 @@ export default function CryptoSearch() {
     setActiveTab("chat"); search(query);
   }
 
+  function toggleTheme() {
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    try { localStorage.setItem("theme", next ? "dark" : "light"); } catch { /* ignore */ }
+  }
+
   const search = useCallback(async (query: string) => {
     const q = query.trim();
     if (!q || loading) return;
+
+    const usedCount = incrementClientLimit();
+    const newRemaining = Math.max(0, CLIENT_DAILY_LIMIT - usedCount);
+    setRemainingCount(newRemaining);
+    if (usedCount > CLIENT_DAILY_LIMIT) return;
+
     setLoading(true);
     setScoreData(null);
     setResult({ query: q, coin: null, links: null, aiAnalysis: null, dataSources: null, aiLoading: true, error: null, scoreData: null });
@@ -768,8 +824,6 @@ export default function CryptoSearch() {
             try {
               const meta: { dataSources: DataSource[]; coin: CoinData | null; remainingCount?: number; dailyLimit?: number } = JSON.parse(buffer.slice(0, nlIdx));
               setResult(prev => prev ? { ...prev, coin: prev.coin ?? meta.coin, dataSources: prev.dataSources ?? meta.dataSources } : null);
-              if (meta.remainingCount !== undefined) setRemainingCount(meta.remainingCount);
-              if (meta.dailyLimit !== undefined) setDailyLimit(meta.dailyLimit);
             } catch { /* ignore bad meta */ }
             aiText = buffer.slice(nlIdx + 1);
             metaParsed = true;
@@ -821,16 +875,16 @@ export default function CryptoSearch() {
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); search(input); };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]" style={{ fontFamily: "var(--font-noto-sans-jp), 'Noto Sans JP', sans-serif" }}>
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]" style={{ fontFamily: "var(--font-noto-sans-jp), 'Noto Sans JP', sans-serif" }}>
       <RankAlert change={rankChange} />
 
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-white border-b border-[#e2e8f0] shadow-sm">
+      <header className="sticky top-0 z-10 bg-[var(--card-bg)] border-b border-[var(--border)] shadow-sm dark:shadow-slate-900/50">
         <div className="max-w-screen-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <span className="text-[#0ea5e9] text-2xl font-black">₿</span>
+          <span className="text-[var(--accent)] text-2xl font-black">₿</span>
           <div>
-            <span className="font-black text-[#0f172a] text-base tracking-wide">Crypto Terminal</span>
-            <span className="ml-2 text-xs text-[#0ea5e9] font-bold hidden sm:inline">Pro Edition</span>
+            <span className="font-black text-[var(--foreground)] text-base tracking-wide">Crypto Terminal</span>
+            <span className="ml-2 text-xs text-[var(--accent)] font-bold hidden sm:inline">Pro Edition</span>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             {[
@@ -848,11 +902,18 @@ export default function CryptoSearch() {
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:text-[#0ea5e9] hover:border-[#0ea5e9] transition-colors whitespace-nowrap"
+                className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors whitespace-nowrap"
               >
                 {label}
               </a>
             ))}
+            <button
+              onClick={toggleTheme}
+              className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors shrink-0"
+              title={isDark ? "ライトモードに切替" : "ダークモードに切替"}
+            >
+              {isDark ? "☀️" : "🌙"}
+            </button>
           </div>
         </div>
       </header>
@@ -860,15 +921,15 @@ export default function CryptoSearch() {
       <PriceTicker />
 
       {/* Tab bar */}
-      <div className="overflow-x-auto bg-white border-b border-[#e2e8f0]">
+      <div className="overflow-x-auto bg-[var(--card-bg)] border-b border-[var(--border)]">
         <div className="max-w-screen-2xl mx-auto px-4 flex min-w-max">
           {visibleTabs.map((tab, idx) => (
             <React.Fragment key={tab.id}>
-              {idx > 0 && <div className="w-px bg-[#e2e8f0] my-2" />}
+              {idx > 0 && <div className="w-px bg-[var(--border)] my-2" />}
               {tab.href ? (
                 <Link
                   href={tab.href}
-                  className="px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-[#64748b] hover:text-[#0f172a] transition-colors whitespace-nowrap"
+                  className="px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-[var(--text-secondary)] hover:text-[var(--foreground)] transition-colors whitespace-nowrap"
                 >
                   {tab.label}
                 </Link>
@@ -877,8 +938,8 @@ export default function CryptoSearch() {
                   onClick={() => setActiveTab(tab.id as Tab)}
                   className={`px-4 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === tab.id
-                      ? "border-[#0ea5e9] text-[#0ea5e9]"
-                      : "border-transparent text-[#64748b] hover:text-[#0f172a]"
+                      ? "border-[var(--accent)] text-[var(--accent)]"
+                      : "border-transparent text-[var(--text-secondary)] hover:text-[var(--foreground)]"
                   }`}
                 >
                   {tab.label}
@@ -886,10 +947,10 @@ export default function CryptoSearch() {
               )}
             </React.Fragment>
           ))}
-          <div className="w-px bg-[#e2e8f0] my-2" />
+          <div className="w-px bg-[var(--border)] my-2" />
           <button
             onClick={() => setShowTabSettings(true)}
-            className="px-3 py-3 text-sm text-[#94a3b8] hover:text-[#0f172a] transition-colors whitespace-nowrap"
+            className="px-3 py-3 text-sm text-[var(--text-muted)] hover:text-[var(--foreground)] transition-colors whitespace-nowrap"
             title="タブをカスタマイズ"
           >
             ⚙️
@@ -911,24 +972,24 @@ export default function CryptoSearch() {
         {activeTab === "chat" && <>
           {/* Search */}
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-black text-[#0f172a] mb-1">暗号通貨を検索</h1>
-            <p className="text-sm text-[#475569] mb-6">銘柄名・ティッカー・日本語名・コントラクトアドレスで検索できます</p>
+            <h1 className="text-2xl font-black text-[var(--foreground)] mb-1">暗号通貨を検索</h1>
+            <p className="text-sm text-[var(--text-secondary)] mb-6">銘柄名・ティッカー・日本語名・コントラクトアドレスで検索できます</p>
             <form onSubmit={handleSubmit} className="relative max-w-xl mx-auto">
               <input
                 ref={inputRef} type="text" value={input} onChange={e => setInput(e.target.value)}
                 placeholder="例: BTC、ビットコイン、ethereum、0x..."
-                className="w-full pl-4 pr-24 py-3 rounded-xl border-2 border-[#e2e8f0] focus:border-[#0ea5e9] focus:outline-none text-[#0f172a] text-sm transition-colors bg-white shadow-sm"
+                className="w-full pl-4 pr-24 py-3 rounded-xl border-2 border-[var(--border)] focus:border-[var(--accent)] focus:outline-none text-[var(--foreground)] text-sm transition-colors bg-[var(--card-bg)] shadow-sm"
               />
-              <button type="submit" disabled={loading || !input.trim()}
+              <button type="submit" disabled={loading || !input.trim() || remainingCount === 0}
                 className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 rounded-lg text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-white"
-                style={{ background: loading ? "#94a3b8" : "#0ea5e9" }}>
+                style={{ background: loading ? "var(--text-secondary)" : "var(--accent)" }}>
                 {loading ? "検索中…" : "検索"}
               </button>
             </form>
             <div className="flex flex-wrap justify-center gap-2 mt-4">
               {QUICK_COINS.map(coin => (
-                <button key={coin} onClick={() => search(coin)} disabled={loading}
-                  className="px-3 py-1 text-xs font-mono font-bold border border-[#e2e8f0] rounded-full text-[#475569] bg-white hover:border-[#0ea5e9] hover:text-[#0ea5e9] hover:bg-sky-50 disabled:opacity-40 transition-colors shadow-sm">
+                <button key={coin} onClick={() => search(coin)} disabled={loading || remainingCount === 0}
+                  className="px-3 py-1 text-xs font-mono font-bold border border-[var(--border)] rounded-full text-[var(--text-secondary)] bg-[var(--card-bg)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-sky-50 disabled:opacity-40 transition-colors shadow-sm">
                   {coin}
                 </button>
               ))}
@@ -940,10 +1001,10 @@ export default function CryptoSearch() {
             <div className={`mb-4 px-4 py-2.5 rounded-xl border text-sm font-medium flex items-center gap-2 ${
               remainingCount === 0 ? "bg-red-50 border-red-300 text-red-600"
               : remainingCount <= 5 ? "bg-orange-50 border-orange-300 text-orange-600"
-              : "bg-slate-50 border-[#e2e8f0] text-[#475569]"
+              : "bg-slate-50 border-[var(--border)] text-[var(--text-secondary)]"
             }`}>
               <span>🔢</span>
-              <span>本日の残り分析回数: <strong className="text-[#0f172a]">{remainingCount}</strong> / {dailyLimit}</span>
+              <span>本日の残り分析回数: <strong className="text-[var(--foreground)]">{remainingCount}</strong> / {dailyLimit}</span>
               {remainingCount === 0 && <span className="ml-auto">明日リセットされます</span>}
             </div>
           )}
@@ -951,20 +1012,20 @@ export default function CryptoSearch() {
           {/* Results */}
           {result && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm text-[#64748b] flex-wrap">
+              <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] flex-wrap">
                 <span>検索:</span>
-                <span className="font-bold text-[#0f172a]">{result.query}</span>
+                <span className="font-bold text-[var(--foreground)]">{result.query}</span>
                 <button
                   onClick={() => { if (!watchlisted) { addToWatchlist(result.query); setWatchlisted(true); } }}
                   className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
                     watchlisted ? "bg-yellow-50 text-yellow-600 border-yellow-300"
-                    : "bg-white text-[#64748b] border-[#e2e8f0] hover:border-yellow-300 hover:text-yellow-600"
+                    : "bg-[var(--card-bg)] text-[var(--text-secondary)] border-[var(--border)] hover:border-yellow-300 hover:text-yellow-600"
                   }`}>
                   {watchlisted ? "★ ウォッチ済み" : "☆ ウォッチ追加"}
                 </button>
                 {(loading || result.aiLoading) && (
-                  <span className="ml-auto flex items-center gap-1.5 text-[#0ea5e9] text-xs">
-                    <span className="w-3 h-3 border-2 border-[#0ea5e9] border-t-transparent rounded-full animate-spin inline-block" />
+                  <span className="ml-auto flex items-center gap-1.5 text-[var(--accent)] text-xs">
+                    <span className="w-3 h-3 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin inline-block" />
                     AI分析中…
                   </span>
                 )}
@@ -982,8 +1043,8 @@ export default function CryptoSearch() {
               )}
 
               {result.links && Object.values(result.links).some(Boolean) && (
-                <div className="bg-white rounded-xl border border-[#e2e8f0] px-4 py-3 shadow-sm">
-                  <div className="text-xs text-[#64748b] mb-2 font-medium">公式リンク</div>
+                <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border)] px-4 py-3 shadow-sm">
+                  <div className="text-xs text-[var(--text-secondary)] mb-2 font-medium">公式リンク</div>
                   <LinkBadges links={result.links} />
                 </div>
               )}
@@ -1017,8 +1078,8 @@ export default function CryptoSearch() {
         </>}
       </main>
 
-      <footer className="border-t border-[#e2e8f0] mt-12 bg-white">
-        <div className="max-w-screen-2xl mx-auto px-4 py-4 text-center text-xs text-[#94a3b8]">
+      <footer className="border-t border-[var(--border)] mt-12 bg-[var(--card-bg)]">
+        <div className="max-w-screen-2xl mx-auto px-4 py-4 text-center text-xs text-[var(--text-muted)]">
           データ提供: CoinGecko · DEXScreener · GeckoTerminal · AI分析: Anthropic Claude
         </div>
       </footer>
@@ -1026,10 +1087,10 @@ export default function CryptoSearch() {
       {/* Tab settings modal */}
       {showTabSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowTabSettings(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-[340px] max-w-[90vw] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-[#e2e8f0] flex items-center justify-between">
-              <h2 className="font-bold text-[#0f172a] text-base">⚙️ タブカスタマイズ</h2>
-              <button onClick={() => setShowTabSettings(false)} className="text-[#94a3b8] hover:text-[#0f172a] text-xl leading-none">×</button>
+          <div className="bg-[var(--card-bg)] rounded-2xl shadow-2xl w-[340px] max-w-[90vw] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
+              <h2 className="font-bold text-[var(--foreground)] text-base">⚙️ タブカスタマイズ</h2>
+              <button onClick={() => setShowTabSettings(false)} className="text-[var(--text-muted)] hover:text-[var(--foreground)] text-xl leading-none">×</button>
             </div>
             <div className="px-5 py-4 space-y-2">
               {tabPrefs.order.map((id, idx) => {
@@ -1037,35 +1098,35 @@ export default function CryptoSearch() {
                 if (!tab) return null;
                 const isHidden = tabPrefs.hidden.includes(id);
                 return (
-                  <div key={id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isHidden ? "bg-[#f8fafc] border-[#e2e8f0] opacity-50" : "bg-white border-[#e2e8f0]"}`}>
-                    <span className="flex-1 text-sm font-medium text-[#0f172a]">{tab.label}</span>
+                  <div key={id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isHidden ? "bg-[var(--background)] border-[var(--border)] opacity-50" : "bg-[var(--card-bg)] border-[var(--border)]"}`}>
+                    <span className="flex-1 text-sm font-medium text-[var(--foreground)]">{tab.label}</span>
                     <button
                       onClick={() => moveTab(id, -1)}
                       disabled={idx === 0}
-                      className="w-7 h-7 flex items-center justify-center text-xs rounded hover:bg-[#f1f5f9] disabled:opacity-20 text-[#64748b]"
+                      className="w-7 h-7 flex items-center justify-center text-xs rounded hover:bg-[var(--background)] disabled:opacity-20 text-[var(--text-secondary)]"
                     >▲</button>
                     <button
                       onClick={() => moveTab(id, 1)}
                       disabled={idx === tabPrefs.order.length - 1}
-                      className="w-7 h-7 flex items-center justify-center text-xs rounded hover:bg-[#f1f5f9] disabled:opacity-20 text-[#64748b]"
+                      className="w-7 h-7 flex items-center justify-center text-xs rounded hover:bg-[var(--background)] disabled:opacity-20 text-[var(--text-secondary)]"
                     >▼</button>
                     <button
                       onClick={() => toggleHidden(id)}
-                      className={`w-7 h-7 flex items-center justify-center text-sm rounded transition-colors ${isHidden ? "text-[#94a3b8] hover:bg-[#f1f5f9]" : "text-[#0ea5e9] hover:bg-sky-50"}`}
+                      className={`w-7 h-7 flex items-center justify-center text-sm rounded transition-colors ${isHidden ? "text-[var(--text-muted)] hover:bg-[var(--background)]" : "text-[var(--accent)] hover:bg-sky-50"}`}
                       title={isHidden ? "表示する" : "非表示にする"}
                     >👁</button>
                   </div>
                 );
               })}
             </div>
-            <div className="px-5 py-4 border-t border-[#e2e8f0] flex items-center justify-between">
+            <div className="px-5 py-4 border-t border-[var(--border)] flex items-center justify-between">
               <button
                 onClick={() => setTabPrefs(defaultTabPrefs())}
-                className="text-xs text-[#64748b] hover:text-[#0f172a] underline"
+                className="text-xs text-[var(--text-secondary)] hover:text-[var(--foreground)] underline"
               >デフォルトに戻す</button>
               <button
                 onClick={() => setShowTabSettings(false)}
-                className="px-4 py-1.5 bg-[#0ea5e9] text-white rounded-lg text-sm font-bold hover:bg-[#0284c7] transition-colors"
+                className="px-4 py-1.5 bg-[var(--accent)] text-white rounded-lg text-sm font-bold hover:bg-[var(--accent-hover)] transition-colors"
               >閉じる</button>
             </div>
           </div>
@@ -1088,9 +1149,9 @@ function PortfolioTabContent({ onGoToBatch }: { onGoToBatch: () => void }) {
     return (
       <div className="text-center py-16 space-y-4">
         <div className="text-5xl">💼</div>
-        <p className="text-sm text-[#64748b]">バッチ分析を実行すると<br />ここにポートフォリオ配分が表示されます</p>
+        <p className="text-sm text-[var(--text-secondary)]">バッチ分析を実行すると<br />ここにポートフォリオ配分が表示されます</p>
         <button onClick={onGoToBatch}
-          className="px-4 py-2 bg-[#0ea5e9] hover:bg-[#0284c7] text-white rounded-lg text-sm font-bold transition-colors">
+          className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-bold transition-colors">
           📋 バッチ分析へ
         </button>
       </div>
@@ -1098,8 +1159,8 @@ function PortfolioTabContent({ onGoToBatch }: { onGoToBatch: () => void }) {
   }
   return (
     <div className="space-y-2">
-      <h2 className="text-lg font-bold text-[#0ea5e9]">💼 ポートフォリオ配分</h2>
-      <p className="text-xs text-[#64748b]">最後のバッチ分析結果をもとに算出</p>
+      <h2 className="text-lg font-bold text-[var(--accent)]">💼 ポートフォリオ配分</h2>
+      <p className="text-xs text-[var(--text-secondary)]">最後のバッチ分析結果をもとに算出</p>
       <PortfolioCalc results={results} />
     </div>
   );
