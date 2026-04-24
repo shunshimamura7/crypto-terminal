@@ -825,10 +825,14 @@ export default function CryptoSearch() {
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             {[
-              { label: "CoinGecko",          href: "https://www.coingecko.com" },
-              { label: "GeckoTerminal",       href: "https://www.geckoterminal.com" },
-              { label: "TradingView",         href: "https://www.tradingview.com" },
-              { label: "DEXScreener",         href: "https://dexscreener.com" },
+              { label: "CoinGecko",     href: "https://www.coingecko.com" },
+              { label: "GeckoTerminal", href: "https://www.geckoterminal.com" },
+              { label: "TradingView",   href: "https://www.tradingview.com" },
+              { label: "DEXScreener",   href: "https://dexscreener.com" },
+              { label: "Coinglass",     href: "https://www.coinglass.com" },
+              { label: "TokenUnlocks",  href: "https://tokenunlocks.app" },
+              { label: "DeFiLlama",     href: "https://defillama.com" },
+              { label: "Bubble Maps",   href: "https://app.bubblemaps.io" },
             ].map(({ label, href }) => (
               <a
                 key={label}
