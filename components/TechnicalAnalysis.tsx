@@ -36,7 +36,7 @@ function fmtPct(v: number | null): string {
 
 // ─── TradingView chart with studies ──────────────────────────────────────────
 
-function TvTechChart({ symbol }: { symbol: string }) {
+function TvTechChart({ symbol, isFullscreen }: { symbol: string; isFullscreen?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,7 +75,7 @@ function TvTechChart({ symbol }: { symbol: string }) {
     <div
       id="tv_tech_chart_inner"
       ref={containerRef}
-      style={{ height: 500 }}
+      style={{ height: isFullscreen ? "calc(100vh - 44px)" : 500 }}
     />
   );
 }
@@ -189,12 +189,21 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TechnicalAnalysis() {
-  const [input,      setInput]      = useState("");
-  const [symbol,     setSymbol]     = useState("");
-  const [loading,    setLoading]    = useState(false);
-  const [indicators, setIndicators] = useState<Indicators | null>(null);
-  const [analysis,   setAnalysis]   = useState("");
-  const [historyKey, setHistoryKey] = useState(0);
+  const [input,        setInput]        = useState("");
+  const [symbol,       setSymbol]       = useState("");
+  const [loading,      setLoading]      = useState(false);
+  const [indicators,   setIndicators]   = useState<Indicators | null>(null);
+  const [analysis,     setAnalysis]     = useState("");
+  const [historyKey,   setHistoryKey]   = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFullscreen(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const analyze = async () => {
     const sym = input.trim().toUpperCase().replace(/USDT$/i, "");
@@ -273,13 +282,23 @@ export default function TechnicalAnalysis() {
       {symbol ? (
         <>
           {/* Chart */}
-          <div className="rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+          <div className={`relative ${
+            isFullscreen
+              ? "fixed inset-0 z-50 bg-white"
+              : "rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-4"
+          }`}>
             <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
               <span className="text-sm font-bold text-gray-700">{symbol}/USDT</span>
               <span className="text-xs text-gray-400">4時間足 · TradingView</span>
               <span className="ml-auto text-xs text-gray-400">MA / RSI / MACD / BB</span>
             </div>
-            <TvTechChart symbol={symbol} />
+            <button
+              onClick={() => setIsFullscreen(v => !v)}
+              className="absolute top-2 right-2 z-10 px-2 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-700"
+            >
+              {isFullscreen ? "✕ 閉じる" : "⛶ 全画面"}
+            </button>
+            <TvTechChart symbol={symbol} isFullscreen={isFullscreen} />
           </div>
 
           {/* Indicators + AI analysis */}
