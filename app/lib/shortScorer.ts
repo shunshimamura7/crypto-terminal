@@ -108,6 +108,7 @@ export interface ShortCandidate {
   currentPrice: number;
   ath14d: number;
   athDropPct: number;
+  ath14dFromKline: boolean;  // true when ath14d was computed from actual kline4h data
   volume24h: number;
   volumeAvg7d: number;
   volumeChangeRatio: number;

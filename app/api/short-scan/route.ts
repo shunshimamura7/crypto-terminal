@@ -51,8 +51,8 @@ const MAJOR_PAIRS = new Set([
 ]);
 
 // Stage 2 concurrency: 40 parallel / 30ms delay
-// 40 × 4 requests = 160 concurrent; 8 batches × ~7s = ~56s well within 120s deadline
-const MAX_KLINE_TARGETS = 300;
+// 400 targets / 40 = 10 batches × ~7s = ~70s well within 120s deadline
+const MAX_KLINE_TARGETS = 400;
 const BATCH = 40;
 const BATCH_DELAY = 30;
 
@@ -84,6 +84,7 @@ interface CandidateMeta {
   symbol: string;
   listedDaysAgo: number;
   vol24hEst: number;
+  riseFallRate: number;  // 24h price change ratio from ticker (for Stage 1 sort)
 }
 
 async function analyzeCandidate(
@@ -130,6 +131,7 @@ async function analyzeCandidate(
 
   // ATH: max high from 4h klines
   let ath14d = price;
+  let ath14dFromKline = false;
   const closes4h: number[] = [];
   let volumeProfile: VolumeProfile | null = null;
   let tradeSetup: TradeSetup | null = null;
@@ -140,7 +142,7 @@ async function analyzeCandidate(
   if (kline4hRes.status === "fulfilled" && kline4hRes.value?.data) {
     const kd = kline4hRes.value.data;
     kHighs4h = (kd.high || []).map(Number).filter((n: number) => n > 0);
-    if (kHighs4h.length > 0) ath14d = Math.max(price, ...kHighs4h);
+    if (kHighs4h.length > 0) { ath14d = Math.max(price, ...kHighs4h); ath14dFromKline = true; }
     for (const c of (kd.close || []) as string[]) {
       const n = parseFloat(c);
       if (n > 0) closes4h.push(n);
@@ -254,6 +256,7 @@ async function analyzeCandidate(
     currentPrice: price,
     ath14d,
     athDropPct,
+    ath14dFromKline,
     volume24h: vol24h,
     volumeAvg7d,
     volumeChangeRatio,
@@ -385,10 +388,18 @@ export async function GET(req: NextRequest) {
     // For new30 mode, pre-filter by listing date at Stage 1
     if (isNew30 && listedDaysAgo > 30) continue;
 
-    candidates.push({ symbol: sym, listedDaysAgo, vol24hEst });
+    const riseFallRate = parseFloat((t as { riseFallRate?: string }).riseFallRate || "0");
+    candidates.push({ symbol: sym, listedDaysAgo, vol24hEst, riseFallRate });
   }
 
   const stage1Passed = candidates.length;
+
+  // Sort by 24h price drop magnitude: most negative first → prioritise downtrend coins
+  // Ensures the MAX_KLINE_TARGETS budget is spent on coins most likely to have ATH drop ≥ 30%
+  if (!isNew30) {
+    candidates.sort((a, b) => a.riseFallRate - b.riseFallRate);
+  }
+
   const klineTargets = candidates.slice(0, MAX_KLINE_TARGETS);
   console.log(`[short-scan] ── Stage1 ── passed: ${stage1Passed} (vol≥$${PRE_FILTER_VOL_USD.toLocaleString()}${isNew30 ? ", listed≤30d" : ""}), kline targets: ${klineTargets.length}/${MAX_KLINE_TARGETS}`);
 
@@ -427,30 +438,31 @@ export async function GET(req: NextRequest) {
 
   // ── Diagnostic log: kline success rate + filter breakdown ───────────────────
   if (!isNew30) {
-    const withKline = results.filter(r => r.vol7dFromKline).length;
-    const noKline   = results.filter(r => !r.vol7dFromKline).length;
-    const passAth   = results.filter(r => Math.abs(r.athDropPct) >= qMinDrop).length;
-    const passVol   = results.filter(r => !r.vol7dFromKline || r.volumeChangeRatio * 100 <= qMaxVolRatio).length;
+    const withAth  = results.filter(r => r.ath14dFromKline).length;
+    const withVol  = results.filter(r => r.vol7dFromKline).length;
+    const passAth  = results.filter(r => !r.ath14dFromKline || Math.abs(r.athDropPct) >= qMinDrop).length;
+    const passVol  = results.filter(r => !r.vol7dFromKline  || r.volumeChangeRatio * 100 <= qMaxVolRatio).length;
     const passVol24 = results.filter(r => r.volume24h >= qMinVol24k * 1_000).length;
-    // volumeChangeRatio distribution (only for symbols with actual kline data)
-    const withKlineResults = results.filter(r => r.vol7dFromKline);
-    const vr0_3  = withKlineResults.filter(r => r.volumeChangeRatio < 0.3).length;
-    const vr3_7  = withKlineResults.filter(r => r.volumeChangeRatio >= 0.3 && r.volumeChangeRatio < 0.7).length;
-    const vr7_1  = withKlineResults.filter(r => r.volumeChangeRatio >= 0.7 && r.volumeChangeRatio < 1.0).length;
-    const vr1p   = withKlineResults.filter(r => r.volumeChangeRatio >= 1.0).length;
-    console.log(`[short-scan] kline: withData=${withKline}/${results.length} (${Math.round(withKline/results.length*100)}%), noData=${noKline}`);
-    console.log(`[short-scan] volRatio (kline only): <0.3=${vr0_3}, 0.3-0.7=${vr3_7}, 0.7-1.0=${vr7_1}, ≥1.0=${vr1p}`);
+    // athDropPct distribution for coins that have actual kline4h ATH data
+    const withAthResults = results.filter(r => r.ath14dFromKline);
+    const ad10 = withAthResults.filter(r => Math.abs(r.athDropPct) < 10).length;
+    const ad30 = withAthResults.filter(r => Math.abs(r.athDropPct) >= 10 && Math.abs(r.athDropPct) < 30).length;
+    const ad50 = withAthResults.filter(r => Math.abs(r.athDropPct) >= 30 && Math.abs(r.athDropPct) < 50).length;
+    const ad70 = withAthResults.filter(r => Math.abs(r.athDropPct) >= 50).length;
+    console.log(`[short-scan] kline4h ATH: withData=${withAth}/${results.length}, athDrop: <10%=${ad10}, 10-30%=${ad30}, 30-50%=${ad50}, ≥50%=${ad70}`);
+    console.log(`[short-scan] kline1d vol: withData=${withVol}/${results.length}`);
     console.log(`[short-scan] filter: passAth=${passAth}, passVolRatio=${passVol}, passVol24h=${passVol24}, params=${JSON.stringify({ qMinDrop, qMaxVolRatio, qMinVol24k, qMaxDays, qMinOiK })}`);
   }
 
   // Apply client slider params as filter for normal mode (new30 already filtered in analyzeCandidate)
-  // vol7dFromKline=false means kline data unavailable → volumeChangeRatio defaults to 1.0 (fallback)
-  // In that case skip the volumeChangeRatio condition to avoid false negatives
+  // When kline data is unavailable, skip that filter condition to avoid false negatives:
+  //   ath14dFromKline=false → kline4h failed → ath14d=price → athDropPct=0 → skip ATH filter
+  //   vol7dFromKline=false  → kline1d failed → volumeChangeRatio=1.0 fallback → skip volRatio filter
   const filteredResults = isNew30
     ? results
     : results.filter(c =>
-        Math.abs(c.athDropPct) >= qMinDrop &&
-        (!c.vol7dFromKline || c.volumeChangeRatio * 100 <= qMaxVolRatio) &&
+        (!c.ath14dFromKline || Math.abs(c.athDropPct) >= qMinDrop) &&
+        (!c.vol7dFromKline  || c.volumeChangeRatio * 100 <= qMaxVolRatio) &&
         c.volume24h >= qMinVol24k * 1_000 &&
         c.listedDaysAgo <= qMaxDays &&
         c.openInterest >= qMinOiK * 1_000
