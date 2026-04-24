@@ -6,7 +6,7 @@ import SectorAnalyzer from "./SectorAnalyzer";
 import BatchAnalyzer from "./BatchAnalyzer";
 import WatchList from "./WatchList";
 import HistoryView from "./HistoryView";
-import FearGreedGauge from "./FearGreedGauge";
+import MarketTicker from "./MarketTicker";
 import PriceTicker from "./PriceTicker";
 import TrendingCoins from "./TrendingCoins";
 import NewsPanel from "./NewsPanel";
@@ -817,14 +817,11 @@ export default function CryptoSearch() {
 
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white border-b border-[#e2e8f0] shadow-sm">
-        <div className="max-w-[800px] mx-auto px-4 py-3 flex items-center gap-3">
+        <div className="max-w-screen-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <span className="text-[#0ea5e9] text-2xl font-black">₿</span>
           <div>
             <span className="font-black text-[#0f172a] text-base tracking-wide">Crypto Terminal</span>
             <span className="ml-2 text-xs text-[#0ea5e9] font-bold hidden sm:inline">Pro Edition</span>
-          </div>
-          <div className="ml-auto">
-            <FearGreedGauge />
           </div>
         </div>
       </header>
@@ -833,7 +830,7 @@ export default function CryptoSearch() {
 
       {/* Tab bar */}
       <div className="overflow-x-auto bg-white border-b border-[#e2e8f0]">
-        <div className="max-w-[800px] mx-auto px-4 flex min-w-max">
+        <div className="max-w-screen-2xl mx-auto px-4 flex min-w-max">
           {visibleTabs.map((tab, idx) => (
             <React.Fragment key={tab.id}>
               {idx > 0 && <div className="w-px bg-[#e2e8f0] my-2" />}
@@ -869,7 +866,7 @@ export default function CryptoSearch() {
         </div>
       </div>
 
-      <main className="max-w-[800px] mx-auto px-4 py-8">
+      <main className="max-w-screen-2xl mx-auto px-4 py-8">
         {activeTab === "sector"    && <SectorAnalyzer onAnalyze={(ticker) => { setActiveTab("chat"); search(ticker); }} />}
         {activeTab === "batch"     && <BatchAnalyzer prefillText={batchPrefill} />}
         {activeTab === "watchlist" && <WatchList onBatchAnalyze={handleBatchFromWatchlist} onAnalyze={handleAnalyzeFromWidget} />}
@@ -974,22 +971,20 @@ export default function CryptoSearch() {
             </div>
           )}
 
-          {!result && (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">🔍</div>
-              <p className="text-sm text-[#475569]">銘柄名を入力して検索してください</p>
+          <div className="mt-6">
+            <MarketTicker />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div className="text-xs p-2 max-h-64 overflow-y-auto">
+              <TrendingCoins onAnalyze={handleAnalyzeFromWidget} />
             </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-            <TrendingCoins onAnalyze={handleAnalyzeFromWidget} />
             <NewsPanel highlightTicker={result?.query ?? ""} />
           </div>
         </>}
       </main>
 
       <footer className="border-t border-[#e2e8f0] mt-12 bg-white">
-        <div className="max-w-[800px] mx-auto px-4 py-4 text-center text-xs text-[#94a3b8]">
+        <div className="max-w-screen-2xl mx-auto px-4 py-4 text-center text-xs text-[#94a3b8]">
           データ提供: CoinGecko · DEXScreener · GeckoTerminal · AI分析: Anthropic Claude
         </div>
       </footer>

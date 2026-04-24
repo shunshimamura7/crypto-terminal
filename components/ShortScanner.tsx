@@ -606,7 +606,7 @@ function LoadingProgress({ t, elapsed }: { t: Translations; elapsed: number }) {
 function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapshots: ScanSnapshot[]; alerts: DiffAlert[]; t: Translations }) {
   const diff = getDiffSummary(c.symbol, c, snapshots);
   const symAlerts = alerts.filter(a => a.symbol === c.symbol);
-  const colSpan = HAS_CG ? 15 : 12;
+  const colSpan = 15;
 
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisData, setAnalysisData]       = useState<AnalyzeResult | null>(null);
@@ -662,6 +662,7 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
             {[
               { label: "取引所独占度", val: c.exclusivityScore, max: 2, color: "#22c55e" },
               { label: "FR連続ボーナス", val: c.frBonus, max: 1, color: "#8b5cf6" },
+              { label: "RSI過熱", val: c.scoreBreakdown.rsiScore ?? 0, max: 2, color: "#f59e0b" },
             ].map(({ label, val, max, color }) => (
               <div key={label}>
                 <div className="flex justify-between text-xs text-gray-600 mb-1">
@@ -688,6 +689,7 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
               { s: "急騰",  v: (c.scoreBreakdown.pumpScore / 2) * 100 },
               { s: "独占",  v: (c.exclusivityScore / 2) * 100 },
               { s: "BTC",  v: (c.scoreBreakdown.btcCorrScore / 1) * 100 },
+              { s: "RSI",  v: (c.scoreBreakdown.rsiScore / 2) * 100 },
             ];
             return (
               <div className="shrink-0 flex flex-col items-center">
@@ -834,15 +836,26 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
               <p className="text-xs font-semibold text-violet-700 mb-2">{t.cgSection}</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600">
                 <div>MC: <span className="font-mono font-semibold text-gray-800">{cg.marketCap ? fmtVol(cg.marketCap) : "N/A"}</span></div>
-                <div>現物Vol: <span className="font-mono font-semibold text-gray-800">{cg.spotVolume ? fmtVol(cg.spotVolume) : "N/A"}</span></div>
-                <div>先物/現物: <span className={`font-mono font-semibold ${futuresRatio && futuresRatio > 500 ? "text-red-600" : futuresRatio && futuresRatio > 200 ? "text-orange-500" : "text-gray-800"}`}>{futuresRatio == null ? "—" : futuresRatio > 9999 ? ">9999%" : `${futuresRatio.toFixed(0)}%`}</span></div>
-                {cg.mexcSharePct != null && <div>MEXC集中: <span className={`font-mono font-semibold ${cg.mexcSharePct >= 90 ? "text-red-600" : "text-gray-800"}`}>{cg.mexcSharePct.toFixed(1)}%</span></div>}
+                <div>現物Vol <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className="font-mono font-semibold text-gray-800">{cg.spotVolume ? fmtVol(cg.spotVolume) : "N/A"}</span></div>
+                <div>先物/現物 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className={`font-mono font-semibold ${futuresRatio && futuresRatio > 500 ? "text-red-600" : futuresRatio && futuresRatio > 200 ? "text-orange-500" : "text-gray-800"}`}>{futuresRatio == null ? "—" : futuresRatio > 9999 ? ">9999%" : `${futuresRatio.toFixed(0)}%`}</span></div>
+                {cg.mexcSharePct != null && <div>MEXC集中 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className={`font-mono font-semibold ${cg.mexcSharePct >= 90 ? "text-red-600" : "text-gray-800"}`}>{cg.mexcSharePct.toFixed(1)}%</span></div>}
                 <div>Twitter: <span className="font-mono text-gray-800">{cg.twitterFollowers != null ? cg.twitterFollowers.toLocaleString() : "N/A"}</span></div>
-                <div>SNS合計: <span className="font-mono text-gray-800">{snsTotal > 0 ? snsTotal.toLocaleString() : "N/A"}</span></div>
+                <div>SNS合計 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className="font-mono text-gray-800">{snsTotal > 0 ? snsTotal.toLocaleString() : "N/A"}</span></div>
               </div>
             </div>
           );
         })()}
+        {!HAS_CG && (
+          <div className="mt-2 pt-2 border-t border-gray-200">
+            <p className="text-xs font-semibold text-violet-700 mb-2">{t.cgSection}</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs bg-gray-50 rounded p-2 text-gray-400">
+              <div>現物Vol <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className="text-gray-300">🔒</span></div>
+              <div>先物/現物 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className="text-gray-300">🔒</span></div>
+              <div>MEXC集中 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className="text-gray-300">🔒</span></div>
+              <div>SNS合計 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className="text-gray-300">🔒</span></div>
+            </div>
+          </div>
+        )}
 
         {/* 前回比 (施策3) */}
         {diff && (
@@ -1388,7 +1401,7 @@ function LongBiasPanel({ candidates, t }: { candidates: ExtendedCandidate[]; t: 
 // ─── Sortable TH ────────────────────────────────────────────────────────────
 function SortTh({ label, sortKey, current, onSort, cls = "text-right" }: { label: string; sortKey: SortKey; current: SortKey; onSort: (k: SortKey) => void; cls?: string }) {
   return (
-    <th className={`px-2 md:px-3 py-2.5 ${cls} cursor-pointer select-none hover:text-indigo-600 transition-colors text-xs`}
+    <th className={`px-1 py-1 ${cls} cursor-pointer select-none hover:text-indigo-600 transition-colors text-xs`}
       onClick={() => onSort(sortKey)}>
       {label}{current === sortKey ? " ▼" : ""}
     </th>
@@ -2517,6 +2530,11 @@ export default function ShortScanner() {
               </button>
             </div>
           </div>
+          {!HAS_CG && (
+            <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1 mx-3 mb-1">
+              💎 <span className="font-semibold">PRO列</span>はCoinGecko APIキー設定で解放されます
+            </div>
+          )}
 
           {/* Heatmap view (施策7 改善) */}
           {viewMode === "heat" && (
@@ -2538,25 +2556,31 @@ export default function ShortScanner() {
           )}
 
           {/* Table view */}
-          {viewMode === "table" && <div ref={topScrollRef} onScroll={onTopScroll} className="overflow-x-scroll overflow-y-hidden border-b border-gray-100" style={{height:14}}><div ref={topScrollInnerRef} style={{height:1}} /></div>}
-          {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll} className="overflow-x-auto"><table className="w-full text-sm min-w-[600px]">
+          {viewMode === "table" && <div ref={topScrollRef} onScroll={onTopScroll} className="overflow-x-auto overflow-y-hidden border-b border-gray-100" style={{height:12}}><div ref={topScrollInnerRef} style={{height:1}} /></div>}
+          {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll}><table className="w-full table-fixed text-xs">
               <thead>
                 <tr className="bg-white border-b border-gray-200 text-xs font-semibold text-gray-600">
-                  <th className="px-2 md:px-3 py-2.5 text-left sticky left-0 bg-white z-10">{t.colSymbol}</th>
-                  <SortTh label={t.colScore}  sortKey="displayScore"   current={sortBy} onSort={setSortBy} cls="text-center" />
-                  <th className="px-2 md:px-3 py-2.5 text-right hidden md:table-cell">{t.colPrice}</th>
-                  <SortTh label={t.colAth}    sortKey="athDropPct"     current={sortBy} onSort={setSortBy} />
-                  <th className="px-2 md:px-3 py-2.5 text-right hidden sm:table-cell">{t.colVolR}</th>
-                  <SortTh label={t.col24h}    sortKey="priceChange24h" current={sortBy} onSort={setSortBy} />
-                  <SortTh label={t.col7d}     sortKey="priceChange7d"  current={sortBy} onSort={setSortBy} cls="text-right hidden sm:table-cell" />
-                  <th className="px-2 md:px-3 py-2.5 text-right">{t.colFr}</th>
-                  <SortTh label={t.colOi}     sortKey="openInterest"   current={sortBy} onSort={setSortBy} cls="text-right hidden md:table-cell" />
-                  <th className="px-2 md:px-3 py-2.5 text-right hidden lg:table-cell">{t.colVol}</th>
-                  {HAS_CG && <th className="px-2 md:px-3 py-2.5 text-right hidden xl:table-cell">{t.colSpot}</th>}
-                  {HAS_CG && <th className="px-2 md:px-3 py-2.5 text-right hidden xl:table-cell">{t.colFsRatio}</th>}
-                  <th className="px-2 md:px-3 py-2.5 text-right hidden md:table-cell">{t.colDays}</th>
-                  <th className="px-2 md:px-3 py-2.5 text-right hidden md:table-cell" title="BTCとの価格連動度。低いほどショートに有利">{t.colBtcCorr}</th>
-                  <th className="px-2 md:px-3 py-2.5 text-center hidden sm:table-cell">{t.colExch}</th>
+                  <th className="px-1 py-1 text-left sticky left-0 bg-white z-10 min-w-[80px]">{t.colSymbol}</th>
+                  <SortTh label={t.colScore}  sortKey="displayScore"   current={sortBy} onSort={setSortBy} cls="text-center min-w-[55px]" />
+                  <th className="px-1 py-1 text-right hidden md:table-cell min-w-[65px]">{t.colPrice}</th>
+                  <SortTh label={t.colAth}    sortKey="athDropPct"     current={sortBy} onSort={setSortBy} cls="text-right min-w-[55px]" />
+                  <th className="px-1 py-1 text-right hidden sm:table-cell min-w-[50px]">{t.colVolR}</th>
+                  <SortTh label={t.col24h}    sortKey="priceChange24h" current={sortBy} onSort={setSortBy} cls="text-right min-w-[55px]" />
+                  <SortTh label={t.col7d}     sortKey="priceChange7d"  current={sortBy} onSort={setSortBy} cls="text-right hidden sm:table-cell min-w-[55px]" />
+                  <th className="px-1 py-1 text-right min-w-[60px]">{t.colFr}</th>
+                  <SortTh label={t.colOi}     sortKey="openInterest"   current={sortBy} onSort={setSortBy} cls="text-right hidden md:table-cell min-w-[60px]" />
+                  <th className="px-1 py-1 text-right hidden lg:table-cell min-w-[60px]">{t.colVol}</th>
+                  <th className={`px-1 py-1 text-right hidden xl:table-cell min-w-[60px]${!HAS_CG ? " bg-gray-50 text-gray-400" : ""}`}>
+                    {!HAS_CG && <span className="mr-0.5">🔒</span>}{t.colSpot}
+                    <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>
+                  </th>
+                  <th className={`px-1 py-1 text-right hidden xl:table-cell min-w-[55px]${!HAS_CG ? " bg-gray-50 text-gray-400" : ""}`}>
+                    {!HAS_CG && <span className="mr-0.5">🔒</span>}{t.colFsRatio}
+                    <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>
+                  </th>
+                  <th className="px-1 py-1 text-right hidden md:table-cell min-w-[45px]">{t.colDays}</th>
+                  <th className="px-1 py-1 text-right hidden md:table-cell min-w-[55px]" title="BTCとの価格連動度。低いほどショートに有利">{t.colBtcCorr}</th>
+                  <th className="px-1 py-1 text-center hidden sm:table-cell min-w-[60px]">{t.colExch}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2574,7 +2598,7 @@ export default function ShortScanner() {
                         className={`border-b border-gray-100 cursor-pointer transition-colors ${isSelected ? "bg-blue-50 hover:bg-blue-50" : "hover:bg-gray-50"}`}>
 
                         {/* 銘柄 — sticky on mobile */}
-                        <td className="px-2 md:px-3 py-2 sticky left-0 bg-white hover:bg-gray-50">
+                        <td className="px-1 py-1 sticky left-0 bg-white hover:bg-gray-50">
                           <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-1 flex-wrap">
                               <span className="font-mono font-bold text-gray-800 text-xs md:text-sm">{base}</span>
@@ -2639,22 +2663,22 @@ export default function ShortScanner() {
                         </td>
 
                         {/* スコア */}
-                        <td className="px-2 md:px-3 py-2 text-center">
+                        <td className="px-1 py-1 text-center">
                           <span style={scoreBadgeStyle(c.displayScore)}>{c.displayScore}/{DISPLAY_MAX}</span>
                         </td>
 
                         {/* 価格 */}
-                        <td className="px-2 md:px-3 py-2 text-right font-mono text-gray-700 text-xs hidden md:table-cell">
+                        <td className="px-1 py-1 text-right font-mono text-gray-700 text-xs hidden md:table-cell">
                           {fmtPrice(c.currentPrice)}
                         </td>
 
                         {/* ATH比 */}
-                        <td className="px-2 md:px-3 py-2 text-right font-bold text-red-600 text-xs">
+                        <td className="px-1 py-1 text-right font-bold text-red-600 text-xs">
                           {c.athDropPct.toFixed(1)}%
                         </td>
 
                         {/* 出来高比 + 施策3スパイクバッジ */}
-                        <td className="px-2 md:px-3 py-2 text-right text-orange-600 text-xs hidden sm:table-cell">
+                        <td className="px-1 py-1 text-right text-orange-600 text-xs hidden sm:table-cell">
                           <div className="flex flex-col items-end gap-0.5">
                             <span>{c.volumeChangeRatio.toFixed(2)}×</span>
                             {c.volumeSpike && c.volumeSpike.direction === "pump" && (
@@ -2671,17 +2695,17 @@ export default function ShortScanner() {
                         </td>
 
                         {/* 24h */}
-                        <td className={`px-2 md:px-3 py-2 text-right text-xs font-mono font-bold ${p24>=50?"text-red-600":p24>=20?"text-orange-500":p24<=-30?"text-green-600":"text-gray-500"}`}>
+                        <td className={`px-1 py-1 text-right text-xs font-mono font-bold ${p24>=50?"text-red-600":p24>=20?"text-orange-500":p24<=-30?"text-green-600":"text-gray-500"}`}>
                           {fmtPct(p24)}
                         </td>
 
                         {/* 7d */}
-                        <td className={`px-2 md:px-3 py-2 text-right text-xs font-mono font-bold hidden sm:table-cell ${p7>=100?"text-red-700":p7>=50?"text-red-500":p7<=-30?"text-green-600":"text-gray-500"}`}>
+                        <td className={`px-1 py-1 text-right text-xs font-mono font-bold hidden sm:table-cell ${p7>=100?"text-red-700":p7>=50?"text-red-500":p7<=-30?"text-green-600":"text-gray-500"}`}>
                           {fmtPct(p7)}{p7>=100&&<span className="ml-0.5">🚀</span>}
                         </td>
 
                         {/* FR — 修正4: 負値強調 */}
-                        <td className={`px-2 md:px-3 py-2 text-right text-xs font-mono ${frPct==null?"text-gray-400":frPct<0?"bg-red-50 text-red-600 font-bold":frPct>0.01?"text-purple-600 font-bold":frPct>0?"text-purple-500":"text-gray-400"}`}
+                        <td className={`px-1 py-1 text-right text-xs font-mono ${frPct==null?"text-gray-400":frPct<0?"bg-red-50 text-red-600 font-bold":frPct>0.01?"text-purple-600 font-bold":frPct>0?"text-purple-500":"text-gray-400"}`}
                           title={frPct != null && frPct < 0 ? t.frNegativeWarn : undefined}>
                           {frPct!=null?`${frPct>=0?"+":""}${frPct.toFixed(4)}%`:"—"}
                           {c.frBonus>0&&<span className="ml-0.5 text-violet-500">★</span>}
@@ -2689,25 +2713,30 @@ export default function ShortScanner() {
                         </td>
 
                         {/* OI */}
-                        <td className={`px-2 md:px-3 py-2 text-right text-xs font-mono hidden md:table-cell ${c.openInterest<10_000?"text-red-600 font-bold":c.openInterest<50_000?"text-yellow-600":c.oiRatio>3?"text-red-600 font-bold":c.oiRatio>1.5?"text-orange-500":"text-gray-600"}`}>
+                        <td className={`px-1 py-1 text-right text-xs font-mono hidden md:table-cell ${c.openInterest<10_000?"text-red-600 font-bold":c.openInterest<50_000?"text-yellow-600":c.oiRatio>3?"text-red-600 font-bold":c.oiRatio>1.5?"text-orange-500":"text-gray-600"}`}>
                           {fmtVol(c.openInterest)}<span className="text-gray-400 ml-0.5">{c.oiRatio.toFixed(1)}×</span>
                         </td>
 
                         {/* 出来高 */}
-                        <td className="px-2 md:px-3 py-2 text-right text-gray-600 text-xs hidden lg:table-cell">
+                        <td className="px-1 py-1 text-right text-gray-600 text-xs hidden lg:table-cell">
                           {fmtVol(c.volume24h)}
                         </td>
 
                         {/* CG spot vol */}
-                        {HAS_CG && <td className="px-2 md:px-3 py-2 text-right text-xs text-gray-600 hidden xl:table-cell">
-                          {c.cgData?.spotVolume ? fmtVol(c.cgData.spotVolume) : <span className="text-gray-300">—</span>}
-                        </td>}
+                        <td className={`px-1 py-1 text-right text-xs hidden xl:table-cell${!HAS_CG ? " bg-gray-50 text-gray-300" : " text-gray-600"}`}>
+                          {HAS_CG
+                            ? (c.cgData?.spotVolume ? fmtVol(c.cgData.spotVolume) : <span className="text-gray-300">—</span>)
+                            : <span className="text-gray-300">🔒</span>}
+                        </td>
 
                         {/* CG F/S ratio */}
-                        {HAS_CG && (() => {
+                        {(() => {
+                          if (!HAS_CG) return (
+                            <td className="px-1 py-1 text-right text-xs font-mono hidden xl:table-cell bg-gray-50 text-gray-300"><span className="text-gray-300">🔒</span></td>
+                          );
                           const sp = c.cgData?.spotVolume;
                           const ratio = (sp && sp >= 1000) ? (c.volume24h / sp) * 100 : null;
-                          return <td className={`px-2 md:px-3 py-2 text-right text-xs font-mono hidden xl:table-cell ${ratio && ratio>500?"text-red-600 font-bold":ratio && ratio>200?"text-orange-500":"text-gray-500"}`}>
+                          return <td className={`px-1 py-1 text-right text-xs font-mono hidden xl:table-cell ${ratio && ratio>500?"text-red-600 font-bold":ratio && ratio>200?"text-orange-500":"text-gray-500"}`}>
                             {ratio == null
                               ? <span className="text-gray-300">—</span>
                               : ratio > 9999
@@ -2717,12 +2746,12 @@ export default function ShortScanner() {
                         })()}
 
                         {/* 上場 */}
-                        <td className="px-2 md:px-3 py-2 text-right text-gray-500 text-xs hidden md:table-cell">
+                        <td className="px-1 py-1 text-right text-gray-500 text-xs hidden md:table-cell">
                           {c.listedDaysAgo}d
                         </td>
 
                         {/* BTC相関 */}
-                        <td className="px-2 md:px-3 py-2 text-right text-xs font-mono hidden md:table-cell"
+                        <td className="px-1 py-1 text-right text-xs font-mono hidden md:table-cell"
                           title="BTCとの価格連動度。低いほどショートに有利">
                           {(() => {
                             const corr = c.btcCorrelation;
@@ -2733,7 +2762,7 @@ export default function ShortScanner() {
                         </td>
 
                         {/* 取引所 */}
-                        <td className="px-2 md:px-3 py-2 text-center hidden sm:table-cell">
+                        <td className="px-1 py-1 text-center hidden sm:table-cell">
                           <div className="flex flex-col items-center gap-0.5">
                             <ExchangeBadges c={c} t={t} />
                             <a href={mexcUrl(base)} target="_blank" rel="noopener noreferrer"

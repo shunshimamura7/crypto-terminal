@@ -11,6 +11,7 @@ export interface BitgetShortScoreBreakdown {
   trendScore:      number; // 0-6: Multi-TF downtrend (2pt per DOWN TF)
   pumpScore:       number; // 0-4: 7d pump (dead-cat setup)
   btcNonCorrScore: number; // 0-2: Independence from BTC movement
+  rsiScore:        number; // 0-2: RSI overbought (≥70→2, ≥60→1)
 }
 
 export interface BitgetTradeSetup {
@@ -46,6 +47,7 @@ export interface BitgetShortCandidate {
   tradeSetup:        BitgetTradeSetup | null;
   frWeeklyCost:      number;
   recommendedLev:    number;
+  rsi:               number | null; // RSI14 raw value for display
 }
 
 // ─── EMA helpers ─────────────────────────────────────────────────────────────
@@ -154,6 +156,23 @@ export function calcBtcNonCorrScore(btcCorr: number): number {
   return 0;
 }
 
+export function calcBitgetRsiScore(closes: number[], period = 14): number {
+  if (closes.length < period + 1) return 0;
+  const recent = closes.slice(-(period + 1));
+  let gains = 0, losses = 0;
+  for (let i = 1; i < recent.length; i++) {
+    const diff = recent[i] - recent[i - 1];
+    if (diff >= 0) gains += diff; else losses -= diff;
+  }
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 2;
+  const rs = (gains / period) / avgLoss;
+  const rsi = 100 - 100 / (1 + rs);
+  if (rsi >= 70) return 2;
+  if (rsi >= 60) return 1;
+  return 0;
+}
+
 // Weekly FR cost for shorts: negative = earning (positive FR), positive = paying (negative FR)
 // Bitget settles 3x/day → 21 settlements/week
 export function calcFrWeeklyCost(fr: number | null): number {
@@ -190,7 +209,7 @@ export function calcBitgetTradeSetup(
   return { entry: currentPrice, entryZone, sl, tp1, tp2, rrRatio, rrWarning: rrRatio < 1.5 };
 }
 
-// ─── Composite score (30pt max) ───────────────────────────────────────────────
+// ─── Composite score (32pt max) ───────────────────────────────────────────────
 
 export function calcBitgetShortScore(
   athDropPct:        number,
@@ -202,6 +221,7 @@ export function calcBitgetShortScore(
   d1:                TrendDir,
   priceChange7d:     number,
   btcCorr:           number = 0.5,
+  closes4h:          number[] = [],
 ): { score: number; breakdown: BitgetShortScoreBreakdown; trendAlignment: number } {
   const dropScore       = calcDropScore(athDropPct);
   const frScore         = calcFrScore(fr);
@@ -210,10 +230,11 @@ export function calcBitgetShortScore(
   const { score: trendScore, alignment: trendAlignment } = calcTrendScore(h1, h4, d1);
   const pumpScore       = calcPumpScore(priceChange7d);
   const btcNonCorrScore = calcBtcNonCorrScore(btcCorr);
+  const rsiScore        = calcBitgetRsiScore(closes4h);
 
   return {
-    score: dropScore + frScore + volumeDryScore + oiScore + trendScore + pumpScore + btcNonCorrScore,
-    breakdown: { dropScore, frScore, volumeDryScore, oiScore, trendScore, pumpScore, btcNonCorrScore },
+    score: dropScore + frScore + volumeDryScore + oiScore + trendScore + pumpScore + btcNonCorrScore + rsiScore,
+    breakdown: { dropScore, frScore, volumeDryScore, oiScore, trendScore, pumpScore, btcNonCorrScore, rsiScore },
     trendAlignment,
   };
 }

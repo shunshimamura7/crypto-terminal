@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { BitgetShortCandidate, BitgetShortScoreBreakdown, TrendDir } from "@/app/lib/bitgetScorer";
 import type { BitgetBtRecord, BitgetBtStats } from "@/app/lib/bitgetBacktest";
 import { loadRecords, recordCandidates, settleRecords, resetRecords, exportCsv, calcStats } from "@/app/lib/bitgetBacktest";
@@ -77,6 +77,7 @@ function BreakdownGrid({ bd }: { bd: BitgetShortScoreBreakdown }) {
     { label: "トレンド",   value: bd.trendScore,        max: 6 },
     { label: "急騰度",     value: bd.pumpScore,         max: 4 },
     { label: "BTC非連動",  value: bd.btcNonCorrScore,   max: 2 },
+    { label: "RSI過熱",    value: bd.rsiScore,          max: 2 },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
@@ -261,8 +262,8 @@ function CandidateRow({ c, rank }: { c: BitgetShortCandidate; rank: number }) {
         style={rowStyle}
         onClick={() => setOpen(o => !o)}
       >
-        <td className="px-2 py-2 text-xs text-gray-400 w-7 shrink-0">{rank}</td>
-        <td className="px-2 py-2 whitespace-nowrap">
+        <td className="px-1 py-1 text-xs text-gray-400 w-7 shrink-0">{rank}</td>
+        <td className="px-1 py-1 whitespace-nowrap">
           <a
             href={bitgetUrl(c.symbol)}
             target="_blank"
@@ -274,56 +275,63 @@ function CandidateRow({ c, rank }: { c: BitgetShortCandidate; rank: number }) {
             {c.symbol.replace("USDT", "")}
           </a>
         </td>
-        <td className="px-2 py-2 text-right whitespace-nowrap">
+        <td className="px-1 py-1 text-right whitespace-nowrap">
           <span
             className={`font-bold ${c.shortScore >= 18 ? "text-base font-black" : "text-sm"}`}
             style={{ color: col }}
           >{c.shortScore}</span>
           <span className="text-xs text-gray-400">/30</span>
         </td>
-        <td className="px-2 py-2 text-right text-xs whitespace-nowrap">{fmtPrice(c.currentPrice)}</td>
-        <td className={`px-2 py-2 text-right text-xs whitespace-nowrap font-semibold ${c.priceChange24h >= 0 ? "text-green-600" : "text-red-500"}`}>
+        <td className="px-1 py-1 text-right text-xs whitespace-nowrap">{fmtPrice(c.currentPrice)}</td>
+        <td className={`px-1 py-1 text-right text-xs whitespace-nowrap font-semibold ${c.priceChange24h >= 0 ? "text-green-600" : "text-red-500"}`}>
           {fmtPct(c.priceChange24h)}
         </td>
-        <td className={`px-2 py-2 text-right text-xs whitespace-nowrap font-semibold ${c.priceChange7d >= 0 ? "text-green-600" : "text-red-500"}`}>
+        <td className={`px-1 py-1 text-right text-xs whitespace-nowrap font-semibold ${c.priceChange7d >= 0 ? "text-green-600" : "text-red-500"}`}>
           {fmtPct(c.priceChange7d)}
         </td>
-        <td className="px-2 py-2 text-right text-xs whitespace-nowrap text-red-500 font-semibold">
+        <td className="px-1 py-1 text-right text-xs whitespace-nowrap text-red-500 font-semibold">
           {c.athDropPct.toFixed(1)}%
         </td>
-        <td className="px-2 py-2 text-right text-xs whitespace-nowrap" style={{ color: frColor(c.fundingRate) }}>
+        <td className="px-1 py-1 text-right text-xs whitespace-nowrap" style={{ color: frColor(c.fundingRate) }}>
           {c.fundingRate !== null ? (c.fundingRate * 100).toFixed(4) + "%" : "—"}
         </td>
-        <td className={`px-2 py-2 text-right text-xs whitespace-nowrap font-semibold ${weeklyAmount >= 0 ? "text-green-600" : "text-red-500"}`}>
+        <td className={`px-1 py-1 text-right text-xs whitespace-nowrap font-semibold ${weeklyAmount >= 0 ? "text-green-600" : "text-red-500"}`}>
           {weeklyAmount >= 0 ? "+" : ""}{weeklyAmount.toFixed(2)}%
         </td>
-        <td className="px-2 py-2 text-right text-xs whitespace-nowrap text-gray-500">
+        <td className="px-1 py-1 text-right text-xs whitespace-nowrap text-gray-500">
           {c.oiRatio.toFixed(1)}x
         </td>
-        <td className="px-2 py-2 text-right text-xs whitespace-nowrap">
+        <td className="px-1 py-1 text-right text-xs whitespace-nowrap">
           {c.longRatio !== null ? (
             <span className={`font-semibold ${c.longRatio >= 0.65 ? "text-red-600" : "text-gray-600"}`}>
               {Math.round(c.longRatio * 100)}/{Math.round((1 - c.longRatio) * 100)}
             </span>
           ) : <span className="text-gray-400">—</span>}
         </td>
-        <td className="px-2 py-2 text-right text-xs whitespace-nowrap">
+        <td className="px-1 py-1 text-right text-xs whitespace-nowrap">
           <span className="px-1.5 py-0.5 rounded text-xs font-bold" style={{ background: `${TEAL}20`, color: TEAL }}>
             {c.recommendedLev}x
           </span>
         </td>
-        <td className="px-2 py-2 text-right text-xs whitespace-nowrap">
+        <td className="px-1 py-1 text-right text-xs whitespace-nowrap">
           <div className="flex justify-end gap-0.5">
             {([c.trendH1, c.trendH4, c.trendD1] as TrendDir[]).map((t, i) => (
               <span key={i}>{t === "DOWN" ? "🔴" : t === "UP" ? "🟢" : "⚪"}</span>
             ))}
           </div>
         </td>
-        <td className="px-2 py-2 text-center text-xs text-gray-400">{open ? "▲" : "▼"}</td>
+        <td className="px-1 py-1 text-right text-xs whitespace-nowrap">
+          {c.rsi !== null && c.rsi !== undefined ? (
+            <span className={`font-mono font-semibold ${c.rsi >= 70 ? "text-red-600" : c.rsi >= 60 ? "text-orange-500" : "text-gray-400"}`}>
+              {c.rsi.toFixed(1)}
+            </span>
+          ) : <span className="text-gray-300">—</span>}
+        </td>
+        <td className="px-1 py-1 text-center text-xs text-gray-400">{open ? "▲" : "▼"}</td>
       </tr>
       {open && (
         <tr>
-          <td colSpan={14} className="p-0">
+          <td colSpan={15} className="p-0">
             <ExpandedRow c={c} />
           </td>
         </tr>
@@ -435,6 +443,11 @@ export default function BitgetShortFinder() {
   const [error,       setError]       = useState<string | null>(null);
   const [btRecords,   setBtRecords]   = useState<BitgetBtRecord[]>([]);
 
+  // Scroll refs for top/bottom dual scrollbar
+  const tableScrollRef    = useRef<HTMLDivElement | null>(null);
+  const topScrollRef      = useRef<HTMLDivElement | null>(null);
+  const topScrollInnerRef = useRef<HTMLDivElement | null>(null);
+
   // Load backtest records on mount
   useEffect(() => { setBtRecords(loadRecords()); }, []);
 
@@ -491,6 +504,12 @@ export default function BitgetShortFinder() {
       return true;
     });
   }, [candidates, minScore, minDrop, maxDrop, minFr, trendFilter]);
+
+  useEffect(() => {
+    if (tableScrollRef.current && topScrollInnerRef.current) {
+      topScrollInnerRef.current.style.width = tableScrollRef.current.scrollWidth + "px";
+    }
+  }, [filtered]);
 
   return (
     <div className="space-y-4">
@@ -594,24 +613,41 @@ export default function BitgetShortFinder() {
             <span className="text-xs text-gray-500">{filtered.length} 件表示（行をクリックで詳細展開）</span>
             <span className="text-xs text-gray-400">← 横スクロールで全列表示</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: "860px" }}>
+          <div
+            ref={topScrollRef}
+            className="overflow-x-auto overflow-y-hidden border-b border-gray-100"
+            style={{ height: 12 }}
+            onScroll={e => {
+              if (tableScrollRef.current) tableScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+            }}
+          >
+            <div ref={topScrollInnerRef} style={{ height: 1 }} />
+          </div>
+          <div
+            ref={tableScrollRef}
+            className=""
+            onScroll={e => {
+              if (topScrollRef.current) topScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+            }}
+          >
+            <table className="w-full table-fixed text-xs">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
-                  <th className="px-2 py-2 text-left w-7">#</th>
-                  <th className="px-2 py-2 text-left">銘柄</th>
-                  <th className="px-2 py-2 text-right">スコア</th>
-                  <th className="px-2 py-2 text-right">価格</th>
-                  <th className="px-2 py-2 text-right">24h</th>
-                  <th className="px-2 py-2 text-right">7d</th>
-                  <th className="px-2 py-2 text-right">ATH比</th>
-                  <th className="px-2 py-2 text-right">FR</th>
-                  <th className="px-2 py-2 text-right">FR/週</th>
-                  <th className="px-2 py-2 text-right">OI</th>
-                  <th className="px-2 py-2 text-right">L/S</th>
-                  <th className="px-2 py-2 text-right">レバ</th>
-                  <th className="px-2 py-2 text-center">TF</th>
-                  <th className="px-2 py-2 w-6"></th>
+                  <th className="px-1 py-1 text-left w-5">#</th>
+                  <th className="px-1 py-1 text-left min-w-[80px]">銘柄</th>
+                  <th className="px-1 py-1 text-right min-w-[55px]">スコア</th>
+                  <th className="px-1 py-1 text-right min-w-[65px]">価格</th>
+                  <th className="px-1 py-1 text-right min-w-[55px]">24h</th>
+                  <th className="px-1 py-1 text-right min-w-[55px]">7d</th>
+                  <th className="px-1 py-1 text-right min-w-[55px]">ATH比</th>
+                  <th className="px-1 py-1 text-right min-w-[60px]">FR</th>
+                  <th className="px-1 py-1 text-right min-w-[55px]">FR/週</th>
+                  <th className="px-1 py-1 text-right min-w-[50px]">OI</th>
+                  <th className="px-1 py-1 text-right min-w-[50px]">L/S</th>
+                  <th className="px-1 py-1 text-right min-w-[42px]">レバ</th>
+                  <th className="px-1 py-1 text-center min-w-[50px]">TF</th>
+                  <th className="px-1 py-1 text-right min-w-[42px]">RSI</th>
+                  <th className="px-1 py-1 w-5"></th>
                 </tr>
               </thead>
               <tbody>

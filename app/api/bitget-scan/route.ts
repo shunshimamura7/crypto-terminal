@@ -8,6 +8,7 @@ import {
   calcTrendDir,
 } from "@/app/lib/bitgetScorer";
 import type { BitgetShortCandidate, TrendDir } from "@/app/lib/bitgetScorer";
+import { calcRSI } from "@/app/lib/shortScorer";
 
 export const runtime     = "nodejs";
 export const maxDuration = 120;
@@ -151,8 +152,10 @@ async function analyzeCandidate(meta: CandidateMeta, btcCloses: number[]): Promi
 
   const { score, breakdown, trendAlignment } = calcBitgetShortScore(
     athDropPct, fr, volumeChangeRatio, oiRatio, trendH1, trendH4, trendD1, priceChange7d, btcCorr,
+    kline4h.closes,
   );
 
+  const rsi            = calcRSI(kline4h.closes);
   const tradeSetup     = calcBitgetTradeSetup(price, kline4h.highs, kline4h.lows);
   const frWeeklyCost   = calcFrWeeklyCost(fr);
   const recommendedLev = calcRecommendedLev(athDropPct, trendAlignment, fr);
@@ -167,6 +170,7 @@ async function analyzeCandidate(meta: CandidateMeta, btcCloses: number[]): Promi
     trendH1, trendH4, trendD1, trendAlignment,
     shortScore: score, breakdown,
     tradeSetup, frWeeklyCost, recommendedLev,
+    rsi,
   };
 }
 

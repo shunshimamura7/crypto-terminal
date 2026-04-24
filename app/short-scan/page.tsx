@@ -14,6 +14,7 @@ const SCORING_ITEMS = [
   { label: "7d急騰",    pts: "2pt", color: "#f43f5e" },
   { label: "BTC非連動", pts: "1pt", color: "#8b5cf6" },
   { label: "パターン",  pts: "1pt", color: "#0ea5e9" },
+  { label: "RSI過熱",  pts: "2pt", color: "#f59e0b" },
 ];
 
 function ScoringBar() {
@@ -35,7 +36,7 @@ function ScoringBar() {
                 {i < SCORING_ITEMS.length - 1 && <span className="text-gray-300 mx-0.5">+</span>}
               </span>
             ))}
-            <span className="text-gray-400 ml-1">= 最大 22pt</span>
+            <span className="text-gray-400 ml-1">= 最大 24pt</span>
           </div>
           <p className="text-[10px] text-gray-400 mt-1">※取引所独占・FR連続はクライアントサイド加算。CoinGecko連携時は最大25pt。</p>
         </div>
@@ -87,7 +88,7 @@ export default function ShortScanPage() {
               {[
                 { value: "全銘柄", sub: "MEXC先物を網羅", color: "text-indigo-600" },
                 { value: "TOP 20", sub: "スコア順で表示", color: "text-red-600" },
-                { value: "22pt", sub: "独自スコア", color: "text-orange-500" },
+                { value: "24pt", sub: "独自スコア", color: "text-orange-500" },
                 { value: "SL/TP", sub: "Klineから自動算出", color: "text-green-600" },
               ].map(s => (
                 <div key={s.value} className="bg-gray-50 rounded-xl p-2.5 border border-gray-200 text-center">

@@ -12,6 +12,7 @@ export interface ShortScoreBreakdown {
   pumpScore: number;       // 0-2 (7d急騰度)
   btcCorrScore: number;    // 0-1 (BTC非連動ボーナス)
   patternScore: number;    // 0-1 (チャートパターン検知: 施策4)
+  rsiScore: number;        // 0-2 (RSI過熱度)
 }
 
 // ─── Chart Pattern (施策4) ────────────────────────────────────────────────────
@@ -395,6 +396,33 @@ export function calcMultiTFScore(closes1h: number[], closes4h: number[], closes1
   };
 }
 
+// RSI計算（period=14）
+export function calcRSI(closes: number[], period = 14): number | null {
+  if (closes.length < period + 1) return null;
+  const recent = closes.slice(-(period + 1));
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i < recent.length; i++) {
+    const diff = recent[i] - recent[i - 1];
+    if (diff >= 0) gains += diff;
+    else losses -= diff;
+  }
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - 100 / (1 + rs);
+}
+
+// RSIスコア（ショート視点: 過熱=高スコア）
+export function calcRSIScore(closes4h: number[]): number {
+  const rsi = calcRSI(closes4h);
+  if (rsi === null) return 0;
+  if (rsi >= 70) return 2;
+  if (rsi >= 60) return 1;
+  return 0;
+}
+
 // exclusivityScore (0-2): 取引所独占度 (施策2, client-side)
 export function calcExclusivityScore(listedOnBinance: boolean, listedOnBybit: boolean): number {
   if (!listedOnBinance && !listedOnBybit) return 2;
@@ -446,9 +474,11 @@ export function calcShortScore(
   const chartPattern = detectChartPattern(closes4h, highs4h, lows4h, priceChange24h, athDropPct);
   const patternScore  = calcPatternScore(chartPattern);
 
+  const rsiScore = calcRSIScore(closes4h);
+
   return {
-    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + trendScore + pumpScore + btcCorrScore + patternScore,
-    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, trendScore, pumpScore, btcCorrScore, patternScore },
+    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + trendScore + pumpScore + btcCorrScore + patternScore + rsiScore,
+    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore },
     oiRatio,
     trendDirection,
     trendMultiTF,
