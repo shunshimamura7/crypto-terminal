@@ -78,22 +78,28 @@ export async function GET() {
   const gold  = resolveY(goldR);
   const us10y = resolveY(us10yR);
 
+  const btcChange = parseFloat(btcT?.riseFallRate || "0") * 100;
+  const ethChange = parseFloat(ethT?.riseFallRate || "0") * 100;
+
   return NextResponse.json({
     // existing fields (backward-compatible)
-    btcPrice:     parseFloat(btcT?.lastPrice     || "0"),
-    btcChange24h: parseFloat(btcT?.riseFallRate  || "0") * 100,
-    ethPrice:     parseFloat(ethT?.lastPrice     || "0"),
-    ethChange24h: parseFloat(ethT?.riseFallRate  || "0") * 100,
+    btcPrice:     parseFloat(btcT?.lastPrice || "0"),
+    btcChange24h: btcChange,
+    btcChange,
+    ethPrice:     parseFloat(ethT?.lastPrice || "0"),
+    ethChange24h: ethChange,
+    ethChange,
     fng,
     // macro fields
     btcDominance,
-    us100:       us100.price,
-    us100Change: us100.changePercent,
-    dxy:         dxy.price,
-    dxyChange:   dxy.changePercent,
-    gold:        gold.price,
-    goldChange:  gold.changePercent,
-    us10y:       us10y.price,
-    us10yValue:  us10y.price,  // alias for clarity
+    us100:        us100.price,
+    us100Change:  us100.changePercent,
+    dxy:          dxy.price,
+    dxyChange:    dxy.changePercent,
+    gold:         gold.price,
+    goldChange:   gold.changePercent,
+    us10y:        us10y.price,
+    us10yValue:   us10y.price,
+    us10yChange:  us10y.changePercent,
   });
 }

@@ -1,6 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
 
+// ─── Change % helper ─────────────────────────────────────────────────────────
+
+function fmtChange(v: number | null | undefined): { text: string; color: string } | null {
+  if (v == null) return null;
+  const sign = v >= 0 ? "+" : "";
+  return {
+    text:  `${sign}${v.toFixed(2)}%`,
+    color: v >= 0 ? "text-green-500" : "text-red-500",
+  };
+}
+
 // ─── F&G helpers ─────────────────────────────────────────────────────────────
 
 function getFgColor(v: number): string {
@@ -72,7 +83,9 @@ function macroScoreInfo(score: number): { label: string; color: string } {
 
 interface MarketEnvData {
   btcPrice:     number;
+  btcChange:    number | null;
   ethPrice:     number;
+  ethChange:    number | null;
   fng:          { value: number; valueText: string } | null;
   btcDominance: number | null;
   us100:        number | null;
@@ -82,6 +95,7 @@ interface MarketEnvData {
   gold:         number | null;
   goldChange:   number | null;
   us10y:        number | null;
+  us10yChange:  number | null;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -101,45 +115,53 @@ export default function MarketTicker() {
 
   const grid = [
     {
-      label: "BTC",
-      value: d?.btcPrice    ? `$${Math.round(d.btcPrice).toLocaleString()}`    : "—",
-      color: "text-orange-500",
+      label:  "BTC",
+      value:  d?.btcPrice    ? `$${Math.round(d.btcPrice).toLocaleString()}`   : "—",
+      color:  "text-orange-500",
+      change: d?.btcChange   ?? null,
     },
     {
-      label: "ETH",
-      value: d?.ethPrice    ? `$${Math.round(d.ethPrice).toLocaleString()}`    : "—",
-      color: "text-blue-500",
+      label:  "ETH",
+      value:  d?.ethPrice    ? `$${Math.round(d.ethPrice).toLocaleString()}`   : "—",
+      color:  "text-blue-500",
+      change: d?.ethChange   ?? null,
     },
     {
-      label: "BTC.D",
-      value: d?.btcDominance != null ? `${d.btcDominance.toFixed(1)}%`         : "—",
-      color: "text-yellow-600",
+      label:  "BTC.D",
+      value:  d?.btcDominance != null ? `${d.btcDominance.toFixed(1)}%`        : "—",
+      color:  "text-yellow-600",
+      change: null,
     },
     {
-      label: "US100",
-      value: d?.us100  != null ? Math.round(d.us100).toLocaleString()          : "—",
-      color: "text-indigo-500",
+      label:  "US100",
+      value:  d?.us100  != null ? Math.round(d.us100).toLocaleString()         : "—",
+      color:  "text-indigo-500",
+      change: d?.us100Change ?? null,
     },
     {
-      label: "DXY",
-      value: d?.dxy    != null ? d.dxy.toFixed(2)                              : "—",
-      color: "text-gray-600",
+      label:  "DXY",
+      value:  d?.dxy    != null ? d.dxy.toFixed(2)                             : "—",
+      color:  "text-gray-600",
+      change: d?.dxyChange   ?? null,
     },
     {
-      label: "Gold",
-      value: d?.gold   != null ? `$${Math.round(d.gold).toLocaleString()}`     : "—",
-      color: "text-yellow-500",
+      label:  "Gold",
+      value:  d?.gold   != null ? `$${Math.round(d.gold).toLocaleString()}`    : "—",
+      color:  "text-yellow-500",
+      change: d?.goldChange  ?? null,
     },
     {
-      label: "米10年債",
-      value: d?.us10y  != null ? `${d.us10y.toFixed(2)}%`                      : "—",
-      color: "text-rose-500",
+      label:  "米10年債",
+      value:  d?.us10y  != null ? `${d.us10y.toFixed(2)}%`                     : "—",
+      color:  "text-rose-500",
+      change: d?.us10yChange ?? null,
     },
     {
-      label: "F&G",
-      value: fgVal != null ? `${getFgEmoji(fgVal)} ${fgVal}`                   : "—",
-      sub:   fgLabel ?? undefined,
-      color: fgVal != null ? getFgColor(fgVal) : "text-gray-400",
+      label:  "F&G",
+      value:  fgVal != null ? `${getFgEmoji(fgVal)} ${fgVal}`                  : "—",
+      sub:    fgLabel ?? undefined,
+      color:  fgVal != null ? getFgColor(fgVal) : "text-gray-400",
+      change: null,
     },
   ];
 
@@ -151,17 +173,23 @@ export default function MarketTicker() {
       <div className="flex">
         {/* 8-column data grid */}
         <div className="flex-1 grid grid-cols-8 divide-x divide-gray-100">
-          {grid.map(({ label, value, sub, color }) => (
-            <div key={label} className="flex flex-col items-center justify-center py-4 px-2">
-              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide leading-tight mb-0.5">
-                {label}
-              </span>
-              <span className={`text-xl font-bold leading-tight ${color}`}>{value}</span>
-              {sub && (
-                <span className="text-[10px] text-gray-400 truncate max-w-full leading-tight mt-0.5">{sub}</span>
-              )}
-            </div>
-          ))}
+          {grid.map(({ label, value, sub, color, change }) => {
+            const chg = fmtChange(change);
+            return (
+              <div key={label} className="flex flex-col items-center justify-center py-4 px-2">
+                <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide leading-tight mb-0.5">
+                  {label}
+                </span>
+                <span className={`text-xl font-bold leading-tight ${color}`}>{value}</span>
+                {chg && (
+                  <span className={`text-xs font-semibold leading-tight mt-0.5 ${chg.color}`}>{chg.text}</span>
+                )}
+                {sub && (
+                  <span className="text-[10px] text-gray-400 truncate max-w-full leading-tight mt-0.5">{sub}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* BTCマクロスコア */}
