@@ -19,6 +19,7 @@ import RankAlert from "./RankAlert";
 import ShortScanner from "./ShortScanner";
 import BitgetShortFinder from "./BitgetShortFinder";
 import HolderAnalysis from "./HolderAnalysis";
+import TechnicalAnalysis from "./TechnicalAnalysis";
 
 // ─────────────────────────────────────────────
 // Types
@@ -589,7 +590,7 @@ function SkeletonCard({ lines = 4 }: { lines?: number }) {
 // ─────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────
-type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan" | "bitgetshort" | "holders";
+type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan" | "bitgetshort" | "holders" | "technical";
 interface TabEntry { id: string; label: string; href?: string }
 const TAB_CONFIG: TabEntry[] = [
   { id: "chat",        label: "💬 個別分析" },
@@ -601,6 +602,7 @@ const TAB_CONFIG: TabEntry[] = [
   { id: "shortscan",   label: "🎯 Short Scanner" },
   { id: "bitgetshort", label: "⚡ Bitget Short" },
   { id: "holders",     label: "👥 ホルダー分析" },
+  { id: "technical",   label: "📐 テクニカル分析" },
   { id: "trades",      label: "📊 トレード履歴", href: "/trades" },
 ];
 
@@ -897,6 +899,7 @@ export default function CryptoSearch() {
         {activeTab === "shortscan"   && <ShortScanner />}
         {activeTab === "bitgetshort" && <BitgetShortFinder />}
         {activeTab === "holders"     && <HolderAnalysis />}
+        {activeTab === "technical"   && <TechnicalAnalysis />}
 
         {activeTab === "chat" && <>
           {/* Search */}
