@@ -827,8 +827,13 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
         })()}
 
         {/* DEX流動性 (GeckoTerminal) */}
-        {c.dex && (() => {
-          const dex = c.dex!;
+        {(() => {
+          if (!c.dex) return (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <span className="text-xs text-gray-400">💧 DEXデータなし</span>
+            </div>
+          );
+          const dex = c.dex;
           const lowLMC = dex.liquidityMcRatio !== null && dex.liquidityMcRatio < 5;
           return (
             <div className="mt-2 pt-2 border-t border-gray-200">

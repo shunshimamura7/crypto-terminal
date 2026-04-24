@@ -399,9 +399,14 @@ export async function GET(req: NextRequest) {
     if (i + BATCH < klineTargets.length) await sleep(BATCH_DELAY);
   }
 
-  const sorted = results.sort((a, b) => b.shortScore - a.shortScore);
+  // Apply passesFilter for normal mode (new30 already filtered in analyzeCandidate)
+  const filteredResults = isNew30
+    ? results
+    : results.filter(c => passesFilter(c.athDropPct, c.volumeChangeRatio, c.volume24h));
 
-  // ── Stage 3: GeckoTerminal DEX liquidity for top 20 ─────────────────────────
+  const sorted = filteredResults.sort((a, b) => b.shortScore - a.shortScore);
+
+  // ── Stage 3: GeckoTerminal DEX liquidity for top 20 of filtered results ──────
   const top20ForDex = sorted.slice(0, 20);
   await Promise.allSettled(
     top20ForDex.map(async c => {
@@ -423,7 +428,7 @@ export async function GET(req: NextRequest) {
 
   // ATH下落率の分布ログ
   const dropBuckets = { lt10: 0, lt30: 0, lt50: 0, lt70: 0, ge70: 0 };
-  for (const r of results) {
+  for (const r of filteredResults) {
     const d = Math.abs(r.athDropPct);
     if (d < 10) dropBuckets.lt10++;
     else if (d < 30) dropBuckets.lt30++;
@@ -431,9 +436,9 @@ export async function GET(req: NextRequest) {
     else if (d < 70) dropBuckets.lt70++;
     else dropBuckets.ge70++;
   }
-  console.log(`[short-scan] ── Stage2 ── analyzed: ${stage2Fetched}, failed: ${stage2Failed}, passed: ${results.length}, returned: ${top100.length}`);
+  console.log(`[short-scan] ── Stage2 ── analyzed: ${stage2Fetched}, failed: ${stage2Failed}, total: ${results.length}, filtered: ${filteredResults.length}, returned: ${top100.length}`);
   console.log(`[short-scan] ATH drop dist: <10%=${dropBuckets.lt10}, 10-30%=${dropBuckets.lt30}, 30-50%=${dropBuckets.lt50}, 50-70%=${dropBuckets.lt70}, ≥70%=${dropBuckets.ge70}`);
-  console.log(`[short-scan] volRatio dist: <0.3=${results.filter(r=>r.volumeChangeRatio<0.3).length}, 0.3-0.7=${results.filter(r=>r.volumeChangeRatio>=0.3&&r.volumeChangeRatio<0.7).length}, 0.7-2=${results.filter(r=>r.volumeChangeRatio>=0.7&&r.volumeChangeRatio<2).length}, ≥2=${results.filter(r=>r.volumeChangeRatio>=2).length}`);
+  console.log(`[short-scan] volRatio dist: <0.3=${filteredResults.filter(r=>r.volumeChangeRatio<0.3).length}, 0.3-0.7=${filteredResults.filter(r=>r.volumeChangeRatio>=0.3&&r.volumeChangeRatio<0.7).length}, 0.7-2=${filteredResults.filter(r=>r.volumeChangeRatio>=0.7&&r.volumeChangeRatio<2).length}, ≥2=${filteredResults.filter(r=>r.volumeChangeRatio>=2).length}`);
 
   return NextResponse.json({
     success: true,
@@ -445,7 +450,7 @@ export async function GET(req: NextRequest) {
       stage1Passed,
       stage2Fetched,
       stage2Failed,
-      filtered: results.length,
+      filtered: filteredResults.length,
     },
   });
 }
