@@ -196,6 +196,45 @@ async function fetchFearGreedIndex(): Promise<string> {
   }
 }
 
+// ── Score fallback extraction (regex) ─────────────────────────────────────
+function extractScoreRegex(text: string, ticker: string): Record<string, unknown> | null {
+  const result: Record<string, unknown> = { ticker_ca: ticker };
+
+  // rank: 総合ランク：A / ランク: B / Rank: S / 評価：C など
+  const rankM =
+    text.match(/(?:総合ランク|ランク|rank|grade|評価)[^\w\n：:]{0,5}[：:\s]\s*\*{0,2}([SABCDEF][+-]?)\*{0,2}/i) ||
+    text.match(/\*{0,2}([SABCDEF])\s*(?:ランク|rank|grade)\*{0,2}/i) ||
+    text.match(/(?:判定|結果)[：:\s]+\s*\*{0,2}([SABCDEF])\b/i);
+  if (rankM) result.rank = rankM[1].toUpperCase();
+
+  // alpha_score_100: Alpha Score: 72/100 / アルファスコア: 72 など
+  const alphaM =
+    text.match(/(?:alpha(?:[_\s]score)?(?:[_\s]100)?|アルファ(?:[スコア]{0,4}))[^\d\n]{0,20}(\d{1,3})\s*(?:\/\s*100)?/i);
+  if (alphaM) {
+    const v = parseInt(alphaM[1]);
+    if (v >= 0 && v <= 100) result.alpha_score_100 = v;
+  }
+
+  // risk_score_100: Risk Score: 45/100 / リスクスコア: 55 など
+  const riskM =
+    text.match(/(?:risk(?:[_\s]score)?(?:[_\s]100)?|リスク(?:[スコア]{0,4}))[^\d\n]{0,20}(\d{1,3})\s*(?:\/\s*100)?/i);
+  if (riskM) {
+    const v = parseInt(riskM[1]);
+    if (v >= 0 && v <= 100) result.risk_score_100 = v;
+  }
+
+  // investment_decision
+  const decM = text.match(/(?:投資判断|投資推奨|判断|recommendation)[：:\s]+[「『]?([^」』\n]{2,15})[」』]?/i);
+  if (decM) result.investment_decision = decM[1].trim();
+
+  // stop_loss_pct
+  const slM = text.match(/(?:損切り|stop.?loss|SL)[^\d\n-]{0,10}-(\d{1,2}(?:\.\d)?)\s*%/i);
+  if (slM) result.stop_loss_pct = -Math.abs(parseFloat(slM[1]));
+
+  if (!result.rank && result.alpha_score_100 == null && result.risk_score_100 == null) return null;
+  return result;
+}
+
 // ── System prompt ──────────────────────────────────────────────────────────
 // BASE_SYSTEM_PROMPT は app/lib/systemPrompts/bell_v5.ts からインポート
 
@@ -319,6 +358,7 @@ export async function POST(request: NextRequest) {
 
         const messages: Anthropic.MessageParam[] = [{ role: "user", content: userMessage }];
         const MAX_ITERATIONS = 4;
+        let fullText = "";
 
         for (let i = 0; i < MAX_ITERATIONS; i++) {
           const msgStream = client.messages.stream({
@@ -333,6 +373,7 @@ export async function POST(request: NextRequest) {
 
           const response = await msgStream
             .on("text", (text) => {
+              fullText += text;
               try { controller.enqueue(encoder.encode(text)); } catch { /* closed */ }
             })
             .finalMessage();
@@ -344,6 +385,18 @@ export async function POST(request: NextRequest) {
             if (response.stop_reason === "pause_turn") continue;
           } else {
             break;
+          }
+        }
+
+        // Fallback: if the AI didn't output a JSON block, extract scores via regex
+        // and append a properly-formatted block that the client's extractJson will find.
+        // stripJson on the client removes it from the display automatically.
+        const hasJsonBlock = /```json[\s\S]*?```/.test(fullText);
+        if (!hasJsonBlock && fullText.trim()) {
+          const fallback = extractScoreRegex(fullText, coinName || query);
+          if (fallback) {
+            const block = `\n\`\`\`json\n${JSON.stringify(fallback, null, 2)}\n\`\`\``;
+            try { controller.enqueue(encoder.encode(block)); } catch { /* closed */ }
           }
         }
       } catch (err) {
