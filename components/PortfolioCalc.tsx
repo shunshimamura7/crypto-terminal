@@ -19,15 +19,17 @@ const RANK_COLORS: Record<string, string> = {
 const RANK_ALLOC_MID: Record<string, number> = { S: 12.5, A: 8.5, B: 4, C: 1.5 };
 const RANK_RANGES: Record<string, string> = { S: "10-15%", A: "7-10%", B: "3-5%", C: "1-2%" };
 
-const CUSTOM_KEY  = "portfolio_custom";
-const HISTORY_KEY = "portfolio_history";
-const MAX_HISTORY = 10;
+const CUSTOM_KEY       = "portfolio_custom";
+const CUSTOM_ALLOC_KEY = "portfolio_custom_alloc";
+const HISTORY_KEY      = "portfolio_history";
+const MAX_HISTORY      = 10;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface CustomItem { label: string; rank: string; }
 interface HistorySnapshot { savedAt: number; items: CustomItem[]; }
 
 interface CalcItem extends CustomItem { rawPct: number; pct: number; amount: number; }
+interface FinalItem extends CalcItem  { isCustomPct: boolean; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function shortLabel(s: string): string {
@@ -55,6 +57,21 @@ function loadHistory(): HistorySnapshot[] {
     return raw ? (JSON.parse(raw) as HistorySnapshot[]) : [];
   } catch { return []; }
 }
+function loadCustomAlloc(): Record<string, number> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CUSTOM_ALLOC_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : null;
+  } catch { return null; }
+}
+function saveCustomAlloc(alloc: Record<string, number> | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (alloc === null) localStorage.removeItem(CUSTOM_ALLOC_KEY);
+    else localStorage.setItem(CUSTOM_ALLOC_KEY, JSON.stringify(alloc));
+  } catch { /* ignore */ }
+}
+
 function pushHistoryEntry(items: CustomItem[]): HistorySnapshot[] {
   if (typeof window === "undefined") return [];
   try {
@@ -428,6 +445,8 @@ function PortfolioHistory({
 export default function PortfolioCalc({ results }: { results: PortfolioResult[] }) {
   const [totalUsd, setTotalUsd]       = useState("10000");
   const [customItems, setCustomItems] = useState<CustomItem[] | null>(null);
+  const [customAlloc, setCustomAlloc] = useState<Record<string, number> | null>(null);
+  const [editingPct, setEditingPct]   = useState<{ label: string; value: string } | null>(null);
   const [history, setHistory]         = useState<HistorySnapshot[]>([]);
   const [newLabel, setNewLabel]       = useState("");
   const [newRank, setNewRank]         = useState("B");
@@ -436,6 +455,7 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
   // SSR-safe mount load
   useEffect(() => {
     setCustomItems(loadCustom());
+    setCustomAlloc(loadCustomAlloc());
     setHistory(loadHistory());
   }, []);
 
@@ -451,7 +471,6 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
       .map(r => ({ label: shortLabel(r.input), rank: r.rank }));
     if (batchItems.length === 0) return;
 
-    // Skip if identical to most recent history entry
     const cur  = loadHistory();
     const last = cur[0];
     const same = last &&
@@ -460,26 +479,51 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
     if (!same) setHistory(pushHistoryEntry(batchItems));
   }, [results]);
 
-  // Derive items to display
+  // ── Derived state ─────────────────────────────────────────────────────────
   const batchItems: CustomItem[] = results
     .filter(r => (RANK_ALLOC[r.rank] ?? 0) > 0)
     .map(r => ({ label: shortLabel(r.input), rank: r.rank }));
 
-  const isCustomized   = customItems !== null;
-  const displayItems   = isCustomized ? customItems : batchItems;
-  const total          = parseFloat(totalUsd) || 0;
-  const allocItems     = calcAllocItems(displayItems, total);
-  const allocPct       = allocItems.reduce((s, i) => s + i.pct, 0);
-  const allocAmt       = allocItems.reduce((s, i) => s + i.amount, 0);
+  const isCustomized = customItems !== null;
+  const displayItems = isCustomized ? customItems : batchItems;
+  const total        = parseFloat(totalUsd) || 0;
 
-  // ── Mutations ────────────────────────────────────────────────────────────
+  // Rank-based base allocation
+  const rankAllocItems = calcAllocItems(displayItems, total);
+
+  // Apply custom % overrides; amount always recalculates from current total
+  const finalItems: FinalItem[] = rankAllocItems.map(item => {
+    const override = customAlloc?.[item.label];
+    const pct      = override !== undefined ? override : item.pct;
+    return { ...item, pct, amount: total * pct / 100, isCustomPct: override !== undefined };
+  });
+
+  const finalAllocPct  = finalItems.reduce((s, i) => s + i.pct, 0);
+  const finalAllocAmt  = finalItems.reduce((s, i) => s + i.amount, 0);
+  const isOverLimit    = finalAllocPct > 100.001;
+  const hasCustomAlloc = customAlloc !== null && Object.keys(customAlloc).length > 0;
+
+  // ── Item mutations ────────────────────────────────────────────────────────
   function mutate(next: CustomItem[]) {
     setCustomItems(next);
     saveCustom(next);
   }
 
-  function deleteItem(i: number)              { mutate(displayItems.filter((_, j) => j !== i)); }
-  function updateRank(i: number, rank: string){ mutate(displayItems.map((x, j) => j === i ? { ...x, rank } : x)); }
+  function deleteItem(i: number) {
+    const deleted = displayItems[i];
+    mutate(displayItems.filter((_, j) => j !== i));
+    if (customAlloc && deleted) {
+      const next = { ...customAlloc };
+      delete next[deleted.label];
+      const hasRemaining = Object.keys(next).length > 0;
+      setCustomAlloc(hasRemaining ? next : null);
+      saveCustomAlloc(hasRemaining ? next : null);
+    }
+  }
+
+  function updateRank(i: number, rank: string) {
+    mutate(displayItems.map((x, j) => j === i ? { ...x, rank } : x));
+  }
 
   function addItem() {
     const label = newLabel.trim();
@@ -491,8 +535,34 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
   function resetToBatch() {
     setCustomItems(null);
     saveCustom(null);
+    setCustomAlloc(null);
+    saveCustomAlloc(null);
+    setEditingPct(null);
   }
 
+  // ── Custom alloc mutations ────────────────────────────────────────────────
+  function startEditPct(label: string, currentPct: number) {
+    setEditingPct({ label, value: currentPct.toFixed(1) });
+  }
+
+  function commitEditPct(label: string) {
+    if (!editingPct || editingPct.label !== label) return;
+    setEditingPct(null);
+    const pct = parseFloat(editingPct.value);
+    if (isNaN(pct) || pct < 0) return;
+    const clamped = Math.min(pct, 100);
+    const next    = { ...(customAlloc ?? {}), [label]: clamped };
+    setCustomAlloc(next);
+    saveCustomAlloc(next);
+  }
+
+  function resetCustomAlloc() {
+    setCustomAlloc(null);
+    saveCustomAlloc(null);
+    setEditingPct(null);
+  }
+
+  // ── History / snapshot ────────────────────────────────────────────────────
   function saveToHistory() {
     if (displayItems.length === 0) return;
     setHistory(pushHistoryEntry(displayItems));
@@ -502,6 +572,9 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
 
   function restoreSnapshot(snap: HistorySnapshot) {
     mutate(snap.items);
+    setCustomAlloc(null);
+    saveCustomAlloc(null);
+    setEditingPct(null);
     setFlash("復元しました ✓");
     setTimeout(() => setFlash(""), 2000);
   }
@@ -509,9 +582,9 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
   function downloadCsv() {
     const rows = [
       "ランク,銘柄,配分%,金額(USD)",
-      ...allocItems.map(i => `${i.rank},${i.label},${i.pct.toFixed(1)},${i.amount.toFixed(2)}`),
-      `,,合計 ${allocPct.toFixed(1)}%,${allocAmt.toFixed(2)}`,
-      `,,未配分 ${(100 - allocPct).toFixed(1)}%,${(total - allocAmt).toFixed(2)}`,
+      ...finalItems.map(i => `${i.rank},${i.label},${i.pct.toFixed(1)},${i.amount.toFixed(2)}`),
+      `,,合計 ${finalAllocPct.toFixed(1)}%,${finalAllocAmt.toFixed(2)}`,
+      `,,未配分 ${Math.max(0, 100 - finalAllocPct).toFixed(1)}%,${Math.max(0, total - finalAllocAmt).toFixed(2)}`,
     ].join("\n");
     const blob = new Blob(["﻿" + rows], { type: "text/csv;charset=utf-8;" });
     const url  = URL.createObjectURL(blob);
@@ -522,8 +595,9 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
 
   return (
     <div>
-      {/* ── ① 推奨ポートフォリオ配分（編集可能） ────────────────────────── */}
+      {/* ── 推奨ポートフォリオ配分（編集可能） ──────────────────────────── */}
       <div className="mt-6 bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+
         {/* Header */}
         <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center gap-2 flex-wrap">
           <span>💼</span>
@@ -531,7 +605,16 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
           {isCustomized && (
             <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-semibold">カスタム編集中</span>
           )}
-          <div className="ml-auto flex items-center gap-1.5">
+          {hasCustomAlloc && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded font-semibold">配分%カスタム</span>
+          )}
+          <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
+            {hasCustomAlloc && (
+              <button onClick={resetCustomAlloc}
+                className="text-xs border border-indigo-200 rounded px-2 py-1 text-indigo-600 hover:bg-indigo-100 transition-colors">
+                配分%をリセット
+              </button>
+            )}
             {isCustomized && (
               <button onClick={resetToBatch}
                 className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600 hover:bg-gray-100 transition-colors">
@@ -546,6 +629,7 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
         </div>
 
         <div className="p-4 space-y-3">
+
           {/* Total input */}
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600 shrink-0">総投資額 (USD):</label>
@@ -565,60 +649,112 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
                 : "💼 ランクS/A/B/C の銘柄がないため配分計算できません"}
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="w-full text-sm" style={{ minWidth: "380px" }}>
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">ランク</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">銘柄</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700">配分%</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700">金額</th>
-                    <th className="px-3 py-2 w-8"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allocItems.map((item, i) => (
-                    <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2">
-                        <select value={item.rank}
-                          onChange={e => updateRank(displayItems.indexOf(item), e.target.value)}
-                          className="border border-gray-200 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:border-indigo-400 cursor-pointer">
-                          <option value="S">S</option><option value="A">A</option>
-                          <option value="B">B</option><option value="C">C</option>
-                        </select>
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-gray-800">{item.label}</td>
-                      <td className="px-3 py-2 text-right font-medium text-gray-700">{item.pct.toFixed(1)}%</td>
-                      <td className="px-3 py-2 text-right font-bold text-gray-800">
-                        ${item.amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <button onClick={() => deleteItem(displayItems.indexOf(item))}
-                          className="text-gray-400 hover:text-red-500 text-xs transition-colors" title="削除">
-                          🗑️
-                        </button>
-                      </td>
+            <>
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="w-full text-sm" style={{ minWidth: "380px" }}>
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">ランク</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">銘柄</th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700"
+                          title="クリックで直接編集">配分% ✎</th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700">金額</th>
+                      <th className="px-3 py-2 w-8"></th>
                     </tr>
-                  ))}
-                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                    <td className="px-3 py-2 text-xs text-gray-600" colSpan={2}>合計</td>
-                    <td className="px-3 py-2 text-right text-sm text-gray-700">{allocPct.toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-right text-sm text-gray-800">
-                      ${allocAmt.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                    </td>
-                    <td />
-                  </tr>
-                  <tr className="bg-gray-50">
-                    <td className="px-3 py-2 text-xs text-gray-700" colSpan={2}>未配分（現金・安全資産）</td>
-                    <td className="px-3 py-2 text-right text-xs text-gray-700">{(100 - allocPct).toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-right text-xs text-gray-700">
-                      ${(total - allocAmt).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                    </td>
-                    <td />
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {finalItems.map((item, i) => (
+                      <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+
+                        {/* Rank dropdown */}
+                        <td className="px-3 py-2">
+                          <select value={item.rank}
+                            onChange={e => updateRank(i, e.target.value)}
+                            className="border border-gray-200 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:border-indigo-400 cursor-pointer">
+                            <option value="S">S</option><option value="A">A</option>
+                            <option value="B">B</option><option value="C">C</option>
+                          </select>
+                        </td>
+
+                        {/* Label */}
+                        <td className="px-3 py-2 font-mono text-xs text-gray-800">{item.label}</td>
+
+                        {/* Editable % cell */}
+                        <td
+                          className={`px-3 py-2 text-right cursor-pointer ${
+                            editingPct?.label !== item.label ? "hover:bg-indigo-50" : ""
+                          } ${item.isCustomPct ? "text-indigo-600" : "text-gray-700"}`}
+                          onClick={() => { if (!editingPct) startEditPct(item.label, item.pct); }}
+                          title="クリックで直接編集"
+                        >
+                          {editingPct?.label === item.label ? (
+                            <input
+                              type="number" min="0" max="100" step="0.1"
+                              autoFocus
+                              value={editingPct.value}
+                              onChange={e => setEditingPct({ label: item.label, value: e.target.value })}
+                              onKeyDown={e => {
+                                if (e.key === "Enter")  commitEditPct(item.label);
+                                if (e.key === "Escape") setEditingPct(null);
+                              }}
+                              onBlur={() => commitEditPct(item.label)}
+                              className="w-16 text-right border border-indigo-300 rounded px-1 py-0.5 text-xs focus:outline-none bg-white"
+                              onClick={e => e.stopPropagation()}
+                            />
+                          ) : (
+                            <span className={`font-medium ${item.isCustomPct ? "font-bold" : ""}`}>
+                              {item.pct.toFixed(1)}%
+                              {item.isCustomPct && <span className="ml-0.5 text-[9px] opacity-60">*</span>}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Amount — always reflects current total */}
+                        <td className="px-3 py-2 text-right font-bold text-gray-800">
+                          ${item.amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                        </td>
+
+                        {/* Delete */}
+                        <td className="px-3 py-2 text-center">
+                          <button onClick={() => deleteItem(i)}
+                            className="text-gray-400 hover:text-red-500 text-xs transition-colors" title="削除">
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {/* Total row */}
+                    <tr className={`border-t-2 ${isOverLimit ? "border-red-300 bg-red-50" : "border-gray-300 bg-gray-50"} font-semibold`}>
+                      <td className="px-3 py-2 text-xs text-gray-600" colSpan={2}>合計</td>
+                      <td className={`px-3 py-2 text-right text-sm ${isOverLimit ? "text-red-600 font-black" : "text-gray-700"}`}>
+                        {finalAllocPct.toFixed(1)}%
+                        {isOverLimit && <span className="ml-1 text-[10px] font-normal">⚠️ 100%超過</span>}
+                      </td>
+                      <td className={`px-3 py-2 text-right text-sm ${isOverLimit ? "text-red-600" : "text-gray-800"}`}>
+                        ${finalAllocAmt.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                      </td>
+                      <td />
+                    </tr>
+
+                    {/* Cash row — hidden when over 100% */}
+                    {!isOverLimit && (
+                      <tr className="bg-gray-50">
+                        <td className="px-3 py-2 text-xs text-gray-600" colSpan={2}>未配分（現金・安全資産）</td>
+                        <td className="px-3 py-2 text-right text-xs text-gray-600">{(100 - finalAllocPct).toFixed(1)}%</td>
+                        <td className="px-3 py-2 text-right text-xs text-gray-600">
+                          ${(total - finalAllocAmt).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                        </td>
+                        <td />
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[10px] text-gray-400">
+                💡 配分%列をクリックして直接編集 / Enter or フォーカスアウトで確定 / Escでキャンセル
+              </p>
+            </>
           )}
 
           {/* + 銘柄を追加 */}
@@ -647,22 +783,22 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
               className="px-3 py-1.5 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               💾 現在の配分を保存
             </button>
-            {flash && <span className="text-xs text-green-600 font-semibold animate-pulse">{flash}</span>}
+            {flash && <span className="text-xs text-green-600 font-semibold">{flash}</span>}
           </div>
 
           <p className="text-[10px] text-gray-500">
-            ※S複数は15%を均等分割 / 合計100%超過時は比率を正規化 / D・E・Fは0%配分
+            ※S複数は15%を均等分割 / 合計100%超過時は赤色警告 / D・E・Fは0%配分
           </p>
         </div>
       </div>
 
-      {/* ── ② 履歴 ──────────────────────────────────────────────────────── */}
+      {/* ── 履歴 ────────────────────────────────────────────────────────── */}
       <PortfolioHistory history={history} onRestore={restoreSnapshot} />
 
-      {/* ── AI ポートフォリオ診断 ────────────────────────────────────────── */}
+      {/* ── AI ポートフォリオ診断 ──────────────────────────────────────── */}
       {results.length > 0 && <PortfolioDiagnosis results={results} />}
 
-      {/* ── 適正配分の提案（手動入力） ──────────────────────────────────── */}
+      {/* ── 適正配分の提案（手動入力） ────────────────────────────────── */}
       <ManualPortfolioCalc />
     </div>
   );
