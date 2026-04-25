@@ -54,6 +54,9 @@ async function fetchCategoryCoins(categoryId: string): Promise<Array<{
   current_price: number; market_cap: number; total_volume: number;
   price_change_percentage_24h: number; price_change_percentage_7d_in_currency: number;
   ath: number;
+  fully_diluted_valuation: number | null;
+  circulating_supply: number | null;
+  total_supply: number | null;
 }>> {
   const res = await fetchWithTimeout(
     `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=${categoryId}&order=market_cap_desc&per_page=15&page=1&sparkline=false&price_change_percentage=7d`,
@@ -104,18 +107,24 @@ export async function POST(req: NextRequest) {
       fetchCategoryCoins(categoryId),
     ]);
 
-    // Format category coins overview (top 15)
+    // Format category coins overview (top 15) with MC/FDV and Vol/MC for scoring anchors
     const coinsOverview = categoryCoins.map(c => {
       const athDrop = c.ath > 0 ? ((c.ath - c.current_price) / c.ath * 100).toFixed(0) : "N/A";
-      return `${c.symbol.toUpperCase()}(${c.name}): $${c.current_price}, MC:${fmtUsd(c.market_cap)}, Vol:${fmtUsd(c.total_volume)}, 24h:${c.price_change_percentage_24h?.toFixed(1)}%, 7d:${c.price_change_percentage_7d_in_currency?.toFixed(1)}%, ATH比:-${athDrop}%`;
+      const fdv = c.fully_diluted_valuation ?? 0;
+      const mcFdv = fdv > 0 ? (c.market_cap / fdv).toFixed(2) : "N/A";
+      const circRatio = c.total_supply && c.total_supply > 0 && c.circulating_supply
+        ? ((c.circulating_supply / c.total_supply) * 100).toFixed(0)
+        : "N/A";
+      const volMcRatio = c.market_cap > 0 ? (c.total_volume / c.market_cap).toFixed(3) : "N/A";
+      return `${c.symbol.toUpperCase()}(${c.name}): $${c.current_price}, MC:${fmtUsd(c.market_cap)}, FDV:${fmtUsd(fdv)}, MC/FDV:${mcFdv}, Vol:${fmtUsd(c.total_volume)}, Vol/MC:${volMcRatio}, 流通率:${circRatio}%, 24h:${c.price_change_percentage_24h?.toFixed(1)}%, 7d:${c.price_change_percentage_7d_in_currency?.toFixed(1)}%, ATH比:-${athDrop}%`;
     }).join("\n");
 
-    // Deep research on top 10 coins with 500ms intervals
-    const top10 = categoryCoins.slice(0, 10);
+    // Deep research on top 5 coins with 1500ms intervals to stay within CoinGecko rate limits
+    const top5 = categoryCoins.slice(0, 5);
     const deepResearch: string[] = [];
-    for (let i = 0; i < top10.length; i++) {
-      if (i > 0) await sleep(500);
-      const coin = top10[i];
+    for (let i = 0; i < top5.length; i++) {
+      if (i > 0) await sleep(1500);
+      const coin = top5[i];
       const research = await researchCoin(coin.symbol);
       deepResearch.push(`=== ${coin.symbol.toUpperCase()} ===\n${research}`);
     }

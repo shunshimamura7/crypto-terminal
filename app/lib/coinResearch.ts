@@ -13,6 +13,20 @@ async function fetchWithTimeout(url: string, timeoutMs = 5000): Promise<Response
   }
 }
 
+async function fetchWithRetry(url: string, timeoutMs = 6000, maxRetries = 2): Promise<Response | null> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetchWithTimeout(url, timeoutMs);
+    if (res && res.status === 429 && attempt < maxRetries) {
+      const wait = 1000 * Math.pow(2, attempt);
+      console.warn(`[CoinGecko] 429 rate limited, retrying in ${wait}ms (attempt ${attempt + 1})`);
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    return res;
+  }
+  return null;
+}
+
 function fmtUsd(n: number): string {
   if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
@@ -52,9 +66,10 @@ async function fetchCoinGecko(query: string): Promise<string> {
   };
 
   const tryId = async (id: string, queryKey: string): Promise<string | null> => {
-    const res = await fetchWithTimeout(
+    const res = await fetchWithRetry(
       `https://api.coingecko.com/api/v3/coins/${id}?localization=false&tickers=false&market_data=true&community_data=true&sparkline=false`,
-      6000
+      6000,
+      2
     );
     if (!res?.ok) return null;
     try {
@@ -125,7 +140,7 @@ async function fetchCoinGecko(query: string): Promise<string> {
     if (r) return r;
   }
 
-  const sr = await fetchWithTimeout(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`, 5000);
+  const sr = await fetchWithRetry(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`, 5000, 1);
   if (!sr?.ok) return `CoinGecko(${query}): データなし`;
   try {
     const sd = await sr.json();
