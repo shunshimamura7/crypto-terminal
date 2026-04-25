@@ -15,6 +15,7 @@ import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import { calculateStats } from "@/app/lib/backtestStats";
 import type { BacktestStats } from "@/app/lib/backtestStats";
 import type { BinanceFuturesData } from "@/app/types/binanceFutures";
+import { evaluateShortSignal } from "@/app/lib/coinglass";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -565,6 +566,26 @@ function ExchangeBadges({ c, t }: { c: ExtendedCandidate; t: Translations }) {
   );
 }
 
+function ShortSignalBadge({ fr }: { fr: number | null }) {
+  const signal = evaluateShortSignal(fr);
+  const styles: Record<string, string> = {
+    danger:    "bg-red-100 text-red-700 border-red-300",
+    caution:   "bg-yellow-100 text-yellow-700 border-yellow-300",
+    neutral:   "bg-gray-100 text-gray-600 border-gray-300",
+    favorable: "bg-green-100 text-green-700 border-green-300",
+    strong:    "bg-emerald-100 text-emerald-700 border-emerald-300",
+  };
+  const icons:  Record<string, string> = { danger: "🚨", caution: "⚠️", neutral: "✅", favorable: "✅", strong: "🔥" };
+  const labels: Record<string, string> = { danger: "禁止", caution: "注意", neutral: "可", favorable: "有利", strong: "強推奨" };
+  const cls   = styles[signal.level] ?? styles.neutral;
+  return (
+    <span title={signal.reason}
+      className={`text-[9px] px-1.5 py-0.5 rounded border font-bold whitespace-nowrap cursor-help ${cls}`}>
+      {icons[signal.level] ?? "✅"}{labels[signal.level] ?? "可"}
+    </span>
+  );
+}
+
 const SEV_CLS: Record<string, string> = {
   high: "bg-red-100 text-red-700 border-red-300",
   medium: "bg-yellow-100 text-yellow-700 border-yellow-300",
@@ -731,6 +752,13 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
               {c.trendMultiTF.alignment === 3 && <span className="ml-1 text-green-600 font-bold text-xs">🎯全TF一致</span>}
             </div>
           )}
+        </div>
+
+        {/* Short signal */}
+        <div className="flex items-center gap-2 mt-2 mb-1">
+          <span className="text-xs text-gray-500">ショート判定:</span>
+          <ShortSignalBadge fr={c.fundingRate} />
+          <span className="text-xs text-gray-500">{evaluateShortSignal(c.fundingRate).reason}</span>
         </div>
 
         {/* Trade Setup (施策10) */}
@@ -2736,12 +2764,17 @@ export default function ShortScanner() {
                           {fmtPct(p7)}{p7>=100&&<span className="ml-0.5">🚀</span>}
                         </td>
 
-                        {/* FR — 修正4: 負値強調 */}
+                        {/* FR — 負値強調 + ShortSignalBadge */}
                         <td className={`px-1 py-1 text-right text-xs font-mono ${frPct==null?"text-gray-400":frPct<0?"bg-red-50 text-red-600 font-bold":frPct>0.01?"text-purple-600 font-bold":frPct>0?"text-purple-500":"text-gray-400"}`}
                           title={frPct != null && frPct < 0 ? t.frNegativeWarn : undefined}>
-                          {frPct!=null?`${frPct>=0?"+":""}${frPct.toFixed(4)}%`:"—"}
-                          {c.frBonus>0&&<span className="ml-0.5 text-violet-500">★</span>}
-                          {frPct!=null&&frPct<0&&<span className="ml-0.5">⚡</span>}
+                          <div className="flex items-center justify-end gap-1 flex-wrap">
+                            <span>
+                              {frPct!=null?`${frPct>=0?"+":""}${frPct.toFixed(4)}%`:"—"}
+                              {c.frBonus>0&&<span className="ml-0.5 text-violet-500">★</span>}
+                              {frPct!=null&&frPct<0&&<span className="ml-0.5">⚡</span>}
+                            </span>
+                            <span className="hidden sm:inline"><ShortSignalBadge fr={c.fundingRate} /></span>
+                          </div>
                         </td>
 
                         {/* OI */}
