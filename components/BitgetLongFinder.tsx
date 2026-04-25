@@ -472,7 +472,7 @@ export default function BitgetLongFinder() {
 
       {/* Table */}
       {!scanning && filtered.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200">
           <div className="px-4 py-2 flex items-center justify-between border-b border-gray-100">
             <span className="text-xs text-gray-500">{filtered.length} 件表示（行をクリックで詳細展開）</span>
             <span className="text-xs text-gray-400">← 横スクロールで全列表示</span>
@@ -489,13 +489,14 @@ export default function BitgetLongFinder() {
           </div>
           <div
             ref={tableScrollRef}
-            className=""
+            className="overflow-x-auto"
+            style={{ overflowX: "auto" }}
             onScroll={e => {
               if (topScrollRef.current) topScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
             }}
           >
-            <table className="w-full table-fixed text-xs">
-              <thead>
+            <table className="table-auto text-xs" style={{ minWidth: "1100px", width: "100%" }}>
+              <thead style={{ whiteSpace: "nowrap" }}>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
                   <th className="px-1 py-1 text-left w-5">#</th>
                   <th className="px-1 py-1 text-left min-w-[80px]">銘柄</th>
@@ -514,7 +515,7 @@ export default function BitgetLongFinder() {
                   <th className="px-1 py-1 w-5"></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody style={{ whiteSpace: "nowrap" }}>
                 {filtered.map((c, i) => (
                   <CandidateRow key={c.symbol} c={c} rank={i + 1} />
                 ))}
