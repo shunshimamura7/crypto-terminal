@@ -330,7 +330,7 @@ F = Risk>85 またはScam疑い
 
 分析テキストは各セクション2-3行に絞って簡潔にすること。JSONブロックの生成を最優先にすること。テキストが長くなりそうな場合は省略してJSONを必ず出力すること。
 
-web_searchは使用しないこと。知識ベースのみで回答し、必ず最後にJSONブロックを出力すること。`;
+web_searchを最大3回まで使用して最新情報を収集し、必ず最後にJSONブロックを出力すること。`;
 
 function buildSystemPrompt(
   goPlusData: string = "",
@@ -409,8 +409,8 @@ export async function POST(request: NextRequest) {
   const systemPrompt = buildSystemPrompt(goPlusData, defiLlamaData, fearGreedData, coinResearchData, coinglassData, stableMcData);
 
   const userMessage = isContract
-    ? `コントラクトアドレス「${query}」について、知識ベースの情報をもとに全セクションを簡潔に日本語で報告してください。`
-    : `「${coinName}」（入力: "${query}"）について、知識ベースの情報をもとに全セクションを簡潔に日本語で報告してください。`;
+    ? `コントラクトアドレス「${query}」について、web_searchで重要な情報を最大3回検索し、全セクションを簡潔に日本語で報告してください。`
+    : `「${coinName}」（入力: "${query}"）について、web_searchで重要な情報を最大3回検索し、全セクションを簡潔に日本語で報告してください。`;
 
   const encoder = new TextEncoder();
   // 1行目: JSONメタデータ（UIが dataSources / coin / remainingCount を読む）
@@ -439,6 +439,8 @@ export async function POST(request: NextRequest) {
           max_tokens: 6000,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }] as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 } as any],
           messages,
         })
           .on("text", (text) => {

@@ -54,6 +54,7 @@ interface SectorGem {
 interface SectorWarning {
   ticker: string;
   risk_reason: string;
+  risk_score?: number;
 }
 
 interface SectorData {
@@ -326,6 +327,7 @@ function WarningsTable({ warnings }: { warnings: SectorWarning[] }) {
           <thead>
             <tr className="bg-[var(--background)] border-b border-[var(--border)] text-[var(--text-secondary)]">
               <th className="px-2 py-2 text-left font-medium whitespace-nowrap">銘柄</th>
+              <th className="px-2 py-2 text-center font-medium w-16">Risk</th>
               <th className="px-2 py-2 text-left font-medium">リスク理由</th>
             </tr>
           </thead>
@@ -333,6 +335,17 @@ function WarningsTable({ warnings }: { warnings: SectorWarning[] }) {
             {warnings.map((w, i) => (
               <tr key={i} className="border-b border-[var(--border)] hover:bg-orange-50">
                 <td className="px-2 py-2 font-mono font-semibold text-orange-600 whitespace-nowrap">⚠️ {w.ticker}</td>
+                <td className="px-2 py-2 text-center">
+                  {w.risk_score != null ? (
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                      w.risk_score >= 70 ? "bg-red-100 text-red-700" :
+                      w.risk_score >= 50 ? "bg-orange-100 text-orange-700" :
+                      "bg-gray-100 text-gray-600"
+                    }`}>
+                      {w.risk_score}
+                    </span>
+                  ) : "—"}
+                </td>
                 <td className="px-2 py-2 text-[var(--text-secondary)] text-[11px] leading-snug">{w.risk_reason}</td>
               </tr>
             ))}
