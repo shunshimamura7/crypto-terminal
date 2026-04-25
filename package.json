@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",
-    "@google/generative-ai": "^0.24.1",
     "@types/node-telegram-bot-api": "^0.64.14",
     "@upstash/redis": "^1.37.0",
     "next": "16.2.4",

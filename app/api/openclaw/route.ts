@@ -152,14 +152,17 @@ async function fetchAiAnalysis(query: string): Promise<string> {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 } as any],
       messages: [
         {
           role: "user",
-          content: `「${coinName}」（入力: "${query}"）について5セクションで日本語報告してください。`,
+          content: `「${coinName}」（入力: "${query}"）について5セクションで日本語報告してください。web_searchで最新情報を1回検索してから回答せよ。`,
         },
       ],
     });
-    return message.content[0]?.type === "text" ? message.content[0].text : "（分析結果なし）";
+    const textBlocks = message.content.filter(b => b.type === "text");
+    return textBlocks.map(b => (b as { type: "text"; text: string }).text).join("\n") || "（分析結果なし）";
   } catch (err) {
     return `（AI分析エラー: ${err instanceof Error ? err.message : "Unknown"}）`;
   }

@@ -290,6 +290,39 @@ function ActionPlanCard({ scoreData }: { scoreData: ScoreData }) {
 }
 
 // ─────────────────────────────────────────────
+// DataConfidenceBadge
+// ─────────────────────────────────────────────
+function DataConfidenceBadge({ scoreData }: { scoreData: ScoreData }) {
+  const conf = scoreData.data_confidence as { measured?: number; estimated?: number; needs_verification?: number } | undefined;
+  if (!conf) return null;
+  const m = conf.measured ?? 0;
+  const e = conf.estimated ?? 0;
+  const v = conf.needs_verification ?? 0;
+  const total = m + e + v;
+  if (total === 0) return null;
+  const pct = Math.round((m / total) * 100);
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 shadow-sm">
+      <div className="text-xs text-gray-600 mb-2 font-semibold">📊 データ信頼度</div>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden flex">
+          {m > 0 && <div className="h-full bg-green-500" style={{ width: `${(m / total) * 100}%` }} />}
+          {e > 0 && <div className="h-full bg-yellow-400" style={{ width: `${(e / total) * 100}%` }} />}
+          {v > 0 && <div className="h-full bg-red-400" style={{ width: `${(v / total) * 100}%` }} />}
+        </div>
+        <span className="text-xs font-bold text-gray-700">{pct}%</span>
+      </div>
+      <div className="flex gap-3 mt-1.5 text-[10px]">
+        <span className="text-green-600">● 実測: {m}</span>
+        <span className="text-yellow-600">● 推定: {e}</span>
+        <span className="text-red-500">● 要確認: {v}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // renderMarkdown
 // ─────────────────────────────────────────────
 function renderMarkdown(raw: string): React.ReactElement {
@@ -377,7 +410,10 @@ function AiAnalysisCard({ analysis, scoreData }: { analysis: string; scoreData: 
       {/* 3. アクションプラン */}
       {scoreData && <ActionPlanCard scoreData={scoreData} />}
 
-      {/* 4. AI分析テキスト */}
+      {/* 4. データ信頼度バッジ */}
+      {scoreData && <DataConfidenceBadge scoreData={scoreData} />}
+
+      {/* 5. AI分析テキスト */}
       {displayText && (
         <details open className="bg-[var(--card-bg)] border border-[var(--border)] rounded-xl overflow-hidden shadow-sm">
           <summary className="px-4 py-3 cursor-pointer text-[var(--text-secondary)] text-sm font-medium hover:bg-[var(--background)] select-none list-none flex items-center gap-2 transition-colors">

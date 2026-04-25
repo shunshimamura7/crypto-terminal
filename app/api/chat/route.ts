@@ -238,6 +238,20 @@ function extractScoreRegex(text: string, ticker: string): Record<string, unknown
   return result;
 }
 
+// ── Stablecoin Market Cap ──────────────────────────────────────────────────
+async function fetchStablecoinMarketCap(): Promise<string> {
+  try {
+    const res = await fetch(
+      "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=stablecoins&order=market_cap_desc&per_page=5&page=1",
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!res.ok) return "";
+    const coins = await res.json();
+    const totalMC = coins.reduce((sum: number, c: { market_cap?: number }) => sum + (c.market_cap ?? 0), 0);
+    return totalMC > 0 ? `ステーブルコイン上位5 MC合計: $${(totalMC / 1e9).toFixed(1)}B` : "";
+  } catch { return ""; }
+}
+
 // ── System prompt ──────────────────────────────────────────────────────────
 // BASE_SYSTEM_PROMPT は app/lib/systemPrompts/bell_v5.ts からインポート
 
@@ -265,11 +279,22 @@ const JSON_OUTPUT_RULE = `
   "recommended_position_size": "5%",
   "bull_price": 80,
   "base_price": 55,
-  "bear_price": 30
+  "bear_price": 30,
+  "data_confidence": {
+    "measured": 5,
+    "estimated": 3,
+    "needs_verification": 2
+  }
 }
 \`\`\`
 
 上記はフォーマット例。実際の分析結果に基づいた数値・文字列に置き換えること。
+
+data_confidence の算出方法:
+- measured: レポート内で [実測] ラベルを付けた項目数
+- estimated: [推定] ラベルを付けた項目数
+- needs_verification: [要確認] ラベルを付けた項目数
+必ず実際にカウントして入力せよ。適当な数を入れるな。
 
 スコアリング定量アンカー（必ず参照）:
 
@@ -313,6 +338,7 @@ function buildSystemPrompt(
   fearGreedData: string = "",
   coinResearchData: string = "",
   coinglassData: CoinglassData | null = null,
+  stableMcData: string = "",
 ): string {
   const glassParts: string[] = [];
   if (coinglassData) {
@@ -331,6 +357,7 @@ function buildSystemPrompt(
     fearGreedData    ? `\n## マクロ指標\n${fearGreedData}`                              : "",
     coinResearchData ? `\n## 銘柄基本データ（CoinGecko/DexScreener）\n${coinResearchData}` : "",
     glassParts.length > 0 ? `\n## デリバティブデータ（Coinglass）\n${glassParts.join(", ")}` : "",
+    stableMcData     ? `\n## ステーブルコイン市場\n${stableMcData}`                     : "",
   ].filter(Boolean).join("\n");
   // extras go BEFORE JSON_OUTPUT_RULE so the JSON instruction is always last
   return extras
@@ -369,16 +396,17 @@ export async function POST(request: NextRequest) {
   const coinName   = getEnglishName(query);
   const isContract = isContractAddress(query);
 
-  // 5つのAPIを並列取得
-  const [goPlusData, defiLlamaData, fearGreedData, coinResearchData, coinglassData] = await Promise.all([
+  // 6つのAPIを並列取得
+  const [goPlusData, defiLlamaData, fearGreedData, coinResearchData, coinglassData, stableMcData] = await Promise.all([
     isContract ? fetchGoPlusSecurity(query) : Promise.resolve(""),
     fetchDeFiLlamaProtocol(query),
     fetchFearGreedIndex(),
     researchCoin(query).catch(() => ""),
     !isContract ? fetchCoinglassData(query).catch(() => null) : Promise.resolve(null),
+    fetchStablecoinMarketCap(),
   ]);
 
-  const systemPrompt = buildSystemPrompt(goPlusData, defiLlamaData, fearGreedData, coinResearchData, coinglassData);
+  const systemPrompt = buildSystemPrompt(goPlusData, defiLlamaData, fearGreedData, coinResearchData, coinglassData, stableMcData);
 
   const userMessage = isContract
     ? `コントラクトアドレス「${query}」について、知識ベースの情報をもとに全セクションを簡潔に日本語で報告してください。`

@@ -47,6 +47,8 @@ interface SectorGem {
   risk: number;
   grade: string;
   reason: string;
+  mc_fdv_ratio?: number;
+  vol_mc_ratio?: number;
 }
 
 interface SectorWarning {
@@ -62,6 +64,9 @@ interface SectorData {
   action_plan?: string;
   gems: SectorGem[];
   warnings: SectorWarning[];
+  short_candidates?: string[];
+  holder_concentration?: string;
+  high_concentration_tickers?: string[];
 }
 
 // ─── JSON パース（複数パターン対応）
@@ -262,6 +267,7 @@ function GemsTable({ gems, onAnalyze }: { gems: SectorGem[]; onAnalyze?: (ticker
               <th className="px-2 py-2 text-left font-medium">銘柄</th>
               <th className="px-2 py-2 text-right font-medium">Alpha</th>
               <th className="px-2 py-2 text-right font-medium">Risk</th>
+              <th className="px-2 py-2 text-right font-medium">MC/FDV</th>
               <th className="px-2 py-2 text-center font-medium">Grade</th>
               <th className="px-2 py-2 text-left font-medium">根拠</th>
             </tr>
@@ -288,6 +294,17 @@ function GemsTable({ gems, onAnalyze }: { gems: SectorGem[]; onAnalyze?: (ticker
                   <td className="px-2 py-2 font-mono font-bold text-gray-900 whitespace-nowrap">{gem.ticker}</td>
                   <td className="px-2 py-2 text-right font-bold text-green-700">{gem.alpha}</td>
                   <td className="px-2 py-2 text-right font-bold text-red-600">{gem.risk}</td>
+                  <td className="px-2 py-2 text-right font-mono text-xs">
+                    {gem.mc_fdv_ratio != null ? (
+                      <span className={
+                        gem.mc_fdv_ratio >= 0.8 ? "text-green-600" :
+                        gem.mc_fdv_ratio >= 0.4 ? "text-yellow-600" :
+                        "text-red-600 font-bold"
+                      }>
+                        {gem.mc_fdv_ratio.toFixed(2)}
+                      </span>
+                    ) : "—"}
+                  </td>
                   <td className="px-2 py-2 text-center font-bold text-gray-900">{gem.grade}</td>
                   <td className="px-2 py-2 text-gray-800 text-[11px] leading-snug">{gem.reason}</td>
                 </tr>
@@ -335,6 +352,43 @@ function ActionPlanCard({ plan }: { plan: string }) {
   );
 }
 
+function ShortCandidatesCard({ candidates }: { candidates: string[] }) {
+  if (!candidates || candidates.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-3 mb-4">
+      <h3 className="text-sm font-bold text-red-700 mb-1.5">🔻 ショート候補（MEXC）</h3>
+      <ul className="text-xs text-gray-800 space-y-1">
+        {candidates.map((c, i) => (
+          <li key={i} className="flex items-start gap-1">
+            <span className="text-red-500 mt-0.5">▸</span>
+            <span>{c}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function HolderConcentrationCard({ concentration, tickers }: { concentration: string; tickers: string[] }) {
+  const colorMap: Record<string, string> = {
+    "分散的":  "text-green-700 bg-green-50 border-green-200",
+    "やや寡占": "text-yellow-700 bg-yellow-50 border-yellow-200",
+    "寡占的":  "text-red-700 bg-red-50 border-red-200",
+  };
+  const cls = colorMap[concentration] ?? "text-gray-700 bg-gray-50 border-gray-200";
+  return (
+    <div className={`rounded-lg border p-3 mb-4 ${cls}`}>
+      <h3 className="text-sm font-bold mb-1.5">🔵 ホルダー集中度: {concentration}</h3>
+      {tickers && tickers.length > 0 && (
+        <div className="text-xs mt-1">
+          <span className="font-semibold">⚠️ 高集中銘柄: </span>
+          {tickers.join(", ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── JSON成功時: 構造化表示 + 全文トグル
 function StructuredResult({ sector, data, fearGreed, rawText, onAnalyze }: {
   sector: string;
@@ -350,6 +404,15 @@ function StructuredResult({ sector, data, fearGreed, rawText, onAnalyze }: {
       {data.gems   && data.gems.length   > 0 && <GemsTable gems={data.gems} onAnalyze={onAnalyze} />}
       {data.warnings && data.warnings.length > 0 && <WarningsTable warnings={data.warnings} />}
       {data.action_plan && <ActionPlanCard plan={data.action_plan} />}
+      {data.short_candidates && data.short_candidates.length > 0 && (
+        <ShortCandidatesCard candidates={data.short_candidates} />
+      )}
+      {data.holder_concentration && (
+        <HolderConcentrationCard
+          concentration={data.holder_concentration}
+          tickers={data.high_concentration_tickers ?? []}
+        />
+      )}
       <button
         onClick={() => setShowRaw(v => !v)}
         className="text-xs text-[var(--text-secondary)] hover:text-[#0f172a] border border-[var(--border)] rounded px-2 py-1 transition-colors mb-2"
