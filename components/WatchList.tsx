@@ -70,7 +70,7 @@ export default function WatchList({ onBatchAnalyze, onAnalyze }: Props) {
           <p className="text-sm text-gray-700">ウォッチリストが空です<br />銘柄名やCAを追加してください</p>
         </div>
       ) : (
-        <ul className="space-y-2">
+        <div style={{ overflowX: "auto" }}><ul className="space-y-2" style={{ minWidth: "280px" }}>
           {items.map((item, i) => (
             <li key={i} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
               <button onClick={() => moveUp(i)} className="text-gray-600 hover:text-gray-500 text-xs" title="上へ">▲</button>
@@ -89,7 +89,7 @@ export default function WatchList({ onBatchAnalyze, onAnalyze }: Props) {
               </button>
             </li>
           ))}
-        </ul>
+        </ul></div>
       )}
 
       {items.length > 0 && (

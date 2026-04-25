@@ -61,3 +61,8 @@ body {
 }
 .toast-enter { animation: toast-in  0.3s ease-out forwards; }
 .toast-leave { animation: toast-out 0.25s ease-in forwards; }
+
+/* Thin horizontal scrollbar for mobile scroll areas */
+::-webkit-scrollbar { height: 4px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #888; border-radius: 2px; }

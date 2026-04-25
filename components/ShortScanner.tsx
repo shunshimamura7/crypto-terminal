@@ -2543,7 +2543,7 @@ export default function ShortScanner() {
 
       {/* Results table / heatmap */}
       {!loading && extended.length > 0 && (
-        <div className="rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="rounded-xl border border-gray-200 shadow-sm">
           {/* Legend + view toggle */}
           <div className="flex flex-wrap items-center gap-3 px-3 md:px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
             <span className="font-semibold text-gray-600">{t.scoreLabel} (/{DISPLAY_MAX}):</span>
@@ -2589,8 +2589,8 @@ export default function ShortScanner() {
 
           {/* Table view */}
           {viewMode === "table" && <div ref={topScrollRef} onScroll={onTopScroll} className="overflow-x-auto overflow-y-hidden border-b border-gray-100" style={{height:12}}><div ref={topScrollInnerRef} style={{height:1}} /></div>}
-          {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll}><table className="w-full table-fixed text-xs">
-              <thead>
+          {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll} className="overflow-x-auto" style={{ overflowX: "auto" }}><table className="table-auto text-xs" style={{ minWidth: "1100px", width: "100%" }}>
+              <thead style={{ whiteSpace: "nowrap" }}>
                 <tr className="bg-white border-b border-gray-200 text-xs font-semibold text-gray-600">
                   <th className="px-1 py-1 text-left sticky left-0 bg-white z-10 min-w-[80px]">{t.colSymbol}</th>
                   <SortTh label={t.colScore}  sortKey="displayScore"   current={sortBy} onSort={setSortBy} cls="text-center min-w-[55px]" />
@@ -2615,7 +2615,7 @@ export default function ShortScanner() {
                   <th className="px-1 py-1 text-center hidden sm:table-cell min-w-[60px]">{t.colExch}</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody style={{ whiteSpace: "nowrap" }}>
                 {extended.map((c, idx) => {
                   const isOpen   = expandedRows.has(c.symbol);
                   const base     = c.symbol.replace(/_USDT$/, "");

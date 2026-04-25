@@ -32,37 +32,32 @@ function getFgEmoji(v: number): string {
 // ─── BTCマクロスコア（100点満点） ───────────────────────────────────────────
 
 function calcMacroScore(d: MarketEnvData | null): number {
-  const DEF = 10; // データなし時の中立点
+  const DEF = 10;
 
-  // 1. US100 24h変動率
   let s1 = DEF;
   if (d?.us100Change != null) {
     const c = d.us100Change;
     s1 = c >= 1 ? 20 : c >= 0 ? 10 : c >= -1 ? 5 : 0;
   }
 
-  // 2. DXY 24h変動率（下落 = BTC有利）
   let s2 = DEF;
   if (d?.dxyChange != null) {
     const c = d.dxyChange;
     s2 = c <= -0.5 ? 20 : c <= 0 ? 10 : c <= 0.5 ? 5 : 0;
   }
 
-  // 3. 米10年債（絶対値）
   let s3 = DEF;
   if (d?.us10y != null) {
     const v = d.us10y;
     s3 = v <= 4 ? 20 : v <= 4.5 ? 15 : v <= 5 ? 5 : 0;
   }
 
-  // 4. Gold 24h変動率（上昇 = リスクオフ = BTC不利）
   let s4 = DEF;
   if (d?.goldChange != null) {
     const c = d.goldChange;
     s4 = c >= 1 ? 0 : c >= 0 ? 5 : c >= -1 ? 15 : 20;
   }
 
-  // 5. F&G（中立40〜60が最適）
   let s5 = DEF;
   if (d?.fng?.value != null) {
     const v = d.fng.value;
@@ -169,14 +164,19 @@ export default function MarketTicker() {
   const { label: macroLabel, color: macroColor } = macroScoreInfo(macroScore);
 
   return (
-    <div className="w-full rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-white">
-      <div className="flex">
-        {/* 8-column data grid */}
-        <div className="flex-1 grid grid-cols-8 divide-x divide-gray-100">
+    /* overflow-x-auto を外枠に直接置く。overflow-hidden は使わない（スクロールをブロックするため） */
+    <div className="w-full rounded-xl border border-gray-200 shadow-sm bg-white"
+         style={{ overflowX: "auto" }}>
+      <div className="flex" style={{ minWidth: "920px" }}>
+
+        {/* 8-column data grid: grid→flex に変更して inline-block 的な min-width を使う */}
+        <div className="flex-1 flex divide-x divide-gray-100">
           {grid.map(({ label, value, sub, color, change }) => {
             const chg = fmtChange(change);
             return (
-              <div key={label} className="flex flex-col items-center justify-center py-4 px-2">
+              <div key={label}
+                   className="flex flex-col items-center justify-center py-4 px-2 flex-1"
+                   style={{ minWidth: "80px", whiteSpace: "nowrap" }}>
                 <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide leading-tight mb-0.5">
                   {label}
                 </span>
@@ -193,12 +193,14 @@ export default function MarketTicker() {
         </div>
 
         {/* BTCマクロスコア */}
-        <div className="shrink-0 border-l border-gray-200 flex flex-col items-center justify-center px-6 py-4 bg-gray-50 min-w-[130px]">
+        <div className="shrink-0 border-l border-gray-200 flex flex-col items-center justify-center px-6 py-4 bg-gray-50"
+             style={{ minWidth: "130px", whiteSpace: "nowrap" }}>
           <span className="text-xs text-gray-500 font-semibold mb-1">BTCマクロスコア</span>
           <span className={`text-3xl font-black leading-none ${macroColor}`}>{macroScore}</span>
           <span className="text-[10px] text-gray-400 mb-1">/ 100</span>
           <span className={`text-sm font-bold ${macroColor}`}>{macroLabel}</span>
         </div>
+
       </div>
     </div>
   );
