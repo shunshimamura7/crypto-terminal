@@ -1,4 +1,4 @@
-// Data source: OKX public API (no auth) + Gate.io fallback
+// Data source: OKX public API (no auth) + Gate.io fallback + MEXC fallback
 // Coinglass free plan does not expose these endpoints; exchange APIs are used instead.
 
 export interface CoinglassData {
@@ -6,6 +6,14 @@ export interface CoinglassData {
   openInterest: number | null;
   openInterestChange24h: number | null;
   longRatio: number | null;
+  fundingRateExchange: string | null;  // exchange that supplied the FR
+  mexcFundingRate: number | null;      // MEXC-specific FR (null = no MEXC perp)
+}
+
+export interface ShortSignal {
+  isRecommended: boolean;
+  reason: string;
+  level: "danger" | "caution" | "neutral" | "favorable" | "strong";
 }
 
 const _cache = new Map<string, { data: CoinglassData; ts: number }>();
@@ -49,6 +57,21 @@ async function fetchFrGate(sym: string): Promise<number | null> {
   const d = raw as any;
   const fr = d?.[0]?.funding_rate;
   return fr !== undefined ? parseFloat(fr) : null;
+}
+
+// MEXC: funding rate
+// GET https://contract.mexc.com/api/v1/contract/funding_rate/{symbol}_USDT
+// data.fundingRate → number
+async function fetchFrMexc(sym: string): Promise<number | null> {
+  const raw = await apiFetch(
+    `https://contract.mexc.com/api/v1/contract/funding_rate/${sym}_USDT`
+  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = raw as any;
+  const fr = d?.data?.fundingRate;
+  if (fr === undefined || fr === null) return null;
+  const parsed = parseFloat(String(fr));
+  return isNaN(parsed) ? null : parsed;
 }
 
 // OKX: open interest + 24h change
@@ -95,20 +118,30 @@ export async function fetchCoinglassData(symbol: string): Promise<CoinglassData>
   const hit = _cache.get(sym);
   if (hit && Date.now() - hit.ts < TTL) return hit.data;
 
-  const [fr1, { oi, change24h }, ls] = await Promise.all([
+  const [fr1, { oi, change24h }, ls, frMexc] = await Promise.all([
     fetchFrOkx(sym),
     fetchOiOkx(sym),
     fetchLsOkx(sym),
+    fetchFrMexc(sym),
   ]);
 
   // Gate.io FR fallback if OKX returned null
-  const fr = fr1 ?? (await fetchFrGate(sym));
+  const fr2 = fr1 ?? (await fetchFrGate(sym));
+  // Final fallback: MEXC
+  const fr = fr2 ?? frMexc;
+
+  let frExchange: string | null = null;
+  if (fr1 !== null) frExchange = "OKX";
+  else if (fr2 !== null) frExchange = "Gate.io";
+  else if (frMexc !== null) frExchange = "MEXC";
 
   const data: CoinglassData = {
     fundingRate: fr,
     openInterest: oi,
     openInterestChange24h: change24h,
     longRatio: ls,
+    fundingRateExchange: frExchange,
+    mexcFundingRate: frMexc,
   };
 
   _cache.set(sym, { data, ts: Date.now() });
@@ -135,4 +168,24 @@ export function formatCoinglass(d: CoinglassData): string {
     parts.push(`ロング率:${(d.longRatio * 100).toFixed(1)}%`);
   }
   return parts.length > 0 ? `Coinglass[${parts.join(", ")}]` : "";
+}
+
+export function evaluateShortSignal(fr: number | null): ShortSignal {
+  if (fr === null) {
+    return { isRecommended: false, reason: "FR取得不可 - 判定不能", level: "neutral" };
+  }
+  const frPct = fr * 100;
+  if (frPct < -0.1) {
+    return { isRecommended: false, reason: "FRマイナス危険域 - ショートスクイーズリスク", level: "danger" };
+  }
+  if (frPct < 0) {
+    return { isRecommended: false, reason: "FRマイナス - ショート非推奨", level: "caution" };
+  }
+  if (frPct <= 0.05) {
+    return { isRecommended: true, reason: "FR中立 - ショート可", level: "neutral" };
+  }
+  if (frPct <= 0.1) {
+    return { isRecommended: true, reason: "FR高め - ショート有利", level: "favorable" };
+  }
+  return { isRecommended: true, reason: "FR過熱 - ショート強く推奨", level: "strong" };
 }
