@@ -21,6 +21,7 @@ import ShortScanner from "./ShortScanner";
 import BitgetLongFinder from "./BitgetLongFinder";
 import HolderAnalysis from "./HolderAnalysis";
 import TechnicalAnalysis from "./TechnicalAnalysis";
+import DerivativesPanel from "./DerivativesPanel";
 
 // ─────────────────────────────────────────────
 // Types
@@ -1046,6 +1047,10 @@ export default function CryptoSearch() {
               ) : result.aiAnalysis ? (
                 <AiAnalysisCard analysis={result.aiAnalysis} scoreData={result.scoreData} />
               ) : null}
+
+              {!result.aiLoading && result.coin && (
+                <DerivativesPanel symbol={result.coin.symbol} />
+              )}
 
               {!result.aiLoading && result.dataSources && result.dataSources.length > 0 && (
                 <DataSourcesPanel sources={result.dataSources} />
