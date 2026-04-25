@@ -27,6 +27,20 @@ export function getCachedCommunity(query: string): SocialData | null {
   return communityCache.get(query.toLowerCase()) ?? null;
 }
 
+export interface MarketMetrics {
+  mc: number | null;
+  fdv: number | null;
+  vol24h: number | null;
+  priceChange24h: number | null;
+  priceChange7d: number | null;
+}
+
+const metricsCache = new Map<string, MarketMetrics>();
+
+export function getCachedMetrics(query: string): MarketMetrics | null {
+  return metricsCache.get(query.toLowerCase()) ?? null;
+}
+
 async function fetchCoinGecko(query: string): Promise<string> {
   const knownIds: Record<string, string> = {
     btc: "bitcoin", eth: "ethereum", sol: "solana", xrp: "ripple",
@@ -74,6 +88,13 @@ async function fetchCoinGecko(query: string): Promise<string> {
         communityScore: d.community_score ?? null,
       };
       communityCache.set(queryKey, social);
+      metricsCache.set(queryKey, {
+        mc:            mc    || null,
+        fdv:           fdv   || null,
+        vol24h:        vol   || null,
+        priceChange24h: ch24 || null,
+        priceChange7d:  ch7d || null,
+      });
 
       // Community data for prompt
       const commParts: string[] = [];

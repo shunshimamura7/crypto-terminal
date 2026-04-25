@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic, { APIError } from "@anthropic-ai/sdk";
-import { researchCoin, getCachedCommunity } from "@/app/lib/coinResearch";
+import { researchCoin, getCachedCommunity, getCachedMetrics } from "@/app/lib/coinResearch";
+import type { MarketMetrics } from "@/app/lib/coinResearch";
 import { fetchCoinglassData, formatCoinglass } from "@/app/lib/coinglass";
 import { fetchEtfFlows, formatEtfFlows } from "@/app/lib/sosovalue";
 import { fetchUnlockData, formatUnlock, unlockRiskScore } from "@/app/lib/tokenomist";
@@ -121,6 +122,7 @@ function adjustScores(
   etf: EtfFlowData,
   xheat: number,
   inputStr: string,
+  metrics: MarketMetrics,
 ): { alpha: number; risk: number } {
   let alphaDelta = 0;
   let riskDelta = 0;
@@ -156,10 +158,60 @@ function adjustScores(
   // Unlock risk
   riskDelta += unlockRiskScore(unlock);
 
+  // ── MC/FDV比 補正 ──
+  if (metrics.mc && metrics.fdv && metrics.fdv > 0) {
+    const mcFdvRatio = metrics.mc / metrics.fdv;
+    if (mcFdvRatio < 0.2) {
+      riskDelta  += 15;
+      alphaDelta -= 5;
+    } else if (mcFdvRatio < 0.4) {
+      riskDelta += 8;
+    } else if (mcFdvRatio > 0.8) {
+      riskDelta -= 5;
+    }
+  }
+
+  // ── Vol/MC比 補正 ──
+  if (metrics.vol24h && metrics.mc && metrics.mc > 0) {
+    const volMcRatio = metrics.vol24h / metrics.mc;
+    if (volMcRatio < 0.03) {
+      riskDelta += 5;
+    } else if (volMcRatio > 0.5) {
+      riskDelta += 8;
+    }
+  }
+
+  // ── 7d急騰 過熱補正 ──
+  if (metrics.priceChange7d !== null) {
+    if (metrics.priceChange7d > 100) {
+      riskDelta  += 10;
+      alphaDelta -= 5;
+    } else if (metrics.priceChange7d > 50) {
+      riskDelta += 5;
+    } else if (metrics.priceChange7d < -30) {
+      alphaDelta += 3;
+    }
+  }
+
+  // ── 24h急落 補正 ──
+  if (metrics.priceChange24h !== null && metrics.priceChange24h < -20) {
+    riskDelta += 5;
+  }
+
   return {
     alpha: clamp(0, 100, baseAlpha + alphaDelta),
-    risk: clamp(0, 100, baseRisk + riskDelta),
+    risk:  clamp(0, 100, baseRisk  + riskDelta),
   };
+}
+
+function determineRank(alpha: number, risk: number): string {
+  if (alpha >= 85 && risk <= 35) return "S";
+  if (alpha >= 70 && risk <= 50) return "A";
+  if (alpha >= 55 && risk <= 60) return "B";
+  if (alpha >= 40)               return "C";
+  if (risk  >  85)               return "F";
+  if (risk  >  70)               return "E";
+  return "D";
 }
 
 export async function POST(req: NextRequest) {
@@ -276,11 +328,36 @@ ${fullContext || "データなし"}
 }
 \`\`\`
 
-スコア基準（0-100）：
-- alpha: 上昇ポテンシャル（MC/FDV低・出来高増加・ATH大幅下落=高い・ETFインフロー=+5・OI増加=+5）
-- risk: リスク（セキュリティ問題・流動性低・集中=高い・FR>0.1%/8h=+15・ロング過熱=+10・アンロック30日以内=+10〜+20）
-- smart_money_score_100: スマートマネー注目度（大口取引・急増出来高・機関保有=高い）
-- XHeat Scoreが70以上の場合は過熱サインとしてriskに反映せよ
+スコア基準（0-100）— 定量アンカー厳守：
+
+### Alpha（上昇ポテンシャル）
+- MC/FDV比: >0.8→+0, 0.4-0.8→+10, 0.2-0.4→+15, <0.2→+5（希薄化リスク相殺）
+- ATH比: -90%以上下落→+15, -70%以上→+10, -50%以上→+5
+- 出来高トレンド: 7d出来高増加傾向→+5, 減少→-5
+- OI増加: 24h OI 5%+増→+5
+- ETFフロー（BTC/ETHのみ）: インフロー→+5, アウトフロー→-5
+- プロダクト/TVL成長: 実需あり→+10, なし→+0
+- 開発活動: GitHub活発→+5, 放置→-5
+- ベースライン: 40（特筆事項なし）
+
+### Risk（リスク）
+- MC/FDV比: <0.2→+20, 0.2-0.4→+10, >0.8→-5
+- FR: >0.1%/8h→+15, >0.05%→+5
+- ロング比率: >70%→+10
+- アンロック: 30日以内5%+→+10, 10%+→+20
+- 監査: なし→+10, あり→-5
+- 流動性: Vol/MC<3%→+10
+- XHeat: >70→+5（過熱）
+- ベースライン: 40（特筆事項なし）
+
+### Smart Money Score
+- 機関/VC保有確認→+20
+- 大口ウォレット蓄積→+15
+- Arkham識別エンティティあり→+10
+- 出来高異常急増→+5
+- ベースライン: 30（情報不足時）
+
+重要: データが不足する項目はベースライン値を使え。推測で極端な値を出すな。
 ランク：S:Alpha≥85かつRisk≤35 / A:Alpha≥70かつRisk≤50 / B:Alpha≥55かつRisk≤60 / C:Alpha≥40 / D:Alpha<40かつRisk<50 / E:Risk>70 / F:Risk>85またはScam疑い
 プレースホルダーのまま出力するな。必ず実際の評価値を入れよ。`;
 
@@ -303,11 +380,12 @@ ${fullContext || "データなし"}
         const baseAlpha = parsed.alpha ?? 50;
         const baseRisk  = parsed.risk  ?? 50;
 
-        const adjusted = adjustScores(baseAlpha, baseRisk, glass, unlock, etfFlows, xheatResult.score, input);
+        const metrics = getCachedMetrics(input) ?? { mc: null, fdv: null, vol24h: null, priceChange24h: null, priceChange7d: null };
+        const adjusted = adjustScores(baseAlpha, baseRisk, glass, unlock, etfFlows, xheatResult.score, input, metrics);
 
         analysisResults.push({
           input: parsed.input ?? input,
-          rank: parsed.rank ?? "C",
+          rank: determineRank(adjusted.alpha, adjusted.risk),
           alpha: adjusted.alpha,
           risk: adjusted.risk,
           smart_money_score_100: parsed.smart_money_score_100 ?? 50,

@@ -1,6 +1,9 @@
 import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
 import { BASE_SYSTEM_PROMPT } from "@/app/lib/systemPrompts/bell_v5";
+import { researchCoin } from "@/app/lib/coinResearch";
+import { fetchCoinglassData } from "@/app/lib/coinglass";
+import type { CoinglassData } from "@/app/lib/coinglass";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -268,6 +271,27 @@ const JSON_OUTPUT_RULE = `
 
 上記はフォーマット例。実際の分析結果に基づいた数値・文字列に置き換えること。
 
+スコアリング定量アンカー（必ず参照）:
+
+Alpha基準:
+- MC/FDV > 0.8: +0（全流通済み）
+- MC/FDV 0.4-0.8: +10（適度な成長余地）
+- MC/FDV 0.2-0.4: +15（成長余地大だが希薄化注意）
+- MC/FDV < 0.2: +5（希薄化リスクが成長余地を相殺）
+- ATH比 -90%+: +15 / -70%+: +10 / -50%+: +5
+- ベースライン: 40（特筆事項なし）
+
+Risk基準:
+- MC/FDV < 0.2: +20（深刻な希薄化）
+- FR > 0.1%/8h: +15
+- ロング比率 > 70%: +10
+- 30日以内アンロック10%+: +20 / 5%+: +10
+- Vol/MC < 3%: +10（流動性不足）
+- 監査なし: +10
+- ベースライン: 40（特筆事項なし）
+
+重要: データ不足時はベースライン値40を使え。推測で極端な値（90や10）を出すな。
+
 ランク判定基準（必ず守れ）:
 S = Alpha≥85 かつ Risk≤35
 A = Alpha≥70 かつ Risk≤50
@@ -287,11 +311,26 @@ function buildSystemPrompt(
   goPlusData: string = "",
   defiLlamaData: string = "",
   fearGreedData: string = "",
+  coinResearchData: string = "",
+  coinglassData: CoinglassData | null = null,
 ): string {
+  const glassParts: string[] = [];
+  if (coinglassData) {
+    if (coinglassData.fundingRate !== null)
+      glassParts.push(`FR: ${(coinglassData.fundingRate * 100).toFixed(4)}%/8h`);
+    if (coinglassData.openInterest !== null)
+      glassParts.push(`OI: ${(coinglassData.openInterest / 1e6).toFixed(1)}M`);
+    if (coinglassData.longRatio !== null) {
+      const longPct = coinglassData.longRatio > 1 ? coinglassData.longRatio : coinglassData.longRatio * 100;
+      glassParts.push(`Long比率: ${longPct.toFixed(1)}%`);
+    }
+  }
   const extras = [
-    goPlusData    ? `\n## セキュリティスキャン（GoPlus）\n${goPlusData}`  : "",
-    defiLlamaData ? `\n## TVLデータ（DeFiLlama）\n${defiLlamaData}`      : "",
-    fearGreedData ? `\n## マクロ指標\n${fearGreedData}`                   : "",
+    goPlusData       ? `\n## セキュリティスキャン（GoPlus）\n${goPlusData}`             : "",
+    defiLlamaData    ? `\n## TVLデータ（DeFiLlama）\n${defiLlamaData}`                 : "",
+    fearGreedData    ? `\n## マクロ指標\n${fearGreedData}`                              : "",
+    coinResearchData ? `\n## 銘柄基本データ（CoinGecko/DexScreener）\n${coinResearchData}` : "",
+    glassParts.length > 0 ? `\n## デリバティブデータ（Coinglass）\n${glassParts.join(", ")}` : "",
   ].filter(Boolean).join("\n");
   // extras go BEFORE JSON_OUTPUT_RULE so the JSON instruction is always last
   return extras
@@ -330,14 +369,16 @@ export async function POST(request: NextRequest) {
   const coinName   = getEnglishName(query);
   const isContract = isContractAddress(query);
 
-  // 3つの無料APIを並列取得
-  const [goPlusData, defiLlamaData, fearGreedData] = await Promise.all([
+  // 5つのAPIを並列取得
+  const [goPlusData, defiLlamaData, fearGreedData, coinResearchData, coinglassData] = await Promise.all([
     isContract ? fetchGoPlusSecurity(query) : Promise.resolve(""),
     fetchDeFiLlamaProtocol(query),
     fetchFearGreedIndex(),
+    researchCoin(query).catch(() => ""),
+    !isContract ? fetchCoinglassData(query).catch(() => null) : Promise.resolve(null),
   ]);
 
-  const systemPrompt = buildSystemPrompt(goPlusData, defiLlamaData, fearGreedData);
+  const systemPrompt = buildSystemPrompt(goPlusData, defiLlamaData, fearGreedData, coinResearchData, coinglassData);
 
   const userMessage = isContract
     ? `コントラクトアドレス「${query}」について、知識ベースの情報をもとに全セクションを簡潔に日本語で報告してください。`
