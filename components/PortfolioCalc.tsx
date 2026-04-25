@@ -446,7 +446,8 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
   const [totalUsd, setTotalUsd]       = useState("10000");
   const [customItems, setCustomItems] = useState<CustomItem[] | null>(null);
   const [customAlloc, setCustomAlloc] = useState<Record<string, number> | null>(null);
-  const [editingPct, setEditingPct]   = useState<{ label: string; value: string } | null>(null);
+  const [editingPct, setEditingPct]       = useState<{ label: string; value: string } | null>(null);
+  const [editingTotalPct, setEditingTotalPct] = useState<string | null>(null);
   const [history, setHistory]         = useState<HistorySnapshot[]>([]);
   const [newLabel, setNewLabel]       = useState("");
   const [newRank, setNewRank]         = useState("B");
@@ -538,6 +539,7 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
     setCustomAlloc(null);
     saveCustomAlloc(null);
     setEditingPct(null);
+    setEditingTotalPct(null);
   }
 
   // ── Custom alloc mutations ────────────────────────────────────────────────
@@ -560,6 +562,26 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
     setCustomAlloc(null);
     saveCustomAlloc(null);
     setEditingPct(null);
+    setEditingTotalPct(null);
+  }
+
+  function startEditTotalPct() {
+    if (editingPct || finalItems.length === 0) return;
+    setEditingTotalPct(finalAllocPct.toFixed(1));
+  }
+
+  function commitEditTotalPct() {
+    if (editingTotalPct === null) return;
+    const newTotal = parseFloat(editingTotalPct);
+    setEditingTotalPct(null);
+    if (isNaN(newTotal) || newTotal <= 0 || finalAllocPct === 0) return;
+    const scale = newTotal / finalAllocPct;
+    const next: Record<string, number> = {};
+    for (const item of finalItems) {
+      next[item.label] = Math.min(item.pct * scale, 100);
+    }
+    setCustomAlloc(next);
+    saveCustomAlloc(next);
   }
 
   // ── History / snapshot ────────────────────────────────────────────────────
@@ -575,6 +597,7 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
     setCustomAlloc(null);
     saveCustomAlloc(null);
     setEditingPct(null);
+    setEditingTotalPct(null);
     setFlash("復元しました ✓");
     setTimeout(() => setFlash(""), 2000);
   }
@@ -727,9 +750,34 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
                     {/* Total row */}
                     <tr className={`border-t-2 ${isOverLimit ? "border-red-300 bg-red-50" : "border-gray-300 bg-gray-50"} font-semibold`}>
                       <td className="px-3 py-2 text-xs text-gray-600" colSpan={2}>合計</td>
-                      <td className={`px-3 py-2 text-right text-sm ${isOverLimit ? "text-red-600 font-black" : "text-gray-700"}`}>
-                        {finalAllocPct.toFixed(1)}%
-                        {isOverLimit && <span className="ml-1 text-[10px] font-normal">⚠️ 100%超過</span>}
+                      <td
+                        className={`px-3 py-2 text-right text-sm cursor-pointer ${
+                          editingTotalPct !== null ? "" : "hover:bg-indigo-50"
+                        } ${isOverLimit ? "text-red-600 font-black" : "text-gray-700"}`}
+                        onClick={() => { if (editingTotalPct === null) startEditTotalPct(); }}
+                        title="クリックで合計配分%を編集（各銘柄に比例配分）"
+                      >
+                        {editingTotalPct !== null ? (
+                          <input
+                            type="number" min="0" max="200" step="0.1"
+                            autoFocus
+                            value={editingTotalPct}
+                            onChange={e => setEditingTotalPct(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter")  commitEditTotalPct();
+                              if (e.key === "Escape") setEditingTotalPct(null);
+                            }}
+                            onBlur={commitEditTotalPct}
+                            className="w-20 text-right border border-indigo-300 rounded px-1 py-0.5 text-xs focus:outline-none bg-white font-normal"
+                            onClick={e => e.stopPropagation()}
+                          />
+                        ) : (
+                          <>
+                            {finalAllocPct.toFixed(1)}%
+                            {isOverLimit && <span className="ml-1 text-[10px] font-normal">⚠️ 100%超過</span>}
+                            <span className="ml-1 text-[9px] text-indigo-400 opacity-70">✎</span>
+                          </>
+                        )}
                       </td>
                       <td className={`px-3 py-2 text-right text-sm ${isOverLimit ? "text-red-600" : "text-gray-800"}`}>
                         ${finalAllocAmt.toLocaleString("en-US", { maximumFractionDigits: 0 })}
@@ -752,7 +800,7 @@ export default function PortfolioCalc({ results }: { results: PortfolioResult[] 
                 </table>
               </div>
               <p className="text-[10px] text-gray-400">
-                💡 配分%列をクリックして直接編集 / Enter or フォーカスアウトで確定 / Escでキャンセル
+                💡 配分%列をクリックして直接編集 / 合計%をクリックで比例スケール変更 / Enter or フォーカスアウトで確定 / Escでキャンセル
               </p>
             </>
           )}
