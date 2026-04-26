@@ -1451,11 +1451,12 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
 }
 
 // ─── Summary Bar (修正5) ─────────────────────────────────────────────────────
-function SummaryBar({ candidates, t, onFilter, isLongBias }: {
+function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter }: {
   candidates: ExtendedCandidate[];
   t: Translations;
   onFilter: (key: "strong" | "long" | "pattern" | "allTf" | "spike") => void;
   isLongBias: (c: ExtendedCandidate) => boolean;
+  summaryFilter: "strong" | "long" | "pattern" | "allTf" | "spike" | null;
 }) {
   const counts = useMemo(() => ({
     strong: candidates.filter(c => c.displayScore >= 10).length,
@@ -1476,12 +1477,19 @@ function SummaryBar({ candidates, t, onFilter, isLongBias }: {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs px-1">
       <span className="font-semibold text-gray-500">{t.summaryLabel}:</span>
-      {items.map(({ key, label, count, cls }) => (
-        <button key={key} onClick={() => onFilter(key)}
-          className={`px-2 py-0.5 rounded-full border font-semibold transition-colors hover:opacity-80 ${cls}`}>
-          {label} <span className="font-bold">{count}</span>
-        </button>
-      ))}
+      {items.map(({ key, label, count, cls }) => {
+        const isActive = summaryFilter === key;
+        return (
+          <button key={key} onClick={() => onFilter(key)}
+            className={`px-2 py-0.5 rounded-full border font-semibold transition-all ${cls} ${
+              isActive
+                ? "ring-2 ring-offset-1 ring-current scale-105 shadow-sm"
+                : "opacity-60 hover:opacity-100"
+            }`}>
+            {label} <span className="font-bold">{count}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -2886,11 +2894,17 @@ export default function ShortScanner() {
             t={t}
             isLongBias={isLongBias}
             onFilter={(key) => setSummaryFilter(f => f === key ? null : key)}
+            summaryFilter={summaryFilter}
           />
           {summaryFilter && (
             <button onClick={() => setSummaryFilter(null)}
-              className="text-xs text-gray-400 hover:text-indigo-600 underline">
-              ✕ フィルター解除
+              className="ml-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-300 text-xs font-bold hover:bg-orange-200 transition-colors flex items-center gap-1">
+              ✕ フィルター解除（{
+                summaryFilter === "strong"  ? "ショート候補のみ" :
+                summaryFilter === "long"    ? "ロング優位のみ" :
+                summaryFilter === "pattern" ? "パターンのみ" :
+                summaryFilter === "allTf"   ? "全TF↓のみ" : "スパイクのみ"
+              }）
             </button>
           )}
         </div>
