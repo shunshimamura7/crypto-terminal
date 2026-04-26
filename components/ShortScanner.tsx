@@ -1949,16 +1949,76 @@ function BacktestPanel({
 
 // ─── Filter Presets (施策6) ───────────────────────────────────────────────────
 interface FilterPreset {
-  name: string; icon: string;
-  minDrop: number; maxVolRatio: number; minVol24k: number; maxDays: number; minOiK: number;
+  name: string;
+  icon: string;
+  description?: string;
+  minDrop: number;
+  maxVolRatio: number;
+  minVol24k: number;
+  maxDays: number;
+  minOiK: number;
   filterSettledOnly?: boolean;
   filterFsRatio5x?: boolean;
   sortBy?: SortKey;
+  summaryFilter?: "strong" | "long" | "pattern" | "allTf" | "spike" | null;
 }
 const DEFAULT_PRESETS: FilterPreset[] = [
-  { name: "presetEntryReady", icon: "🎯", minDrop: 30, maxVolRatio: 70,  minVol24k: 100, maxDays: 9999, minOiK: 50, filterSettledOnly: true },
-  { name: "presetNewListing", icon: "🆕", minDrop: 10, maxVolRatio: 150, minVol24k: 10,  maxDays: 30,   minOiK: 0  },
-  { name: "presetMexcOnly",   icon: "💀", minDrop: 30, maxVolRatio: 70,  minVol24k: 50,  maxDays: 9999, minOiK: 0,  filterFsRatio5x: true },
+  {
+    name: "本日のおすすめ",
+    icon: "🔥",
+    description: "スコア10+の強いショート候補のみ表示。迷ったらこれ",
+    minDrop: 20, maxVolRatio: 150, minVol24k: 50, maxDays: 9999, minOiK: 0,
+    sortBy: "displayScore",
+    summaryFilter: "strong",
+  },
+  {
+    name: "スキャルプ(即日〜3日)",
+    icon: "⚡",
+    description: "新規上場直後のポンプ崩壊狙い。上場7日以内",
+    minDrop: 5, maxVolRatio: 500, minVol24k: 10, maxDays: 7, minOiK: 0,
+    sortBy: "priceChange24h",
+    summaryFilter: null,
+  },
+  {
+    name: "スイング(1-2週間)",
+    icon: "📉",
+    description: "FR過熱+出来高枯渇の安定ショート。上場30日+",
+    minDrop: 30, maxVolRatio: 70, minVol24k: 100, maxDays: 9999, minOiK: 30,
+    sortBy: "displayScore",
+    summaryFilter: null,
+  },
+  {
+    name: "新規上場ハンター",
+    icon: "🆕",
+    description: "上場30日以内。出来高閾値緩め",
+    minDrop: 10, maxVolRatio: 150, minVol24k: 10, maxDays: 30, minOiK: 0,
+    sortBy: "displayScore",
+    summaryFilter: null,
+  },
+  {
+    name: "MEXC独占",
+    icon: "🎪",
+    description: "Binance/Bybitに未上場。流動性の薄さが武器",
+    minDrop: 20, maxVolRatio: 100, minVol24k: 50, maxDays: 9999, minOiK: 0,
+    sortBy: "displayScore",
+    summaryFilter: null,
+  },
+  {
+    name: "デッドキャット",
+    icon: "🐱",
+    description: "パターン検知+全TF下降のみ表示",
+    minDrop: 40, maxVolRatio: 100, minVol24k: 50, maxDays: 9999, minOiK: 0,
+    sortBy: "athDropPct",
+    summaryFilter: "pattern",
+  },
+  {
+    name: "FR収穫",
+    icon: "💰",
+    description: "FR高止まり銘柄。デルタニュートラル or 純ショート",
+    minDrop: 10, maxVolRatio: 200, minVol24k: 100, maxDays: 9999, minOiK: 50,
+    sortBy: "displayScore",
+    summaryFilter: null,
+  },
 ];
 const CUSTOM_PRESETS_KEY = "shortScanPresets";
 function loadCustomPresets(): FilterPreset[] {
@@ -1968,36 +2028,65 @@ function saveCustomPresets(presets: FilterPreset[]) {
   localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(presets.slice(0, 5)));
 }
 
-function FilterPresets({ t, customPresets, onApply, onSaveCurrent, onDeleteCustom }: {
+const EN_NAMES: Record<string, string> = {
+  "本日のおすすめ": "Today's Picks",
+  "スキャルプ(即日〜3日)": "Scalp (1-3d)",
+  "スイング(1-2週間)": "Swing (1-2w)",
+  "新規上場ハンター": "New Listing",
+  "MEXC独占": "MEXC Only",
+  "デッドキャット": "Dead Cat",
+  "FR収穫": "FR Harvest",
+};
+
+function FilterPresets({ t, lang, customPresets, onApply, onSaveCurrent, onDeleteCustom }: {
   t: Translations;
+  lang: Lang;
   customPresets: FilterPreset[];
   onApply: (p: FilterPreset) => void;
   onSaveCurrent: () => void;
   onDeleteCustom: (idx: number) => void;
 }) {
-  const presetName = (p: FilterPreset) => {
-    if (p.name === "presetStandard")   return `${p.icon} ${t.presetStandard}`;
-    if (p.name === "presetStrict")     return `${p.icon} ${t.presetStrict}`;
-    if (p.name === "presetNewListing") return `${p.icon} ${t.presetNewListing}`;
-    if (p.name === "presetEntryReady") return `${p.icon} ${t.presetEntryReady}`;
-    if (p.name === "presetSqueeze")    return `${p.icon} ${t.presetSqueeze}`;
-    if (p.name === "presetMexcOnly")   return `${p.icon} ${t.presetMexcOnly}`;
-    return `${p.icon} ${p.name}`;
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+
+  const handleApply = (p: FilterPreset) => {
+    onApply(p);
+    setActivePreset(p.name);
   };
+
+  const presetLabel = (p: FilterPreset) => {
+    const displayName = lang === "en" ? (EN_NAMES[p.name] ?? p.name) : p.name;
+    return `${p.icon} ${displayName}`;
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="text-gray-500 font-semibold shrink-0">{t.presetsLabel}:</span>
       {DEFAULT_PRESETS.map((p, i) => (
-        <button key={i} onClick={() => onApply(p)}
-          className="px-2.5 py-1 rounded-lg border border-gray-300 bg-white hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600 transition-colors">
-          {presetName(p)}
+        <button
+          key={i}
+          onClick={() => handleApply(p)}
+          title={p.description ?? ""}
+          className={`px-2.5 py-1 rounded-lg border transition-colors ${
+            activePreset === p.name
+              ? "bg-indigo-600 text-white border-indigo-600"
+              : "bg-white text-gray-600 border-gray-300 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+          }`}
+        >
+          {presetLabel(p)}
         </button>
       ))}
       {customPresets.map((p, i) => (
         <div key={`c${i}`} className="flex items-center">
-          <button onClick={() => onApply(p)}
-            className="px-2.5 py-1 rounded-l-lg border border-gray-300 bg-white hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600 transition-colors">
-            {presetName(p)}
+          <button
+            onClick={() => handleApply(p)}
+            title={p.description ?? "カスタムプリセット"}
+            className={`px-2.5 py-1 rounded-l-lg border transition-colors ${
+              activePreset === p.name
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-gray-600 border-gray-300 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+            }`}
+          >
+            {presetLabel(p)}
           </button>
           <button onClick={() => onDeleteCustom(i)}
             className="px-1.5 py-1 rounded-r-lg border border-l-0 border-gray-300 bg-white hover:bg-red-50 hover:text-red-500 text-gray-400 transition-colors">
@@ -2170,10 +2259,15 @@ export default function ShortScanner() {
   // Filter presets (施策6)
   const [customPresets, setCustomPresets] = useState<FilterPreset[]>(() => typeof window !== "undefined" ? loadCustomPresets() : []);
   function applyPreset(p: FilterPreset) {
-    setMinDrop(p.minDrop); setMaxVolRatio(p.maxVolRatio); setMinVol24k(p.minVol24k); setMaxDays(p.maxDays); setMinOiK(p.minOiK);
+    setMinDrop(p.minDrop);
+    setMaxVolRatio(p.maxVolRatio);
+    setMinVol24k(p.minVol24k);
+    setMaxDays(p.maxDays);
+    setMinOiK(p.minOiK);
     setFilterSettledOnly(p.filterSettledOnly ?? false);
     setFilterFsRatio5x(p.filterFsRatio5x ?? false);
     if (p.sortBy) setSortBy(p.sortBy);
+    if (p.summaryFilter !== undefined) setSummaryFilter(p.summaryFilter);
   }
   function applyPresetAndScan(p: FilterPreset) {
     applyPreset(p);
@@ -2182,7 +2276,7 @@ export default function ShortScanner() {
   function saveCurrentPreset() {
     const name = window.prompt(t.presetNamePrompt);
     if (!name?.trim()) return;
-    const p: FilterPreset = { name: name.trim(), icon: "⭐", minDrop, maxVolRatio, minVol24k, maxDays, minOiK, filterSettledOnly, filterFsRatio5x, sortBy };
+    const p: FilterPreset = { name: name.trim(), icon: "⭐", minDrop, maxVolRatio, minVol24k, maxDays, minOiK, filterSettledOnly, filterFsRatio5x, sortBy, summaryFilter };
     const next = [...customPresets, p].slice(0, 5);
     setCustomPresets(next);
     saveCustomPresets(next);
@@ -2634,7 +2728,7 @@ export default function ShortScanner() {
       </div>
 
       {/* Filter Presets (施策6) — Row 2 */}
-      <FilterPresets t={t} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
+      <FilterPresets t={t} lang={lang} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
 
       {/* Filters */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 border border-gray-200 rounded-xl p-3 md:p-4">
