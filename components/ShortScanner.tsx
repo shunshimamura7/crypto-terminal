@@ -9,9 +9,14 @@ import type { DiffAlert } from "@/app/lib/snapshotDiff";
 import { fetchCoinGeckoData, calcFuturesHeatScore, calcSnsHeatScore } from "@/app/lib/coinGeckoClient";
 import type { CgMarketData } from "@/app/lib/coinGeckoClient";
 import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
-import { checkAndUpdateRecords, recordNewCandidates } from "@/app/lib/backtestChecker";
-import { getRecords, clearRecords } from "@/app/lib/backtestStorage";
+import { checkAndUpdateRecords, recordNewCandidates, recordNewCandidatesWithStrategy } from "@/app/lib/backtestChecker";
+import type { ExtendedCandidateLike } from "@/app/lib/backtestChecker";
+import { getRecords, saveRecords, clearRecords } from "@/app/lib/backtestStorage";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
+import { findBestStrategy, evaluateDangerZone, ALL_STRATEGIES } from "@/app/lib/strategies";
+import type { DangerZoneResult } from "@/app/lib/strategies";
+import type { StrategyTag } from "@/app/lib/strategies/types";
+import DangerBanner from "@/components/DangerBanner";
 import { calculateStats } from "@/app/lib/backtestStats";
 import type { BacktestStats } from "@/app/lib/backtestStats";
 import type { BinanceFuturesData } from "@/app/types/binanceFutures";
@@ -2297,6 +2302,10 @@ export default function ShortScanner() {
   const [btRecords, setBtRecords] = useState<BacktestRecord[]>([]);
   const btStats = useMemo(() => calculateStats(btRecords), [btRecords]);
 
+  // Market context for DangerZone
+  const [marketBtcChange, setMarketBtcChange] = useState<number>(0);
+  const [marketFearGreed, setMarketFearGreed] = useState<number | null>(null);
+
   // Toast (施策10)
   const [toasts, setToasts] = useState<Toast[]>([]);
   const addToast = useCallback((message: string, type: Toast["type"] = "info", duration = 3000) => {
@@ -2310,6 +2319,16 @@ export default function ShortScanner() {
 
   useEffect(() => { setSnapshots(getSnapshots()); }, []);
   useEffect(() => { setBtRecords(getRecords()); }, []);
+
+  useEffect(() => {
+    fetch("/api/market-env")
+      .then(r => r.json())
+      .then((d: { btcChange24h?: number; fng?: { value: number } | null }) => {
+        if (d?.btcChange24h != null) setMarketBtcChange(d.btcChange24h);
+        if (d?.fng?.value != null)   setMarketFearGreed(d.fng.value);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("https://fapi.binance.com/fapi/v1/exchangeInfo")
@@ -2516,6 +2535,59 @@ export default function ShortScanner() {
     return m;
   }, [btRecords]);
 
+  // v6: 戦略マッチングマップ
+  const strategyMatches = useMemo(() => {
+    const m = new Map<string, { tag: StrategyTag; confidence: number; reasons: string[]; warnings: string[] }>();
+    for (const c of extended) {
+      const best = findBestStrategy({
+        athDropPct:        c.athDropPct,
+        volumeChangeRatio: c.volumeChangeRatio,
+        fundingRate:       c.fundingRate,
+        oiRatio:           c.oiRatio,
+        listedDaysAgo:     c.listedDaysAgo,
+        priceChange7d:     c.priceChange7d,
+        priceChange24h:    c.priceChange24h,
+        btcCorrelation:    c.btcCorrelation,
+        displayScore:      c.displayScore,
+        shortScore:        c.shortScore,
+        chartPattern:      c.chartPattern,
+        trendMultiTF:      c.trendMultiTF,
+        exclusivityScore:  c.exclusivityScore,
+        frBonus:           c.frBonus,
+        volumeSpike:       c.volumeSpike,
+      });
+      if (best) m.set(c.symbol, best);
+    }
+    return m;
+  }, [extended]);
+
+  // v6: DangerZone判定
+  const dangerZone = useMemo((): DangerZoneResult => {
+    const longCount      = extended.filter(c => isLongBias(c)).length;
+    const longBiasRatio  = extended.length > 0 ? longCount / extended.length : 0;
+    const frs            = extended.map(c => c.fundingRate).filter((fr): fr is number => fr !== null);
+    const avgFundingRate = frs.length > 0 ? frs.reduce((a, b) => a + b, 0) / frs.length : null;
+    return evaluateDangerZone({
+      btcChange24h:   marketBtcChange,
+      fearGreed:      marketFearGreed,
+      longBiasRatio,
+      avgFundingRate,
+      candidateCount: extended.length,
+    });
+  }, [extended, marketBtcChange, marketFearGreed]);
+
+  // v6: 新規recordにstrategyタグを後付けパッチ
+  useEffect(() => {
+    if (!extended.length || !strategyMatches.size) return;
+    const patched = recordNewCandidatesWithStrategy(
+      extended as unknown as ExtendedCandidateLike[],
+      dangerZone,
+      { btcChange24h: marketBtcChange, fearGreed: marketFearGreed, avgFundingRate: dangerZone.inputs.avgFundingRate },
+    );
+    if (patched.length > 0) setBtRecords(getRecords());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extended, strategyMatches, dangerZone]);
+
   useEffect(() => { setCurrentPage(1); }, [sortBy, minDrop, maxVolRatio, minVol24k, maxDays, minOiK]);
 
   function toggleRow(sym: string) {
@@ -2641,6 +2713,9 @@ export default function ShortScanner() {
 
       {/* Market Panel (施策9) */}
       <MarketEnvironmentPanel cgApiKey={HAS_CG ? CG_API_KEY : undefined} />
+
+      {/* v6 DangerZone banner */}
+      <DangerBanner result={dangerZone} />
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -2817,6 +2892,22 @@ export default function ShortScanner() {
         </div>
       )}
 
+      {/* v6: 戦略マッチサマリー */}
+      {data && !loading && strategyMatches.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs px-1">
+          <span className="font-semibold text-gray-500">戦略マッチ:</span>
+          {ALL_STRATEGIES.map(s => {
+            const count = [...strategyMatches.values()].filter(m => m.tag === s.tag).length;
+            if (!count) return null;
+            return (
+              <span key={s.tag} className="px-2 py-0.5 rounded-full border font-semibold bg-purple-50 text-purple-700 border-purple-200">
+                {s.icon}{s.shortName} <span className="font-bold">{count}</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       {/* Loading (F) */}
       {!loading && !data && !error && (
         <div className="text-center py-12 px-4">
@@ -2979,6 +3070,19 @@ export default function ShortScanner() {
                             <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${phaseBadgeCls(c.phase.phase)}`}>
                               {c.phase.emoji}{c.phase.label}
                             </span>
+                            {/* v6: strategy badge */}
+                            {(() => {
+                              const m = strategyMatches.get(c.symbol);
+                              if (!m) return null;
+                              const strategy = ALL_STRATEGIES.find(s => s.tag === m.tag);
+                              if (!strategy) return null;
+                              return (
+                                <span title={m.reasons.join("\n")}
+                                  className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-purple-50 text-purple-700 border-purple-300 cursor-help">
+                                  {strategy.icon}{strategy.shortName} {m.confidence}%
+                                </span>
+                              );
+                            })()}
                             {(() => {
                               const fr = c.fundingRate;
                               const squeezeCount = [

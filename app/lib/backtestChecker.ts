@@ -3,6 +3,9 @@
 import type { ShortCandidate } from "./shortScorer";
 import { getRecords, saveRecords } from "./backtestStorage";
 import type { BacktestRecord } from "./backtestStorage";
+import { findBestStrategy } from "./strategies";
+import type { DangerZoneResult } from "./strategies";
+import type { CandidateInput } from "./strategies/types";
 
 const EXPIRE_DAYS = 14;
 const SCORE_THRESHOLD = 10;
@@ -95,4 +98,77 @@ export function recordNewCandidates(candidates: ShortCandidate[]): BacktestRecor
   }
 
   return newRecords;
+}
+
+// Extended candidate shape needed for strategy matching
+export interface ExtendedCandidateLike extends ShortCandidate {
+  displayScore: number;
+  exclusivityScore: number;
+  frBonus: number;
+}
+
+// Step 3: patch active records that have no strategyTag yet with strategy + market context
+export function recordNewCandidatesWithStrategy(
+  extended: ExtendedCandidateLike[],
+  dangerZoneResult: DangerZoneResult,
+  marketCtx: { btcChange24h: number; fearGreed: number | null; avgFundingRate: number | null },
+): BacktestRecord[] {
+  const records = getRecords();
+  const extMap = new Map(extended.map(c => [c.symbol, c]));
+
+  let changed = false;
+  const patched: BacktestRecord[] = [];
+
+  for (const record of records) {
+    if (record.status !== "active" || record.strategyTag !== undefined) continue;
+    const ext = extMap.get(record.symbol);
+    if (!ext) continue;
+
+    const input: CandidateInput = {
+      athDropPct:          ext.athDropPct,
+      volumeChangeRatio:   ext.volumeChangeRatio,
+      fundingRate:         ext.fundingRate,
+      oiRatio:             ext.oiRatio,
+      listedDaysAgo:       ext.listedDaysAgo,
+      priceChange7d:       ext.priceChange7d,
+      priceChange24h:      ext.priceChange24h,
+      btcCorrelation:      ext.btcCorrelation,
+      displayScore:        ext.displayScore,
+      shortScore:          ext.shortScore,
+      chartPattern:        ext.chartPattern,
+      trendMultiTF:        ext.trendMultiTF,
+      exclusivityScore:    ext.exclusivityScore,
+      frBonus:             ext.frBonus,
+      volumeSpike:         ext.volumeSpike,
+    };
+
+    const best = findBestStrategy(input);
+    record.strategyTag    = best?.tag;
+    record.confidence     = best?.confidence;
+    record.matchReasons   = best?.reasons;
+    record.matchWarnings  = best?.warnings;
+    record.dangerLevel              = dangerZoneResult.level;
+    record.btcChange24hAtEntry      = marketCtx.btcChange24h;
+    record.fearGreedAtEntry         = marketCtx.fearGreed ?? undefined;
+    record.avgFundingRateAtEntry    = marketCtx.avgFundingRate ?? undefined;
+    record.candidateSnapshot = {
+      athDropPct:          ext.athDropPct,
+      volumeChangeRatio:   ext.volumeChangeRatio,
+      fundingRate:         ext.fundingRate,
+      oiRatio:             ext.oiRatio,
+      listedDaysAgo:       ext.listedDaysAgo,
+      priceChange7d:       ext.priceChange7d,
+      priceChange24h:      ext.priceChange24h,
+      btcCorrelation:      ext.btcCorrelation,
+      chartPatternType:    ext.chartPattern?.type ?? null,
+      trendAlignment:      ext.trendMultiTF?.alignment ?? null,
+      exclusivityScore:    ext.exclusivityScore,
+    };
+
+    changed = true;
+    patched.push(record);
+  }
+
+  if (changed) saveRecords(records);
+  return patched;
 }
