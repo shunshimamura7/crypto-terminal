@@ -66,3 +66,26 @@ body {
 ::-webkit-scrollbar { height: 4px; }
 ::-webkit-scrollbar-track { background: #f1f1f1; }
 ::-webkit-scrollbar-thumb { background: #888; border-radius: 2px; }
+
+/* Short scan table — thick visible scrollbar */
+.short-scan-table::-webkit-scrollbar { height: 12px; }
+.short-scan-table::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 6px; }
+.short-scan-table::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; }
+.short-scan-table::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* Short Scanner テーブルスクロールバー太く */
+.short-scan-scrollbar::-webkit-scrollbar {
+  height: 14px;
+}
+.short-scan-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 7px;
+}
+.short-scan-scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 7px;
+  border: 2px solid #f1f5f9;
+}
+.short-scan-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}

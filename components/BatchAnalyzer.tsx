@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 import PortfolioCalc from "./PortfolioCalc";
 import { addToWatchlist, isInWatchlist } from "@/app/lib/watchlist";
+import FRWatchToggle from "@/components/FRWatchToggle";
 
 type InputKind = "ticker" | "evm" | "solana" | "ton" | "sui" | "tron" | "invalid";
 
@@ -254,7 +255,7 @@ export default function BatchAnalyzer({ prefillText = "" }: { prefillText?: stri
                 <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700">SM</th>
                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">指標</th>
                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">投資判断</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">W</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">W / FR</th>
               </tr>
             </thead>
             <tbody>
@@ -308,19 +309,22 @@ export default function BatchAnalyzer({ prefillText = "" }: { prefillText?: stri
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-600">{r.decision}</td>
                       <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={() => {
-                            const res = addToWatchlist(r.input);
-                            if (res !== "full") setWatchStates(s => ({ ...s, [r.input]: true }));
-                          }}
-                          className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${
-                            watchStates[r.input]
-                              ? "bg-yellow-100 text-yellow-700 border-yellow-300"
-                              : "bg-gray-100 text-gray-700 border-gray-200 hover:bg-yellow-50 hover:text-yellow-600"
-                          }`}
-                        >
-                          {watchStates[r.input] ? "★" : "☆"}
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              const res = addToWatchlist(r.input);
+                              if (res !== "full") setWatchStates(s => ({ ...s, [r.input]: true }));
+                            }}
+                            className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${
+                              watchStates[r.input]
+                                ? "bg-yellow-100 text-yellow-700 border-yellow-300"
+                                : "bg-gray-100 text-gray-700 border-gray-200 hover:bg-yellow-50 hover:text-yellow-600"
+                            }`}
+                          >
+                            {watchStates[r.input] ? "★" : "☆"}
+                          </button>
+                          {r.type === "ticker" && <FRWatchToggle symbol={r.input} />}
+                        </div>
                       </td>
                     </tr>
                   );

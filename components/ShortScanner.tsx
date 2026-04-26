@@ -16,6 +16,10 @@ import { calculateStats } from "@/app/lib/backtestStats";
 import type { BacktestStats } from "@/app/lib/backtestStats";
 import type { BinanceFuturesData } from "@/app/types/binanceFutures";
 import { evaluateShortSignal } from "@/app/lib/coinglass";
+import FRWatchToggle from "@/components/FRWatchToggle";
+import { addToWatchlist, removeFromWatchlist, isInWatchlist } from "@/app/lib/watchlist";
+import { detectPhase, phaseBadgeCls } from "@/app/lib/phaseDetector";
+import type { PhaseResult, Phase } from "@/app/lib/phaseDetector";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -214,6 +218,9 @@ const T = {
     presetStandard: "通常スキャン",
     presetStrict: "厳選ショート",
     presetNewListing: "新規上場ハンター",
+    presetEntryReady: "本日のおすすめ",
+    presetSqueeze: "スクイーズ警戒",
+    presetMexcOnly: "MEXC独占",
     presetSave: "+ 保存",
     presetNamePrompt: "プリセット名を入力",
     presetDelConfirm: "このプリセットを削除しますか？",
@@ -230,6 +237,12 @@ const T = {
     binanceFuturesSection: "📡 Binance Futures 分析",
     binanceNotListed: "Binance未上場 — MEXC独占銘柄の可能性",
     aiAnalysis: "🤖 AI分析:",
+    // Phase判定
+    entryJudgment: "📡 エントリー判定",
+    filterSettledOnly: "安定期のみ",
+    filterFsRatio5x: "先/現 5倍以上",
+    colPhase: "Phase",
+    sortPhase: "Phase順",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -410,6 +423,9 @@ const T = {
     presetStandard: "Standard",
     presetStrict: "Strict Short",
     presetNewListing: "New Listing",
+    presetEntryReady: "Today's Picks",
+    presetSqueeze: "Squeeze Watch",
+    presetMexcOnly: "MEXC Exclusive",
     presetSave: "+ Save",
     presetNamePrompt: "Enter preset name",
     presetDelConfirm: "Delete this preset?",
@@ -425,6 +441,12 @@ const T = {
     binanceFuturesSection: "📡 Binance Futures Analysis",
     binanceNotListed: "Not on Binance — possibly MEXC exclusive",
     aiAnalysis: "🤖 AI Analysis:",
+    // Phase
+    entryJudgment: "📡 Entry Judgment",
+    filterSettledOnly: "Settled only",
+    filterFsRatio5x: "F/S ≥ 5×",
+    colPhase: "Phase",
+    sortPhase: "Phase",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -439,6 +461,7 @@ interface ExtendedCandidate extends ShortCandidate {
   futuresHeatScore: number;
   snsHeatScore: number;
   displayScore: number;
+  phase: PhaseResult;
 }
 
 interface ScanResponse {
@@ -458,7 +481,7 @@ const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
 const DISPLAY_MAX = HAS_CG ? 25 : 22; // v5施策1+2+4: BTC非連動+1, MTF 2→3, パターン+1
 
-type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest";
+type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest" | "phase";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 function fmtPrice(n: number): string {
@@ -514,6 +537,36 @@ function ToastContainer({ toasts }: { toasts: Toast[] }) {
       ))}
     </div>
   );
+}
+
+const PHASE_ORDER: Record<Phase, number> = { SETTLED: 0, ACCUMULATING: 1, NEUTRAL: 2, CHAOTIC: 3, SQUEEZING: 4 };
+
+function getEntryJudgment(
+  phase: Phase,
+  fr: number | null,
+  fsRatio: number | null,
+  exclusivity: number,
+): { verdict: "RECOMMENDED" | "POSSIBLE" | "WAIT" | "FORBIDDEN"; label: string; emoji: string; reasons: string[] } {
+  let score = 0;
+  const reasons: string[] = [];
+
+  if (phase === "SETTLED")      { score += 3; reasons.push("Phase安定期 ✓"); }
+  else if (phase === "ACCUMULATING") { score += 1; reasons.push("Phase蓄積中 — 注意"); }
+  else { reasons.push(`Phase: ${phase} — 待機`); }
+
+  if (fr !== null) {
+    if (fr > 0.0005)       { score += 2; reasons.push("FR +ショート有利 ✓"); }
+    else if (fr > -0.0005) { score += 1; reasons.push("FR 中立 ✓"); }
+    else                   { reasons.push("FR マイナス — スクイーズ注意"); }
+  }
+
+  if (fsRatio != null && fsRatio >= 5) { score += 1; reasons.push(`先/現 ${fsRatio.toFixed(1)}倍 — レバ相場 ✓`); }
+  if (exclusivity === 2) { score += 1; reasons.push("MEXCのみ — 流動性薄 ✓"); }
+
+  if (score >= 5) return { verdict: "RECOMMENDED", label: "ショート推奨",   emoji: "🟢", reasons };
+  if (score >= 3) return { verdict: "POSSIBLE",    label: "ショート検討可", emoji: "🟡", reasons };
+  if (phase === "SQUEEZING" || phase === "CHAOTIC") return { verdict: "FORBIDDEN", label: "エントリー禁止", emoji: "🔴", reasons };
+  return { verdict: "WAIT", label: "待機", emoji: "⚪", reasons };
 }
 
 function scoreBadgeStyle(s: number): React.CSSProperties {
@@ -624,7 +677,7 @@ function LoadingProgress({ t, elapsed }: { t: Translations; elapsed: number }) {
 }
 
 // ─── Score Detail ─────────────────────────────────────────────────────────────
-function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapshots: ScanSnapshot[]; alerts: DiffAlert[]; t: Translations }) {
+function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle }: { c: ExtendedCandidate; snapshots: ScanSnapshot[]; alerts: DiffAlert[]; t: Translations; watchlistSet: Set<string>; onWatchlistToggle: (sym: string) => void }) {
   const diff = getDiffSummary(c.symbol, c, snapshots);
   const symAlerts = alerts.filter(a => a.symbol === c.symbol);
   const colSpan = 15;
@@ -760,6 +813,34 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
           <ShortSignalBadge fr={c.fundingRate} />
           <span className="text-xs text-gray-500">{evaluateShortSignal(c.fundingRate).reason}</span>
         </div>
+
+        {/* Entry Judgment */}
+        {(() => {
+          const sp = c.cgData?.spotVolume;
+          const fsRatio = (sp && sp >= 1000) ? c.volume24h / sp : null;
+          const { verdict, emoji, label, reasons } = getEntryJudgment(c.phase.phase, c.fundingRate, fsRatio, c.exclusivityScore);
+          const borderCls = verdict === "RECOMMENDED" ? "border-green-300" : verdict === "FORBIDDEN" ? "border-red-300" : "border-gray-200";
+          const bgCls     = verdict === "RECOMMENDED" ? "bg-green-50"     : verdict === "FORBIDDEN" ? "bg-red-50"     : "bg-white";
+          return (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <p className="text-xs font-semibold text-gray-700 mb-1.5">{t.entryJudgment}</p>
+              <div className={`rounded-lg border ${borderCls} ${bgCls} p-2.5`}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-sm">{emoji}</span>
+                  <span className="text-xs font-bold text-gray-800">{label}</span>
+                  <span className={`text-[9px] px-1 py-0.5 rounded border ${phaseBadgeCls(c.phase.phase)}`}>
+                    {c.phase.emoji}{c.phase.label}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                  {reasons.map((r, ri) => (
+                    <span key={ri} className="text-[10px] text-gray-600">• {r}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Trade Setup (施策10) */}
         {c.tradeSetup && (() => {
@@ -1004,8 +1085,24 @@ function ScoreDetail({ c, snapshots, alerts, t }: { c: ExtendedCandidate; snapsh
           )}
         </div>
 
+        {/* Watchlist + Share */}
+        <div className="mt-2 pt-2 border-t border-gray-200 flex flex-wrap gap-2 items-center">
+          {(() => {
+            const base = c.symbol.replace(/_USDT$/, "");
+            const inWl = watchlistSet.has(base);
+            return (
+              <button
+                onClick={e => { e.stopPropagation(); onWatchlistToggle(base); }}
+                className={`text-[11px] px-2.5 py-1 rounded border font-semibold transition-colors ${inWl ? "bg-yellow-50 text-yellow-700 border-yellow-300 hover:bg-yellow-100" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"}`}
+              >
+                {inWl ? "⭐ 登録済" : "☆ ウォッチリスト追加"}
+              </button>
+            );
+          })()}
+        </div>
+
         {/* Share this candidate (E) */}
-        <div className="mt-2 flex gap-2">
+        <div className="mt-1.5 flex gap-2">
           <a
             href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`🎯 ${c.symbol.replace("_USDT","")}/USDT ショートスコア ${c.displayScore}/${DISPLAY_MAX}点\nATH比 ${c.athDropPct.toFixed(1)}% | FR ${c.fundingRate != null ? (c.fundingRate*100).toFixed(4) : "—"}%\n#MEXC #CryptoShort #暗号通貨\nhttps://bell-crypto-terminal.vercel.app/short-scan`)}`}
             target="_blank" rel="noopener noreferrer"
@@ -1254,6 +1351,7 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
     allTfDown: c.trendMultiTF?.alignment === 3,
     longBias: isLongBias(c),
     color: bubbleColor(c),
+    phase: c.phase.phase,
   }));
 
   return (
@@ -1312,15 +1410,25 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
             }}
             style={{ cursor: "pointer" }}
           >
-            {data.map((entry, i) => (
-              <Cell
-                key={i}
-                fill={entry.color}
-                fillOpacity={0.75}
-                stroke={entry.hasPattern ? "#0ea5e9" : entry.allTfDown ? "#16a34a" : "transparent"}
-                strokeWidth={entry.hasPattern || entry.allTfDown ? 2 : 0}
-              />
-            ))}
+            {data.map((entry, i) => {
+              const phaseBorder =
+                entry.phase === "SETTLED"      ? { stroke: "#22c55e", w: 2 } :
+                entry.phase === "ACCUMULATING" ? { stroke: "#f59e0b", w: 2 } :
+                entry.phase === "CHAOTIC"      ? { stroke: "#f97316", w: 2 } :
+                entry.phase === "SQUEEZING"    ? { stroke: "#ef4444", w: 2 } :
+                entry.hasPattern ? { stroke: "#0ea5e9", w: 2 } :
+                entry.allTfDown  ? { stroke: "#16a34a", w: 2 } :
+                { stroke: "transparent", w: 0 };
+              return (
+                <Cell
+                  key={i}
+                  fill={entry.color}
+                  fillOpacity={0.75}
+                  stroke={phaseBorder.stroke}
+                  strokeWidth={phaseBorder.w}
+                />
+              );
+            })}
           </Scatter>
           {/* 狙い目ラベル */}
           <text x="75%" y="12" textAnchor="middle" fill="#16a34a" fontSize={10} fontWeight={700}>{t.heatTarget}</text>
@@ -1843,11 +1951,14 @@ function BacktestPanel({
 interface FilterPreset {
   name: string; icon: string;
   minDrop: number; maxVolRatio: number; minVol24k: number; maxDays: number; minOiK: number;
+  filterSettledOnly?: boolean;
+  filterFsRatio5x?: boolean;
+  sortBy?: SortKey;
 }
 const DEFAULT_PRESETS: FilterPreset[] = [
-  { name: "presetStandard",    icon: "📊", minDrop: 10,  maxVolRatio: 150, minVol24k: 50,  maxDays: 9999, minOiK: 0  },
-  { name: "presetStrict",      icon: "🎯", minDrop: 40,  maxVolRatio: 50,  minVol24k: 200, maxDays: 365,  minOiK: 50 },
-  { name: "presetNewListing",  icon: "🆕", minDrop: 10,  maxVolRatio: 150, minVol24k: 10,  maxDays: 30,  minOiK: 0  },
+  { name: "presetEntryReady", icon: "🎯", minDrop: 30, maxVolRatio: 70,  minVol24k: 100, maxDays: 9999, minOiK: 50, filterSettledOnly: true },
+  { name: "presetNewListing", icon: "🆕", minDrop: 10, maxVolRatio: 150, minVol24k: 10,  maxDays: 30,   minOiK: 0  },
+  { name: "presetMexcOnly",   icon: "💀", minDrop: 30, maxVolRatio: 70,  minVol24k: 50,  maxDays: 9999, minOiK: 0,  filterFsRatio5x: true },
 ];
 const CUSTOM_PRESETS_KEY = "shortScanPresets";
 function loadCustomPresets(): FilterPreset[] {
@@ -1868,6 +1979,9 @@ function FilterPresets({ t, customPresets, onApply, onSaveCurrent, onDeleteCusto
     if (p.name === "presetStandard")   return `${p.icon} ${t.presetStandard}`;
     if (p.name === "presetStrict")     return `${p.icon} ${t.presetStrict}`;
     if (p.name === "presetNewListing") return `${p.icon} ${t.presetNewListing}`;
+    if (p.name === "presetEntryReady") return `${p.icon} ${t.presetEntryReady}`;
+    if (p.name === "presetSqueeze")    return `${p.icon} ${t.presetSqueeze}`;
+    if (p.name === "presetMexcOnly")   return `${p.icon} ${t.presetMexcOnly}`;
     return `${p.icon} ${p.name}`;
   };
   return (
@@ -2006,16 +2120,20 @@ export default function ShortScanner() {
   const [snapshots, setSnapshots] = useState<ScanSnapshot[]>([]);
 
   // Filters
-  const [minDrop,     setMinDrop]     = useState(30);
-  const [maxVolRatio, setMaxVolRatio] = useState(70);
-  const [maxDays,     setMaxDays]     = useState(9999);
-  const [minVol24k,   setMinVol24k]   = useState(100);
-  const [minOiK,      setMinOiK]      = useState(0);
+  const [minDrop,          setMinDrop]          = useState(30);
+  const [maxVolRatio,      setMaxVolRatio]       = useState(70);
+  const [maxDays,          setMaxDays]           = useState(9999);
+  const [minVol24k,        setMinVol24k]         = useState(100);
+  const [minOiK,           setMinOiK]            = useState(50);
+  const [filterSettledOnly, setFilterSettledOnly] = useState(true);
+  const [filterFsRatio5x,   setFilterFsRatio5x]   = useState(false);
 
   // Sort & view
   const [sortBy, setSortBy] = useState<SortKey>("displayScore");
   const [viewMode, setViewMode] = useState<"table" | "heat">("table");
   const [summaryFilter, setSummaryFilter] = useState<"strong"|"long"|"pattern"|"allTf"|"spike"|null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 15;
 
   // Auto-refresh interval (施策5)
   const [autoIntervalMin, setAutoIntervalMin] = useState<0|5|10|30|60>(() => {
@@ -2024,6 +2142,21 @@ export default function ShortScanner() {
   });
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showAutoMenu, setShowAutoMenu] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+
+  // Watchlist state (reactive)
+  const [watchlistSet, setWatchlistSet] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    return new Set(JSON.parse(localStorage.getItem("watchlist") ?? "[]") as string[]);
+  });
+  function toggleWatchlist(sym: string) {
+    if (watchlistSet.has(sym)) {
+      removeFromWatchlist(sym);
+    } else {
+      addToWatchlist(sym);
+    }
+    setWatchlistSet(new Set(JSON.parse(localStorage.getItem("watchlist") ?? "[]") as string[]));
+  }
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Keyboard shortcuts (施策3)
@@ -2038,11 +2171,18 @@ export default function ShortScanner() {
   const [customPresets, setCustomPresets] = useState<FilterPreset[]>(() => typeof window !== "undefined" ? loadCustomPresets() : []);
   function applyPreset(p: FilterPreset) {
     setMinDrop(p.minDrop); setMaxVolRatio(p.maxVolRatio); setMinVol24k(p.minVol24k); setMaxDays(p.maxDays); setMinOiK(p.minOiK);
+    setFilterSettledOnly(p.filterSettledOnly ?? false);
+    setFilterFsRatio5x(p.filterFsRatio5x ?? false);
+    if (p.sortBy) setSortBy(p.sortBy);
+  }
+  function applyPresetAndScan(p: FilterPreset) {
+    applyPreset(p);
+    if (!loading) scan(undefined, { minDrop: p.minDrop, maxVolRatio: p.maxVolRatio, minVol24k: p.minVol24k, maxDays: p.maxDays, minOiK: p.minOiK });
   }
   function saveCurrentPreset() {
     const name = window.prompt(t.presetNamePrompt);
     if (!name?.trim()) return;
-    const p: FilterPreset = { name: name.trim(), icon: "⭐", minDrop, maxVolRatio, minVol24k, maxDays, minOiK };
+    const p: FilterPreset = { name: name.trim(), icon: "⭐", minDrop, maxVolRatio, minVol24k, maxDays, minOiK, filterSettledOnly, filterFsRatio5x, sortBy };
     const next = [...customPresets, p].slice(0, 5);
     setCustomPresets(next);
     saveCustomPresets(next);
@@ -2088,7 +2228,7 @@ export default function ShortScanner() {
       }).catch(() => {});
   }, []);
 
-  const scan = useCallback(async (mode?: "new30") => {
+  const scan = useCallback(async (mode?: "new30", filterOverrides?: { minDrop: number; maxVolRatio: number; minVol24k: number; maxDays: number; minOiK: number }) => {
     setLoading(true);
     setError("");
     setExpandedRows(new Set());
@@ -2110,11 +2250,11 @@ export default function ShortScanner() {
         url = "/api/short-scan?mode=new30";
       } else {
         const params = new URLSearchParams({
-          minDrop: String(minDrop),
-          maxVolRatio: String(maxVolRatio),
-          minVol24k: String(minVol24k),
-          maxDays: String(maxDays),
-          minOiK: String(minOiK),
+          minDrop: String(filterOverrides?.minDrop ?? minDrop),
+          maxVolRatio: String(filterOverrides?.maxVolRatio ?? maxVolRatio),
+          minVol24k: String(filterOverrides?.minVol24k ?? minVol24k),
+          maxDays: String(filterOverrides?.maxDays ?? maxDays),
+          minOiK: String(filterOverrides?.minOiK ?? minOiK),
         });
         url = `/api/short-scan?${params}`;
       }
@@ -2123,6 +2263,7 @@ export default function ShortScanner() {
       const json: ScanResponse = await res.json();
       if (!json.success) throw new Error(json.error || "スキャン失敗");
       setData(json);
+      setCurrentPage(1);
 
       // Snapshot (施策3)
       const snap: ScanSnapshot = {
@@ -2213,6 +2354,7 @@ export default function ShortScanner() {
     setShowAutoMenu(false);
   }
 
+
   // Extended candidates — server already applied filter params; no client-side re-filter
   const extended = useMemo((): ExtendedCandidate[] => {
     if (!data?.candidates) return [];
@@ -2227,7 +2369,8 @@ export default function ShortScanner() {
       const futuresHeatScore = cgData ? calcFuturesHeatScore(c.volume24h, cgData.spotVolume) : 0;
       const snsHeatScore = cgData ? calcSnsHeatScore(cgData.twitterFollowers, cgData.telegramMembers, c.priceChange7d) : 0;
       const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore;
-      return { ...c, listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, displayScore };
+      const phase = detectPhase(c.fundingRate, null, null, c.priceChange24h);
+      return { ...c, listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, displayScore, phase };
     });
     const sorted = mapped.sort((a, b) => {
       switch (sortBy) {
@@ -2235,20 +2378,36 @@ export default function ShortScanner() {
         case "priceChange24h": return b.priceChange24h - a.priceChange24h;
         case "priceChange7d":  return b.priceChange7d - a.priceChange7d;
         case "openInterest":   return b.openInterest - a.openInterest;
+        case "phase":          return (PHASE_ORDER[a.phase.phase] ?? 5) - (PHASE_ORDER[b.phase.phase] ?? 5);
         default:               return b.displayScore - a.displayScore;
       }
     });
 
-    if (!summaryFilter) return sorted;
-    switch (summaryFilter) {
-      case "strong":  return sorted.filter(c => c.displayScore >= 10);
-      case "long":    return sorted.filter(c => isLongBias(c));
-      case "pattern": return sorted.filter(c => !!c.chartPattern);
-      case "allTf":   return sorted.filter(c => c.trendMultiTF?.alignment === 3);
-      case "spike":   return sorted.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral");
-      default:        return sorted;
+    let result = sorted;
+    if (summaryFilter) {
+      switch (summaryFilter) {
+        case "strong":  result = sorted.filter(c => c.displayScore >= 10); break;
+        case "long":    result = sorted.filter(c => isLongBias(c)); break;
+        case "pattern": result = sorted.filter(c => !!c.chartPattern); break;
+        case "allTf":   result = sorted.filter(c => c.trendMultiTF?.alignment === 3); break;
+        case "spike":   result = sorted.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral"); break;
+      }
     }
-  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter]);
+    if (filterSettledOnly) result = result.filter(c => c.phase.phase === "SETTLED");
+    if (filterFsRatio5x) {
+      result = result.filter(c => {
+        const sp = c.cgData?.spotVolume;
+        return sp && sp >= 1000 && c.volume24h / sp >= 5;
+      });
+    }
+    return result;
+  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, filterSettledOnly, filterFsRatio5x]);
+
+  const totalPages = Math.ceil(extended.length / ITEMS_PER_PAGE);
+  const paginatedItems = extended.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const alerts = useMemo(() => detectAlerts(data?.candidates ?? [], snapshots), [data, snapshots]);
 
@@ -2262,6 +2421,8 @@ export default function ShortScanner() {
     }
     return m;
   }, [btRecords]);
+
+  useEffect(() => { setCurrentPage(1); }, [sortBy, minDrop, maxVolRatio, minVol24k, maxDays, minOiK]);
 
   function toggleRow(sym: string) {
     setExpandedRows(prev => { const n = new Set(prev); n.has(sym) ? n.delete(sym) : n.add(sym); return n; });
@@ -2279,8 +2440,8 @@ export default function ShortScanner() {
         case "arrowdown":
           e.preventDefault();
           setSelectedIdx(i => {
-            const next = Math.min(i + 1, extended.length - 1);
-            if (extended[next]) setTimeout(() => document.getElementById(`row-${extended[next].symbol}`)?.scrollIntoView({ block: "nearest" }), 0);
+            const next = Math.min(i + 1, paginatedItems.length - 1);
+            if (paginatedItems[next]) setTimeout(() => document.getElementById(`row-${paginatedItems[next].symbol}`)?.scrollIntoView({ block: "nearest" }), 0);
             return next;
           });
           break;
@@ -2288,13 +2449,13 @@ export default function ShortScanner() {
           e.preventDefault();
           setSelectedIdx(i => {
             const next = Math.max(i - 1, 0);
-            if (extended[next]) setTimeout(() => document.getElementById(`row-${extended[next].symbol}`)?.scrollIntoView({ block: "nearest" }), 0);
+            if (paginatedItems[next]) setTimeout(() => document.getElementById(`row-${paginatedItems[next].symbol}`)?.scrollIntoView({ block: "nearest" }), 0);
             return next;
           });
           break;
         case "enter":
           e.preventDefault();
-          if (selectedIdx >= 0 && extended[selectedIdx]) toggleRow(extended[selectedIdx].symbol);
+          if (selectedIdx >= 0 && paginatedItems[selectedIdx]) toggleRow(paginatedItems[selectedIdx].symbol);
           break;
         case "escape":
           e.preventDefault();
@@ -2310,7 +2471,7 @@ export default function ShortScanner() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, extended, selectedIdx]);
+  }, [loading, extended, selectedIdx, currentPage]);
 
   // Share results (E)
   function shareResults() {
@@ -2400,16 +2561,20 @@ export default function ShortScanner() {
         </button>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex flex-wrap gap-2">
+      {/* Action buttons — Row 1 */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <button onClick={() => scan()} disabled={loading}
+          className="px-4 py-1.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
+          {loading ? "⏳ ..." : t.scanBtn}
+        </button>
         <button onClick={exportCSV} disabled={extended.length === 0}
-          className="px-2 md:px-3 py-1.5 text-xs bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed border border-gray-300 rounded-lg text-gray-600 transition-colors">
+          className="px-3 py-1.5 text-xs bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed border border-gray-300 rounded-lg text-gray-600 transition-colors">
           {t.csvBtn}
         </button>
         {/* Auto-refresh interval dropdown (施策5) */}
         <div className="relative">
           <button onClick={() => setShowAutoMenu(v => !v)}
-            className={`px-2 md:px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoIntervalMin > 0 ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
+            className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoIntervalMin > 0 ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
             {t.autoRefresh} {autoIntervalMin > 0 ? `${autoIntervalMin}m` : t.autoOff} ▾
             {autoIntervalMin > 0 && countdown != null && (
               <span className="ml-1 text-indigo-400">{Math.floor(countdown / 60)}:{String(Math.floor(countdown % 60)).padStart(2,"0")}</span>
@@ -2426,56 +2591,50 @@ export default function ShortScanner() {
             </div>
           )}
         </div>
-        {/* Sound toggle (施策2) */}
-        <button onClick={toggleSound}
-          className={`px-2 md:px-3 py-1.5 text-xs border rounded-lg transition-colors ${soundEnabled ? "bg-emerald-50 text-emerald-700 border-emerald-300" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"}`}
-          title={soundEnabled ? "サウンドをOFFにする" : "サウンドをONにする"}>
-          {soundEnabled ? t.soundOn : t.soundOff}
-        </button>
-        {/* Notification (D) */}
-        {notifState !== "granted" ? (
-          <button onClick={requestNotif}
-            className="px-2 md:px-3 py-1.5 text-xs bg-amber-50 text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors">
-            {t.notifEnable}
+        {/* Settings menu */}
+        <div className="relative ml-auto">
+          <button onClick={() => setShowSettingsMenu(v => !v)}
+            className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
+            title="設定">
+            ⚙️
           </button>
-        ) : (
-          <span className="px-2 md:px-3 py-1.5 text-xs bg-green-50 text-green-700 border border-green-200 rounded-lg">{t.notifOn}</span>
-        )}
-        {/* Share (E) */}
-        <button onClick={shareResults} disabled={extended.length === 0}
-          className="px-2 md:px-3 py-1.5 text-xs bg-sky-50 text-sky-700 border border-sky-300 rounded-lg hover:bg-sky-100 disabled:opacity-40 transition-colors">
-          {t.shareBtn}
-        </button>
-        {/* URL share (施策4) */}
-        <button onClick={shareFilterURL}
-          className="px-2 md:px-3 py-1.5 text-xs bg-violet-50 text-violet-700 border border-violet-300 rounded-lg hover:bg-violet-100 transition-colors">
-          {t.shareUrl}
-        </button>
-        {/* MEXC referral (C) */}
-        <a href={MEXC_REG_URL} target="_blank" rel="noopener noreferrer"
-          className="px-2 md:px-3 py-1.5 text-xs bg-orange-50 text-orange-700 border border-orange-300 rounded-lg hover:bg-orange-100 transition-colors">
-          {t.mexcReg}
-        </a>
-        <div className="flex gap-2 ml-auto">
-          {/* Keyboard shortcut help (施策3) */}
-          <button onClick={() => setShowShortcutHelp(true)}
-            className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-400 hover:bg-gray-50 transition-colors"
-            title="キーボードショートカット (?)">
-            ⌨️
-          </button>
-          <button onClick={() => scan()} disabled={loading}
-            className="px-3 md:px-4 py-1.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
-            {loading ? "⏳ ..." : t.scanBtn}
-          </button>
-          <button onClick={() => scan("new30")} disabled={loading}
-            className="px-3 md:px-4 py-1.5 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-300 text-white rounded-lg transition-colors whitespace-nowrap">
-            {loading ? "⏳ ..." : t.new30Btn}
-          </button>
+          {showSettingsMenu && (
+            <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[170px]">
+              <button onClick={toggleSound}
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-gray-600">
+                {soundEnabled ? t.soundOn : t.soundOff}
+              </button>
+              {notifState !== "granted" ? (
+                <button onClick={requestNotif}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-amber-700">
+                  {t.notifEnable}
+                </button>
+              ) : (
+                <div className="px-3 py-1.5 text-xs text-green-700">{t.notifOn}</div>
+              )}
+              <button onClick={shareResults} disabled={extended.length === 0}
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-40 transition-colors text-gray-600">
+                {t.shareBtn}
+              </button>
+              <button onClick={shareFilterURL}
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-gray-600">
+                {t.shareUrl}
+              </button>
+              <a href={MEXC_REG_URL} target="_blank" rel="noopener noreferrer"
+                className="block px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-orange-700">
+                {t.mexcReg}
+              </a>
+              <button onClick={() => { setShowShortcutHelp(true); setShowSettingsMenu(false); }}
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-gray-500">
+                ⌨️ ショートカット
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Filter Presets (施策6) */}
-      <FilterPresets t={t} customPresets={customPresets} onApply={applyPreset} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
+      {/* Filter Presets (施策6) — Row 2 */}
+      <FilterPresets t={t} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
 
       {/* Filters */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 border border-gray-200 rounded-xl p-3 md:p-4">
@@ -2494,6 +2653,23 @@ export default function ShortScanner() {
               onChange={e => set(+e.target.value)} className={`w-full ${accent}`} />
           </div>
         ))}
+        {/* Phase / F/S フィルター */}
+        <div className="col-span-2 md:col-span-5 flex flex-wrap items-center gap-4 pt-1 border-t border-gray-200">
+          <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+            <input type="checkbox" checked={filterSettledOnly} onChange={e => setFilterSettledOnly(e.target.checked)} className="accent-green-500 w-3.5 h-3.5" />
+            <span className="text-gray-700">{t.filterSettledOnly} <span className="text-green-600">✅</span></span>
+          </label>
+          <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+            <input type="checkbox" checked={filterFsRatio5x} onChange={e => setFilterFsRatio5x(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
+            <span className="text-gray-700">{t.filterFsRatio5x}</span>
+          </label>
+          <button
+            onClick={() => setSortBy(s => s === "phase" ? "displayScore" : "phase")}
+            className={`text-xs px-2 py-0.5 rounded border transition-colors ${sortBy === "phase" ? "bg-green-100 text-green-700 border-green-300 font-bold" : "bg-gray-100 text-gray-600 border-gray-200 hover:border-green-300"}`}
+          >
+            {t.sortPhase}
+          </button>
+        </div>
       </div>
 
       {/* Alerts */}
@@ -2513,7 +2689,7 @@ export default function ShortScanner() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
           <span>{t.scanTarget}: <strong className="text-gray-700">{totalScanned}</strong></span>
           <span>{t.passed}: <strong className="text-indigo-600">{data.meta.filtered}</strong></span>
-          <span>{t.showing}: <strong className="text-gray-700">{extended.length}</strong></span>
+          <span>{t.showing}: <strong className="text-gray-700">{paginatedItems.length}</strong>（全{extended.length}件中）</span>
           {data.mode === "new30" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
           {snapshots.length > 0 && <span>{t.snapshots}: <strong className="text-teal-600">{snapshots.length}</strong></span>}
           {HAS_CG && cgLoading && <span className="text-violet-600">{t.cgFetching} {cgProgress}%</span>}
@@ -2616,8 +2792,8 @@ export default function ShortScanner() {
           )}
 
           {/* Table view */}
-          {viewMode === "table" && <div ref={topScrollRef} onScroll={onTopScroll} className="overflow-x-auto overflow-y-hidden border-b border-gray-100" style={{height:12}}><div ref={topScrollInnerRef} style={{height:1}} /></div>}
-          {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll} className="overflow-x-auto" style={{ overflowX: "auto" }}><table className="table-auto text-xs" style={{ minWidth: "1100px", width: "100%" }}>
+          {viewMode === "table" && <div ref={topScrollRef} onScroll={onTopScroll} className="overflow-x-auto overflow-y-hidden border-b border-gray-100 short-scan-scrollbar" style={{height:16}}><div ref={topScrollInnerRef} style={{height:1}} /></div>}
+          {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll} className="overflow-x-auto short-scan-table short-scan-scrollbar" style={{ overflowX: "auto" }}><table className="table-auto text-xs" style={{ minWidth: "1100px", width: "100%" }}>
               <thead style={{ whiteSpace: "nowrap" }}>
                 <tr className="bg-white border-b border-gray-200 text-xs font-semibold text-gray-600">
                   <th className="px-1 py-1 text-left sticky left-0 bg-white z-10 min-w-[80px]">{t.colSymbol}</th>
@@ -2644,7 +2820,7 @@ export default function ShortScanner() {
                 </tr>
               </thead>
               <tbody style={{ whiteSpace: "nowrap" }}>
-                {extended.map((c, idx) => {
+                {paginatedItems.map((c, idx) => {
                   const isOpen   = expandedRows.has(c.symbol);
                   const base     = c.symbol.replace(/_USDT$/, "");
                   const frPct    = c.fundingRate != null ? c.fundingRate * 100 : null;
@@ -2663,6 +2839,13 @@ export default function ShortScanner() {
                             <div className="flex items-center gap-1 flex-wrap">
                               <span className="font-mono font-bold text-gray-800 text-xs md:text-sm">{base}</span>
                               <span className="text-gray-400 text-[10px]">/USDT</span>
+                              <button
+                                onClick={e => { e.stopPropagation(); toggleWatchlist(base); }}
+                                className="text-[13px] leading-none hover:scale-110 transition-transform"
+                                title={watchlistSet.has(base) ? "ウォッチリストから削除" : "ウォッチリストに追加"}
+                              >
+                                {watchlistSet.has(base) ? "⭐" : "☆"}
+                              </button>
                               {hasAlert && <span className="text-xs">🔔</span>}
                               {c.trendMultiTF ? (
                                 <span className="flex items-center gap-0.5 text-[9px] font-bold">
@@ -2697,6 +2880,11 @@ export default function ShortScanner() {
                                 {t.longBiasBadge}
                               </span>
                             )}
+                            <FRWatchToggle symbol={base} />
+                            {/* Phase badge */}
+                            <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${phaseBadgeCls(c.phase.phase)}`}>
+                              {c.phase.emoji}{c.phase.label}
+                            </span>
                             {(() => {
                               const fr = c.fundingRate;
                               const squeezeCount = [
@@ -2835,15 +3023,55 @@ export default function ShortScanner() {
                               className="text-xs text-blue-500 hover:text-blue-700 underline">
                               {t.openLink}
                             </a>
+                            <a href={`https://www.coinglass.com/ja/currencies/${base}`} target="_blank" rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="text-[10px] text-purple-500 hover:text-purple-700 underline">
+                              📊CG
+                            </a>
                           </div>
                         </td>
                       </tr>
-                      {isOpen && <ScoreDetail c={c} snapshots={snapshots} alerts={alerts} t={t} />}
+                      {isOpen && <ScoreDetail c={c} snapshots={snapshots} alerts={alerts} t={t} watchlistSet={watchlistSet} onWatchlistToggle={toggleWatchlist} />}
                     </React.Fragment>
                   );
                 })}
               </tbody>
             </table></div>}
+          {viewMode === "table" && totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 py-3 border-t border-gray-100">
+              <button
+                onClick={() => { setCurrentPage(1); }}
+                disabled={currentPage === 1}
+                className="px-2 py-1 text-xs rounded border border-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-colors"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 text-sm rounded border border-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-colors"
+              >
+                ← 前へ
+              </button>
+              <span className="text-sm text-gray-600 font-medium">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 text-sm rounded border border-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-colors"
+              >
+                次へ →
+              </button>
+              <button
+                onClick={() => { setCurrentPage(totalPages); }}
+                disabled={currentPage === totalPages}
+                className="px-2 py-1 text-xs rounded border border-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-colors"
+              >
+                »
+              </button>
+            </div>
+          )}
           {viewMode === "table" && <div className="px-3 md:px-4 py-2 text-xs text-gray-400 bg-gray-50 border-t border-gray-100">
             {t.clickHint}
           </div>}

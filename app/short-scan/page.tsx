@@ -50,7 +50,7 @@ export default function ShortScanPage() {
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Landing hero */}
       <section className="border-b border-gray-200 bg-white">
-        <div className="max-w-5xl mx-auto px-4 py-6 md:py-10">
+        <div className="max-w-7xl mx-auto px-4 py-6 md:py-10">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div className="flex-1">
               <div className="inline-flex items-center gap-2 bg-red-50 text-red-700 text-xs font-semibold px-3 py-1 rounded-full border border-red-200 mb-3">
@@ -102,13 +102,13 @@ export default function ShortScanPage() {
       </section>
 
       {/* Scanner */}
-      <section className="max-w-5xl mx-auto px-4 py-6 md:py-8">
+      <section className="max-w-7xl mx-auto px-4 py-6 md:py-8">
         <ShortScanner />
       </section>
 
       {/* Disclaimer */}
       <footer className="border-t border-gray-200 bg-gray-50">
-        <div className="max-w-5xl mx-auto px-4 py-5">
+        <div className="max-w-7xl mx-auto px-4 py-5">
           <p className="text-xs font-semibold text-gray-500 mb-1.5">⚠️ 免責事項 / Disclaimer</p>
           <p className="text-[11px] text-gray-400 leading-relaxed">
             本ツールは情報提供のみを目的としており、投資助言・売買推奨ではありません。
