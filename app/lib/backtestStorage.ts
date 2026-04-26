@@ -1,5 +1,8 @@
 "use client";
 
+import type { StrategyTag } from "./strategies/types";
+import type { DangerLevel } from "./strategies/dangerZone";
+
 const STORAGE_KEY = "bell:backtest:records";
 const MAX_RECORDS = 1000;
 
@@ -25,6 +28,33 @@ export interface BacktestRecord {
   maxProfit: number | null;
   currentPrice: number | null;
   lastCheckedAt: number | null;
+
+  // ★ v6: 戦略メタ
+  strategyTag?: StrategyTag;
+  confidence?: number;
+  matchReasons?: string[];
+  matchWarnings?: string[];
+
+  // ★ v6: 市場メタ
+  dangerLevel?: DangerLevel;
+  btcChange24hAtEntry?: number;
+  fearGreedAtEntry?: number;
+  avgFundingRateAtEntry?: number;
+
+  // ★ v6: 候補スナップショット（エントリー時の根拠データ）
+  candidateSnapshot?: {
+    athDropPct: number;
+    volumeChangeRatio: number;
+    fundingRate: number | null;
+    oiRatio: number;
+    listedDaysAgo: number;
+    priceChange7d: number;
+    priceChange24h: number;
+    btcCorrelation: number;
+    chartPatternType: string | null;
+    trendAlignment: number | null;
+    exclusivityScore: number;
+  };
 }
 
 export function getRecords(): BacktestRecord[] {
