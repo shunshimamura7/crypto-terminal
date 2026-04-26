@@ -2219,7 +2219,7 @@ export default function ShortScanner() {
   const [maxDays,          setMaxDays]           = useState(9999);
   const [minVol24k,        setMinVol24k]         = useState(100);
   const [minOiK,           setMinOiK]            = useState(50);
-  const [filterSettledOnly, setFilterSettledOnly] = useState(true);
+  const [filterSettledOnly, setFilterSettledOnly] = useState(false);
   const [filterFsRatio5x,   setFilterFsRatio5x]   = useState(false);
 
   // Sort & view
@@ -2824,7 +2824,10 @@ export default function ShortScanner() {
         ))}
         {/* Phase / F/S フィルター */}
         <div className="col-span-2 md:col-span-5 flex flex-wrap items-center gap-4 pt-1 border-t border-gray-200">
-          <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+          <label
+            className="flex items-center gap-1.5 text-xs cursor-pointer select-none"
+            title="FRがほぼゼロの「安定期」銘柄のみ表示。ONにすると候補が大幅に減ります。OFF推奨。"
+          >
             <input type="checkbox" checked={filterSettledOnly} onChange={e => setFilterSettledOnly(e.target.checked)} className="accent-green-500 w-3.5 h-3.5" />
             <span className="text-gray-700">{t.filterSettledOnly} <span className="text-green-600">✅</span></span>
           </label>
@@ -2858,6 +2861,7 @@ export default function ShortScanner() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
           <span>{t.scanTarget}: <strong className="text-gray-700">{totalScanned}</strong></span>
           <span>{t.passed}: <strong className="text-indigo-600">{data.meta.filtered}</strong></span>
+          <span title="安定期・summaryフィルターなどクライアント側絞り込み後の件数">最終候補: <strong className="text-purple-600">{extended.length}</strong>件</span>
           <span>{t.showing}: <strong className="text-gray-700">{paginatedItems.length}</strong>（全{extended.length}件中）</span>
           {data.mode === "new30" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
           {snapshots.length > 0 && <span>{t.snapshots}: <strong className="text-teal-600">{snapshots.length}</strong></span>}
