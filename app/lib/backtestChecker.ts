@@ -63,10 +63,12 @@ export function checkAndUpdateRecords(candidates: ShortCandidate[]): void {
 export function recordNewCandidates(candidates: ShortCandidate[]): BacktestRecord[] {
   const records = getRecords();
   const activeSymbols = new Set(records.filter(r => r.status === "active").map(r => r.symbol));
+  const recentCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const recentSymbols = new Set(records.filter(r => r.recordedAt >= recentCutoff).map(r => r.symbol));
   const now = Date.now();
 
   const newRecords: BacktestRecord[] = candidates
-    .filter(c => c.shortScore >= SCORE_THRESHOLD && c.tradeSetup !== null && !activeSymbols.has(c.symbol))
+    .filter(c => c.shortScore >= SCORE_THRESHOLD && c.tradeSetup !== null && !activeSymbols.has(c.symbol) && !recentSymbols.has(c.symbol))
     .map(c => {
       const ts = c.tradeSetup!;
       return {
@@ -114,6 +116,8 @@ export function recordNewCandidatesWithStrategy(
   marketCtx: { btcChange24h: number; fearGreed: number | null; avgFundingRate: number | null },
 ): BacktestRecord[] {
   const records = getRecords();
+  const recentCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const recentSymbols = new Set(records.filter(r => r.recordedAt >= recentCutoff).map(r => r.symbol));
   const extMap = new Map(extended.map(c => [c.symbol, c]));
 
   let changed = false;
@@ -121,6 +125,7 @@ export function recordNewCandidatesWithStrategy(
 
   for (const record of records) {
     if (record.status !== "active" || record.strategyTag !== undefined) continue;
+    if (!recentSymbols.has(record.symbol)) continue; // skip stale unpatched records outside cooldown window
     const ext = extMap.get(record.symbol);
     if (!ext) continue;
 
