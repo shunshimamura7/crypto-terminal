@@ -6,11 +6,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: "BELL Short Scanner",
     description: "MEXC先物の全銘柄を25指標でスコアリング。ショート候補を自動検出。完全無料。",
-    url: "https://bell-crypto-terminal.vercel.app/short-scan",
+    url: "https://bell-sig.vercel.app/short-scan",
     siteName: "BELL Short Scanner",
     images: [
       {
-        url: "https://bell-crypto-terminal.vercel.app/og-short-scan.png",
+        url: "https://bell-sig.vercel.app/og-short-scan.png",
         width: 1200,
         height: 630,
         alt: "BELL Short Scanner",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "BELL Short Scanner",
     description: "MEXC先物の全銘柄を25指標でスコアリング。ショート候補を自動検出。完全無料。",
-    images: ["https://bell-crypto-terminal.vercel.app/og-short-scan.png"],
+    images: ["https://bell-sig.vercel.app/og-short-scan.png"],
   },
 };
 

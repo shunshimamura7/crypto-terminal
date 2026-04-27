@@ -8,9 +8,9 @@ interface Env {
 // ── CORS ───────────────────────────────────────────────────────────────────
 function corsHeaders(origin: string | null): Record<string, string> {
   const allowed =
-    origin && (origin === "https://bell-crypto-terminal.vercel.app" || /\.vercel\.app$/.test(origin))
+    origin && (origin === "https://bell-sig.vercel.app" || /\.vercel\.app$/.test(origin))
       ? origin
-      : "https://bell-crypto-terminal.vercel.app";
+      : "https://bell-sig.vercel.app";
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Methods": "POST, OPTIONS",

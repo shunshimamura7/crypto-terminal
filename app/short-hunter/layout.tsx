@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "BELL Short Hunter",
     description: "FRアラート × ウォッチリスト × ショートスキャナー。MEXC先物ショートトレード特化ツール。",
-    url: "https://bell-crypto-terminal.vercel.app/short-hunter",
+    url: "https://bell-sig.vercel.app/short-hunter",
     siteName: "BELL Short Hunter",
     locale: "ja_JP",
     type: "website",

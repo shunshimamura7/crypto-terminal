@@ -1109,7 +1109,7 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
         {/* Share this candidate (E) */}
         <div className="mt-1.5 flex gap-2">
           <a
-            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`🎯 ${c.symbol.replace("_USDT","")}/USDT ショートスコア ${c.displayScore}/${DISPLAY_MAX}点\nATH比 ${c.athDropPct.toFixed(1)}% | FR ${c.fundingRate != null ? (c.fundingRate*100).toFixed(4) : "—"}%\n#MEXC #CryptoShort #暗号通貨\nhttps://bell-crypto-terminal.vercel.app/short-scan`)}`}
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`🎯 ${c.symbol.replace("_USDT","")}/USDT ショートスコア ${c.displayScore}/${DISPLAY_MAX}点\nATH比 ${c.athDropPct.toFixed(1)}% | FR ${c.fundingRate != null ? (c.fundingRate*100).toFixed(4) : "—"}%\n#MEXC #CryptoShort #暗号通貨\nhttps://bell-sig.vercel.app/short-scan`)}`}
             target="_blank" rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
             className="text-[10px] px-2 py-1 rounded bg-sky-100 text-sky-700 border border-sky-200 hover:bg-sky-200 transition-colors"
@@ -2651,7 +2651,7 @@ export default function ShortScanner() {
   function shareResults() {
     if (!extended.length) return;
     const top3 = extended.slice(0, 3).map(c => `${c.symbol.replace("_USDT","")} ${c.displayScore}pt`).join(" / ");
-    const text = `🎯 MEXC Short Scanner スキャン結果\nTOP3: ${top3}\n#MEXC #CryptoShort #暗号通貨\nhttps://bell-crypto-terminal.vercel.app/short-scan`;
+    const text = `🎯 MEXC Short Scanner スキャン結果\nTOP3: ${top3}\n#MEXC #CryptoShort #暗号通貨\nhttps://bell-sig.vercel.app/short-scan`;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank", "noopener");
   }
 
