@@ -27,6 +27,8 @@ export function checkAndUpdateRecords(candidates: ShortCandidate[]): void {
     record.lastCheckedAt = Date.now();
     record.maxProfit   = Math.max(record.maxProfit   ?? 0, pnlPct);
     record.maxDrawdown = Math.min(record.maxDrawdown ?? 0, pnlPct);
+    if (currentPrice <= record.tp1) record.reachedTP1 = true;
+    if (currentPrice <= record.tp2) record.reachedTP2 = true;
     changed = true;
 
     // TP3 → TP2 → TP1 の順でチェック（最も深いTPから）

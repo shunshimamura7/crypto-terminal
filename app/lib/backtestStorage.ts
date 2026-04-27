@@ -28,6 +28,8 @@ export interface BacktestRecord {
   maxProfit: number | null;
   currentPrice: number | null;
   lastCheckedAt: number | null;
+  reachedTP1?: boolean;
+  reachedTP2?: boolean;
 
   // ★ v6: 戦略メタ
   strategyTag?: StrategyTag;
