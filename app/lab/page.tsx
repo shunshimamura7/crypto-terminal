@@ -494,6 +494,11 @@ export default function LabPage() {
           ))}
         </div>
 
+        {/* FR note */}
+        <p className="text-xs text-gray-400 -mt-3">
+          ※ FR目安は 0.02%/8h で概算。実際のFRは銘柄ごとに異なります
+        </p>
+
         {/* Equity Curve */}
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">📈 エクイティカーブ</h2>
@@ -609,6 +614,7 @@ export default function LabPage() {
                     <th className="text-right py-2 font-medium">PnL%</th>
                     <th className="text-left py-2 font-medium pl-3">戦略</th>
                     <th className="text-right py-2 font-medium">記録日時</th>
+                    <th className="text-right py-2 font-medium">FR目安</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -617,6 +623,9 @@ export default function LabPage() {
                       r.currentPrice && r.entryPrice
                         ? ((r.entryPrice - r.currentPrice) / r.entryPrice) * 100
                         : null;
+                    const heldHours = (Date.now() - r.recordedAt) / (1000 * 60 * 60);
+                    const frCount   = Math.floor(heldHours / 8);
+                    const frCost    = frCount * 0.02;
                     return (
                       <tr
                         key={r.id}
@@ -648,6 +657,9 @@ export default function LabPage() {
                         </td>
                         <td className="py-2.5 text-right text-xs text-gray-400">
                           {fmtDate(r.recordedAt)}
+                        </td>
+                        <td className="py-2.5 text-right text-xs font-medium text-red-500">
+                          {frCost > 0 ? `-${frCost.toFixed(2)}%` : "—"}
                         </td>
                       </tr>
                     );
