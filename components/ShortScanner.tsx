@@ -1123,6 +1123,61 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
           </div>
         )}
 
+        {/* スコアトレンド / FRトレンド スパークライン */}
+        {snapshots.length >= 2 && (() => {
+          const scoreVals = snapshots.map(s => s.data[c.symbol]?.score ?? null);
+          const frVals    = snapshots.map(s => s.data[c.symbol]?.fr    ?? null);
+          const validScores = scoreVals.filter((v): v is number => v !== null);
+          const validFRs    = frVals.filter((v): v is number => v !== null);
+          if (validScores.length < 2 && validFRs.length < 2) return null;
+
+          function mkPoints(vals: (number | null)[], w: number, h: number): string {
+            const nonNull = vals.filter((v): v is number => v !== null);
+            if (nonNull.length < 2) return "";
+            const min   = Math.min(...nonNull);
+            const range = Math.max(...nonNull) - min || 1;
+            const pts = vals
+              .map((v, i) => v === null ? null : {
+                x: (i / (vals.length - 1)) * w,
+                y: h - ((v - min) / range) * (h - 4) - 2,
+              })
+              .filter((p): p is { x: number; y: number } => p !== null);
+            return pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+          }
+
+          const latestScore = validScores[validScores.length - 1];
+          const prevScore2  = validScores[validScores.length - 2];
+          const scoreColor  = latestScore > prevScore2 ? "#dc2626" : latestScore < prevScore2 ? "#16a34a" : "#6b7280";
+
+          return (
+            <div className="mt-2 pt-2 border-t border-gray-200 flex flex-wrap gap-4">
+              {validScores.length >= 2 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-gray-500">Score</span>
+                  <svg width={80} height={24} style={{ overflow: "visible" }}>
+                    <polyline points={mkPoints(scoreVals, 80, 24)} fill="none" stroke={scoreColor} strokeWidth={1.5} strokeLinejoin="round" />
+                  </svg>
+                  <span className="font-mono text-[10px] font-bold" style={{ color: scoreColor }}>{latestScore}</span>
+                </div>
+              )}
+              {validFRs.length >= 2 && (() => {
+                const latestFR = validFRs[validFRs.length - 1];
+                const frColor  = latestFR > 0 ? "#ea580c" : "#16a34a";
+                return (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-500">FR</span>
+                    <svg width={80} height={24} style={{ overflow: "visible" }}>
+                      <line x1={0} y1={12} x2={80} y2={12} stroke="#e5e7eb" strokeWidth={1} strokeDasharray="2 2" />
+                      <polyline points={mkPoints(frVals, 80, 24)} fill="none" stroke={frColor} strokeWidth={1.5} strokeLinejoin="round" />
+                    </svg>
+                    <span className="font-mono text-[10px]" style={{ color: frColor }}>{(latestFR * 100).toFixed(4)}%</span>
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })()}
+
         {/* Binance Futures 分析パネル */}
         <div className="mt-2 pt-2 border-t border-gray-200">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -1782,10 +1837,11 @@ function BacktestPanel({
   records, stats, t, onReset,
 }: { records: BacktestRecord[]; stats: BacktestStats; t: Translations; onReset: () => void }) {
   const [open,        setOpen]        = useState(true);
-  const [showRecords, setShowRecords] = useState(false);
-  const [simOpen,     setSimOpen]     = useState(false);
-  const [simCapital,  setSimCapital]  = useState(1000);
-  const [simPos,      setSimPos]      = useState(100);
+  const [showRecords,   setShowRecords]   = useState(false);
+  const [showActivePos, setShowActivePos] = useState(false);
+  const [simOpen,       setSimOpen]       = useState(false);
+  const [simCapital,    setSimCapital]    = useState(1000);
+  const [simPos,        setSimPos]        = useState(100);
   const [btPresetTab, setBtPresetTab] = useState<"all" | "low_lev" | "new_listing">("all");
 
   const tabStats = useMemo(
@@ -2104,6 +2160,76 @@ function BacktestPanel({
                   );
                 })()}
               </div>
+
+              {/* 📍 進行中ポジション */}
+              {(() => {
+                const activePos = records
+                  .filter(r => r.status === "active")
+                  .sort((a, b) => a.recordedAt - b.recordedAt);
+                if (activePos.length === 0) return null;
+                const presetBadge: Record<string, string> = {
+                  low_lev: "🐢", new_listing: "🆕", high_lev: "🔥", unknown: "—",
+                };
+                return (
+                  <div className="mt-2">
+                    <button onClick={() => setShowActivePos(v => !v)}
+                      className="flex items-center gap-1 text-xs text-yellow-700 hover:text-yellow-900 font-semibold">
+                      <span>📍 進行中ポジション ({activePos.length})</span>
+                      <span className="text-gray-400 ml-1">{showActivePos ? "▲" : "▼"}</span>
+                    </button>
+                    {showActivePos && (
+                      <div className="mt-2 overflow-x-auto rounded-lg border border-yellow-200">
+                        <table className="w-full text-xs min-w-[580px]">
+                          <thead>
+                            <tr className="bg-yellow-50 text-yellow-800 border-b border-yellow-200 font-semibold">
+                              <th className="px-2 py-1.5 text-left">銘柄</th>
+                              <th className="px-2 py-1.5 text-center">Score</th>
+                              <th className="px-2 py-1.5 text-center">種別</th>
+                              <th className="px-2 py-1.5 text-right">日数</th>
+                              <th className="px-2 py-1.5 text-right">Entry</th>
+                              <th className="px-2 py-1.5 text-right">SL%</th>
+                              <th className="px-2 py-1.5 text-right">TP1%</th>
+                              <th className="px-2 py-1.5 text-right">現在PnL</th>
+                              <th className="px-2 py-1.5 text-right">MaxP</th>
+                              <th className="px-2 py-1.5 text-right">MaxDD</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activePos.map(r => {
+                              const days    = Math.floor((Date.now() - r.recordedAt) / 86_400_000);
+                              const pnlPct  = r.currentPrice != null
+                                ? ((r.entryPrice - r.currentPrice) / r.entryPrice * 100)
+                                : null;
+                              const slDist  = ((r.sl - r.entryPrice) / r.entryPrice * 100);
+                              const tp1Dist = ((r.entryPrice - r.tp1) / r.entryPrice * 100);
+                              return (
+                                <tr key={r.id} className="border-b border-yellow-100 last:border-0 hover:bg-yellow-50">
+                                  <td className="px-2 py-1.5 font-mono font-bold text-gray-800">{r.symbol.replace("_USDT","")}</td>
+                                  <td className="px-2 py-1.5 text-center text-gray-600">{r.score}/{r.scoreMax}</td>
+                                  <td className="px-2 py-1.5 text-center">{presetBadge[r.preset] ?? "—"}</td>
+                                  <td className="px-2 py-1.5 text-right text-gray-500">{days}d</td>
+                                  <td className="px-2 py-1.5 text-right font-mono text-gray-700">{fmtPrice(r.entryPrice)}</td>
+                                  <td className="px-2 py-1.5 text-right font-mono text-red-500">+{slDist.toFixed(1)}%</td>
+                                  <td className="px-2 py-1.5 text-right font-mono text-green-600">-{tp1Dist.toFixed(1)}%</td>
+                                  <td className={`px-2 py-1.5 text-right font-mono font-bold ${pnlPct == null ? "text-gray-400" : pnlPct >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                    {pnlPct != null ? `${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%` : "—"}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right font-mono text-emerald-600">
+                                    {r.maxProfit != null ? `+${r.maxProfit.toFixed(1)}%` : "—"}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right font-mono text-red-400">
+                                    {r.maxDrawdown != null ? `${r.maxDrawdown.toFixed(1)}%` : "—"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Full records (expandable) */}
               <div>
