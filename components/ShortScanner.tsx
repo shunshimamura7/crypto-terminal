@@ -2421,6 +2421,7 @@ export default function ShortScanner() {
   const [snapshots, setSnapshots] = useState<ScanSnapshot[]>([]);
 
   // Filters
+  const [filtersOpen,      setFiltersOpen]       = useState(false);
   const [minDrop,          setMinDrop]          = useState(30);
   const [maxVolRatio,      setMaxVolRatio]       = useState(70);
   const [maxDays,          setMaxDays]           = useState(9999);
@@ -3046,8 +3047,16 @@ export default function ShortScanner() {
       {/* Filter Presets (施策6) — Row 2 */}
       <FilterPresets t={t} lang={lang} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
 
-      {/* Filters */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 md:p-4">
+      {/* Filters — collapsible */}
+      <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <button
+          onClick={() => setFiltersOpen(v => !v)}
+          className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <span>🎛️ フィルター設定{!filtersOpen && <span className="ml-2 font-normal text-gray-400 dark:text-gray-500">ATH≥{minDrop}% / 出来高比≤{(maxVolRatio/100).toFixed(1)}x / Vol≥${minVol24k}K</span>}</span>
+          <span className="text-gray-400 text-[10px]">{filtersOpen ? "▲ 閉じる" : "▼ 開く"}</span>
+        </button>
+        {filtersOpen && <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 dark:bg-gray-800 p-3 md:p-4 border-t border-gray-200 dark:border-gray-700">
         {[
           { label: `${t.athDrop} ≥`, val: `${minDrop}%`, color: "text-red-600", accent: "accent-red-500", min:0, max:100, step:5, v:minDrop, set:setMinDrop },
           { label: `${t.volRatio} ≤`, val: (maxVolRatio/100).toFixed(1), color: "text-orange-600", accent: "accent-orange-500", min:10, max:1000, step:10, v:maxVolRatio, set:setMaxVolRatio },
@@ -3113,6 +3122,7 @@ export default function ShortScanner() {
             </div>
           )}
         </div>
+        </div>}
       </div>
 
       {/* Alerts */}
@@ -3267,12 +3277,12 @@ export default function ShortScanner() {
                   <SortTh label={t.colScore}  sortKey="displayScore"   current={sortBy} onSort={setSortBy} cls="text-center min-w-[55px]" />
                   <th className="px-1 py-1 text-right hidden md:table-cell min-w-[65px]">{t.colPrice}</th>
                   <SortTh label={t.colAth}    sortKey="athDropPct"     current={sortBy} onSort={setSortBy} cls="text-right min-w-[55px]" />
-                  <th className="px-1 py-1 text-right hidden sm:table-cell min-w-[50px]">{t.colVolR}</th>
+                  <th className="px-1 py-1 text-right hidden md:table-cell min-w-[50px]">{t.colVolR}</th>
                   <SortTh label={t.col24h}    sortKey="priceChange24h" current={sortBy} onSort={setSortBy} cls="text-right min-w-[55px]" />
-                  <SortTh label={t.col7d}     sortKey="priceChange7d"  current={sortBy} onSort={setSortBy} cls="text-right hidden sm:table-cell min-w-[55px]" />
+                  <SortTh label={t.col7d}     sortKey="priceChange7d"  current={sortBy} onSort={setSortBy} cls="text-right hidden lg:table-cell min-w-[55px]" />
                   <th className="px-1 py-1 text-right min-w-[60px]">{t.colFr}</th>
                   <SortTh label={t.colOi}     sortKey="openInterest"   current={sortBy} onSort={setSortBy} cls="text-right hidden md:table-cell min-w-[60px]" />
-                  <th className="px-1 py-1 text-right hidden lg:table-cell min-w-[60px]">{t.colVol}</th>
+                  <th className="px-1 py-1 text-right hidden xl:table-cell min-w-[60px]">{t.colVol}</th>
                   <th className={`px-1 py-1 text-right hidden xl:table-cell min-w-[60px]${!HAS_CG ? " bg-gray-50 text-gray-400" : ""}`}>
                     {!HAS_CG && <span className="mr-0.5">🔒</span>}{t.colSpot}
                     <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>
@@ -3283,7 +3293,7 @@ export default function ShortScanner() {
                   </th>
                   <th className="px-1 py-1 text-right hidden md:table-cell min-w-[45px]">{t.colDays}</th>
                   <th className="px-1 py-1 text-right hidden md:table-cell min-w-[55px]" title="BTCとの価格連動度。低いほどショートに有利">{t.colBtcCorr}</th>
-                  <th className="px-1 py-1 text-center hidden sm:table-cell min-w-[60px]">{t.colExch}</th>
+                  <th className="px-1 py-1 text-center hidden lg:table-cell min-w-[60px]">{t.colExch}</th>
                 </tr>
               </thead>
               <tbody style={{ whiteSpace: "nowrap" }}>
@@ -3406,7 +3416,7 @@ export default function ShortScanner() {
                         </td>
 
                         {/* 出来高比 + 施策3スパイクバッジ */}
-                        <td className="px-1 py-1 text-right text-orange-600 text-xs hidden sm:table-cell">
+                        <td className="px-1 py-1 text-right text-orange-600 text-xs hidden md:table-cell">
                           <div className="flex flex-col items-end gap-0.5">
                             <span>{c.volumeChangeRatio.toFixed(2)}×</span>
                             {c.volumeSpike && c.volumeSpike.direction === "pump" && (
@@ -3428,7 +3438,7 @@ export default function ShortScanner() {
                         </td>
 
                         {/* 7d */}
-                        <td className={`px-1 py-1 text-right text-xs font-mono font-bold hidden sm:table-cell ${p7>=100?"text-red-700":p7>=50?"text-red-500":p7<=-30?"text-green-600":"text-gray-500"}`}>
+                        <td className={`px-1 py-1 text-right text-xs font-mono font-bold hidden lg:table-cell ${p7>=100?"text-red-700":p7>=50?"text-red-500":p7<=-30?"text-green-600":"text-gray-500"}`}>
                           {fmtPct(p7)}{p7>=100&&<span className="ml-0.5">🚀</span>}
                         </td>
 
@@ -3451,7 +3461,7 @@ export default function ShortScanner() {
                         </td>
 
                         {/* 出来高 */}
-                        <td className="px-1 py-1 text-right text-gray-600 text-xs hidden lg:table-cell">
+                        <td className="px-1 py-1 text-right text-gray-600 text-xs hidden xl:table-cell">
                           {fmtVol(c.volume24h)}
                         </td>
 
@@ -3495,7 +3505,7 @@ export default function ShortScanner() {
                         </td>
 
                         {/* 取引所 */}
-                        <td className="px-1 py-1 text-center hidden sm:table-cell">
+                        <td className="px-1 py-1 text-center hidden lg:table-cell">
                           <div className="flex flex-col items-center gap-0.5">
                             <ExchangeBadges c={c} t={t} />
                             <a href={mexcUrl(base)} target="_blank" rel="noopener noreferrer"

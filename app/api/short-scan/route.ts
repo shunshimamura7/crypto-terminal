@@ -40,6 +40,18 @@ function getCached(key: string): any | null {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function setCached(key: string, data: any) { _apiCache.set(key, { data, ts: Date.now() }); }
 
+// Non-crypto tokenized assets (equities, commodities, forex, indices)
+const NON_CRYPTO_PATTERNS = [
+  /STOCK$/i,           // TXNSTOCK, VRTSTOCK, ANTHROPICSTOCK, etc.
+  /^(GOLD|SILVER|COPPER|XAU|XAG|XPD|XPT)_/i,
+  /^(HK50|SPX|NASDAQ|NDX|DJI|FTSE|DAX|NI225|HSI|KOSPI|CAC40|IBEX|ASX200)_/i,
+  /^(WTI|BRENT|NATGAS|WHEAT|CORN|SOYBEAN|SUGAR|COFFEE|COTTON|COCOA)_/i,
+  /^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|KRW|HKD|CNH|SGD|MXN|BRL|INR|ZAR)_/i,
+];
+function isNonCrypto(symbol: string): boolean {
+  return NON_CRYPTO_PATTERNS.some(p => p.test(symbol));
+}
+
 const MAJOR_PAIRS = new Set([
   "BTC_USDT","ETH_USDT","BNB_USDT","SOL_USDT","XRP_USDT","DOGE_USDT","ADA_USDT","AVAX_USDT",
   "DOT_USDT","MATIC_USDT","LINK_USDT","UNI_USDT","ATOM_USDT","LTC_USDT","BCH_USDT","NEAR_USDT",
@@ -156,6 +168,11 @@ async function analyzeCandidate(
       volumeProfile = calcVolumeProfile(kHighs4h, kLows4h, kVols4h, price);
     }
   }
+
+  // Kline quality gate: reject tokens with no meaningful price history
+  // (tokenized equities/commodities often return empty or single-candle klines)
+  if (closes4h.length < 3) return null;
+  if (ath14d <= price * 1.001 && kHighs4h.length < 5) return null;
 
   // Phase2 Task2: ATRボラティリティレジーム
   if (kHighs4h.length >= 15) {
@@ -374,6 +391,7 @@ export async function GET(req: NextRequest) {
 
   // ── Stage 1: ticker-based pre-filter ────────────────────────────────────────
   const candidates: CandidateMeta[] = [];
+  let nonCryptoFiltered = 0;
 
   for (const t of cachedTicker as Array<{
     symbol: string; lastPrice: string; amount24?: string; volume24?: string;
@@ -381,6 +399,7 @@ export async function GET(req: NextRequest) {
     const sym = t.symbol;
     if (!sym?.endsWith("_USDT")) continue;
     if (MAJOR_PAIRS.has(sym)) continue;
+    if (isNonCrypto(sym)) { nonCryptoFiltered++; continue; }
 
     const price = parseFloat(t.lastPrice || "0");
     if (!price) continue;
@@ -412,7 +431,7 @@ export async function GET(req: NextRequest) {
   }
 
   const klineTargets = candidates.slice(0, MAX_KLINE_TARGETS);
-  console.log(`[short-scan] ── Stage1 ── passed: ${stage1Passed} (vol≥$${PRE_FILTER_VOL_USD.toLocaleString()}${isNew30 ? ", listed≤30d" : ""}), kline targets: ${klineTargets.length}/${MAX_KLINE_TARGETS}`);
+  console.log(`[short-scan] ── Stage1 ── passed: ${stage1Passed}, nonCrypto excluded: ${nonCryptoFiltered} (vol≥$${PRE_FILTER_VOL_USD.toLocaleString()}${isNew30 ? ", listed≤30d" : ""}), kline targets: ${klineTargets.length}/${MAX_KLINE_TARGETS}`);
 
   // ── Stage 2: fetch klines + FR ───────────────────────────────────────────────
   const results: ShortCandidate[] = [];
