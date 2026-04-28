@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { fetchCoinglassData, evaluateShortSignal } from "@/app/lib/coinglass";
+import { fetchCoinglassData, evaluateShortSignal } from "@/app/lib/derivativesData";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;

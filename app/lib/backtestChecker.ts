@@ -77,7 +77,7 @@ export function recordNewCandidates(candidates: ShortCandidate[]): BacktestRecor
         id: `${c.symbol}_${now}`,
         symbol: c.symbol,
         score: c.shortScore,
-        scoreMax: 25,
+        scoreMax: 19,
         recordedAt: now,
         entryPrice: c.currentPrice,
         sl:      ts.sl,

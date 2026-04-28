@@ -6,7 +6,7 @@ import { saveSnapshot, getSnapshots, getConsecutivePositiveFR } from "@/app/lib/
 import type { ScanSnapshot } from "@/app/lib/snapshotStorage";
 import { detectAlerts, getDiffSummary } from "@/app/lib/snapshotDiff";
 import type { DiffAlert } from "@/app/lib/snapshotDiff";
-import { fetchCoinGeckoData, calcFuturesHeatScore, calcSnsHeatScore } from "@/app/lib/coinGeckoClient";
+import { fetchCoinGeckoData, calcFuturesHeatScore, calcSnsHeatScore, calcMcFdvScore } from "@/app/lib/coinGeckoClient";
 import type { CgMarketData } from "@/app/lib/coinGeckoClient";
 import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
 import { checkAndUpdateRecords, recordNewCandidates, recordNewCandidatesWithStrategy } from "@/app/lib/backtestChecker";
@@ -20,7 +20,7 @@ import DangerBanner from "@/components/DangerBanner";
 import { calculateStats } from "@/app/lib/backtestStats";
 import type { BacktestStats } from "@/app/lib/backtestStats";
 import type { BinanceFuturesData } from "@/app/types/binanceFutures";
-import { evaluateShortSignal } from "@/app/lib/coinglass";
+import { evaluateShortSignal } from "@/app/lib/derivativesData";
 import FRWatchToggle from "@/components/FRWatchToggle";
 import { addToWatchlist, removeFromWatchlist, isInWatchlist } from "@/app/lib/watchlist";
 import { detectPhase, phaseBadgeCls } from "@/app/lib/phaseDetector";
@@ -465,6 +465,7 @@ interface ExtendedCandidate extends ShortCandidate {
   cgData: CgMarketData | null;
   futuresHeatScore: number;
   snsHeatScore: number;
+  mcFdvScore: number;
   displayScore: number;
   phase: PhaseResult;
 }
@@ -484,7 +485,7 @@ interface AnalyzeResult {
 
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 25 : 22; // v5施策1+2+4: BTC非連動+1, MTF 2→3, パターン+1
+const DISPLAY_MAX = HAS_CG ? 28 : 22; // サーバー19+取引所独占2+FR連続1+先物ヒート2+SNSヒート1+MC/FDV乖離3=28
 
 type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest" | "phase";
 
@@ -980,6 +981,9 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
                 <div>現物Vol <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className="font-mono font-semibold text-gray-800">{cg.spotVolume ? fmtVol(cg.spotVolume) : "N/A"}</span></div>
                 <div>先物/現物 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className={`font-mono font-semibold ${futuresRatio && futuresRatio > 500 ? "text-red-600" : futuresRatio && futuresRatio > 200 ? "text-orange-500" : "text-gray-800"}`}>{futuresRatio == null ? "—" : futuresRatio > 9999 ? ">9999%" : `${futuresRatio.toFixed(0)}%`}</span></div>
                 {cg.mexcSharePct != null && <div>MEXC集中 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className={`font-mono font-semibold ${cg.mexcSharePct >= 90 ? "text-red-600" : "text-gray-800"}`}>{cg.mexcSharePct.toFixed(1)}%</span></div>}
+                {cg.mcFdvRatio != null && (
+                  <div>MC/FDV: <span className={`font-mono font-semibold ${cg.mcFdvRatio < 0.1 ? "text-red-600 font-bold" : cg.mcFdvRatio < 0.2 ? "text-orange-500" : cg.mcFdvRatio < 0.5 ? "text-yellow-600" : "text-green-600"}`}>{(cg.mcFdvRatio * 100).toFixed(1)}%</span>{c.mcFdvScore > 0 && <span className="ml-1 text-red-500 font-bold">+{c.mcFdvScore}pt</span>}{cg.mcFdvRatio < 0.1 && <span className="ml-1 text-red-600">⚠️ 重度希薄化</span>}</div>
+                )}
                 <div>Twitter: <span className="font-mono text-gray-800">{cg.twitterFollowers != null ? cg.twitterFollowers.toLocaleString() : "N/A"}</span></div>
                 <div>SNS合計 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className="font-mono text-gray-800">{snsTotal > 0 ? snsTotal.toLocaleString() : "N/A"}</span></div>
               </div>
@@ -2489,9 +2493,10 @@ export default function ShortScanner() {
       const cgData = cgMap.get(c.symbol) ?? null;
       const futuresHeatScore = cgData ? calcFuturesHeatScore(c.volume24h, cgData.spotVolume) : 0;
       const snsHeatScore = cgData ? calcSnsHeatScore(cgData.twitterFollowers, cgData.telegramMembers, c.priceChange7d) : 0;
-      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore;
+      const mcFdvScore = cgData ? calcMcFdvScore(cgData.mcFdvRatio) : 0;
+      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore;
       const phase = detectPhase(c.fundingRate, null, null, c.priceChange24h);
-      return { ...c, listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, displayScore, phase };
+      return { ...c, listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, mcFdvScore, displayScore, phase };
     });
     const sorted = mapped.sort((a, b) => {
       switch (sortBy) {

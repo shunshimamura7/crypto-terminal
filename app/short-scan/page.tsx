@@ -15,6 +15,7 @@ const SCORING_ITEMS = [
   { label: "BTC非連動", pts: "1pt", color: "#8b5cf6" },
   { label: "パターン",  pts: "1pt", color: "#0ea5e9" },
   { label: "RSI過熱",  pts: "2pt", color: "#f59e0b" },
+  { label: "MC/FDV乖離", pts: "3pt", color: "#dc2626" },
 ];
 
 function ScoringBar() {
@@ -38,7 +39,7 @@ function ScoringBar() {
             ))}
             <span className="text-gray-400 ml-1">= 最大 24pt</span>
           </div>
-          <p className="text-[10px] text-gray-400 mt-1">※取引所独占・FR連続はクライアントサイド加算。CoinGecko連携時は最大25pt。</p>
+          <p className="text-[10px] text-gray-400 mt-1">※取引所独占・FR連続・MC/FDV乖離はクライアントサイド加算。CoinGecko連携時は最大28pt。</p>
         </div>
       )}
     </div>

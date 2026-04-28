@@ -2,8 +2,8 @@ import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
 import { BASE_SYSTEM_PROMPT } from "@/app/lib/systemPrompts/bell_v5";
 import { researchCoin } from "@/app/lib/coinResearch";
-import { fetchCoinglassData } from "@/app/lib/coinglass";
-import type { CoinglassData } from "@/app/lib/coinglass";
+import { fetchCoinglassData } from "@/app/lib/derivativesData";
+import type { CoinglassData } from "@/app/lib/derivativesData";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

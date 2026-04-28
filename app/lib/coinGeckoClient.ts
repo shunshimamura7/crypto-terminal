@@ -12,6 +12,7 @@ export interface CgMarketData {
   telegramMembers: number | null;
   mexcSharePct: number | null;     // MEXC出来高シェア%
   cgId: string | null;
+  mcFdvRatio: number | null;       // MC/FDV比（小さいほど希薄化リスク大）
 }
 
 interface CoinListEntry { id: string; symbol: string; name: string }
@@ -90,9 +91,12 @@ function parseCoinDetail(detail: any, mexcSymbol: string): CgMarketData {
     if (totalVol > 0) mexcSharePct = (mexcVol / totalVol) * 100;
   }
 
+  const mcFdvRatio = (marketCap && fdv && fdv > 0) ? marketCap / fdv : null;
+
   return {
     spotVolume, marketCap, fdv, twitterFollowers, telegramMembers, mexcSharePct,
     cgId: detail?.id ?? null,
+    mcFdvRatio,
   };
 }
 
@@ -121,14 +125,14 @@ export async function fetchCoinGeckoData(
       const base = sym.replace(/_USDT$/, "");
       const id = resolveCgId(base, list);
       if (!id) {
-        result.set(sym, { spotVolume: null, marketCap: null, fdv: null, twitterFollowers: null, telegramMembers: null, mexcSharePct: null, cgId: null });
+        result.set(sym, { spotVolume: null, marketCap: null, fdv: null, twitterFollowers: null, telegramMembers: null, mexcSharePct: null, cgId: null, mcFdvRatio: null });
         return;
       }
       const detail = await fetchCoinDetail(id, apiKey);
       if (detail) {
         result.set(sym, parseCoinDetail(detail, sym));
       } else {
-        result.set(sym, { spotVolume: null, marketCap: null, fdv: null, twitterFollowers: null, telegramMembers: null, mexcSharePct: null, cgId: null });
+        result.set(sym, { spotVolume: null, marketCap: null, fdv: null, twitterFollowers: null, telegramMembers: null, mexcSharePct: null, cgId: null, mcFdvRatio: null });
       }
     }));
     done += batch.length;
@@ -157,5 +161,14 @@ export function calcSnsHeatScore(
 ): number {
   const totalSns = (twitterFollowers ?? 0) + (telegramMembers ?? 0);
   if (totalSns < 5000 && priceChange7d > 50) return 1;
+  return 0;
+}
+
+// MC/FDV乖離スコア: FDV/MC比が高い（MC/FDV比が低い）ほど希薄化リスク大 → ショートに有利
+export function calcMcFdvScore(mcFdvRatio: number | null): number {
+  if (mcFdvRatio === null || mcFdvRatio <= 0) return 0;
+  if (mcFdvRatio < 0.1) return 3;  // FDVがMCの10倍以上
+  if (mcFdvRatio < 0.2) return 2;  // FDVがMCの5倍以上
+  if (mcFdvRatio < 0.5) return 1;  // FDVがMCの2倍以上
   return 0;
 }

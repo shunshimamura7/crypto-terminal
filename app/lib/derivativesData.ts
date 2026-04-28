@@ -1,5 +1,6 @@
-// Data source: OKX public API (no auth) + Gate.io fallback + MEXC fallback
-// Coinglass free plan does not expose these endpoints; exchange APIs are used instead.
+// derivativesData.ts
+// Derivatives data fetcher: OKX public API (primary) + Gate.io (fallback)
+// Note: Originally named coinglass.ts but does NOT use Coinglass API.
 
 export interface CoinglassData {
   fundingRate: number | null;
