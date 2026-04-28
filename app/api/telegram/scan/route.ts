@@ -38,23 +38,36 @@ export async function GET(req: NextRequest) {
       return Response.json({ ok: true, message: "No high-score candidates" });
     }
 
-    const lines = (highScore as Array<{
+    const lines = (highScore as unknown as Array<{
       symbol: string; shortScore: number; currentPrice: number;
       athDropPct: number; fundingRate: number | null; volumeChangeRatio: number;
-      trendDirection: string; atrData?: { regime: string } | null;
+      trendDirection: string; atrData?: { regime: string; atrPct: number } | null;
       allPatterns?: Array<{ type: string }>;
+      tradeSetup?: { sl: number; tp1: number; rrRatio: number } | null;
+      oiRatio: number; openInterest: number;
     }>).map((c, i) => {
-      const sym      = c.symbol.replace("_USDT", "");
-      const fr       = c.fundingRate !== null ? `${(c.fundingRate * 100).toFixed(4)}%` : "N/A";
-      const regime   = c.atrData?.regime ?? "N/A";
-      const patterns = c.allPatterns?.map(p => p.type).join(", ") ?? "";
+      const sym = c.symbol.replace("_USDT", "");
+      const fr  = c.fundingRate !== null ? `${(c.fundingRate * 100).toFixed(4)}%` : "N/A";
+      const PATTERN_LABELS: Record<string, string> = {
+        bear_flag: "🚩BF", dead_cat: "🐱DC", descending_wedge: "📐DW",
+        break_of_structure: "💥BOS", fair_value_gap: "🕳FVG", supply_zone: "🏗SZ",
+      };
+      const patterns = c.allPatterns?.map(p => PATTERN_LABELS[p.type] ?? p.type).join(" ") ?? "";
+      const regime = c.atrData ? `${c.atrData.regime}(${c.atrData.atrPct.toFixed(1)}%)` : "";
+      const rr = c.tradeSetup ? `R:R ${c.tradeSetup.rrRatio.toFixed(2)}` : "";
+      const oi = c.openInterest >= 1e6
+        ? `$${(c.openInterest / 1e6).toFixed(1)}M`
+        : `$${(c.openInterest / 1e3).toFixed(0)}K`;
+
       return (
         `${i + 1}. ${sym} ⚡${c.shortScore}pt\n` +
-        `   $${c.currentPrice} | ATH${c.athDropPct.toFixed(0)}%\n` +
-        `   FR:${fr} | Vol:${c.volumeChangeRatio.toFixed(2)}×\n` +
-        `   TF:${c.trendDirection} | ATR:${regime}` +
-        (patterns ? `\n   📐 ${patterns}` : "")
-      );
+        `   💰 $${c.currentPrice} | ATH${c.athDropPct.toFixed(0)}%\n` +
+        `   📊 FR:${fr} | OI:${oi} (${(c.oiRatio ?? 0).toFixed(1)}×)\n` +
+        `   📉 Vol:${c.volumeChangeRatio.toFixed(2)}× | TF:${c.trendDirection}` +
+        (regime  ? `\n   🌡️ ${regime}` : "") +
+        (patterns ? `\n   📐 ${patterns}` : "") +
+        (rr       ? `\n   ⚔️ ${rr}` : "")
+      ).trimEnd();
     });
 
     const msg =

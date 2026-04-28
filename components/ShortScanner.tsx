@@ -722,7 +722,7 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
 
   return (
     <tr>
-      <td colSpan={colSpan} className="px-3 md:px-4 py-3 bg-gray-50 border-b border-gray-100">
+      <td colSpan={colSpan} className="px-3 md:px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
         {symAlerts.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-3">
             {symAlerts.map((a, i) => (
@@ -1704,7 +1704,7 @@ function BacktestPanel({
   const sorted = [...records].sort((a, b) => b.recordedAt - a.recordedAt);
 
   return (
-    <div className="rounded-xl border border-indigo-200 bg-white overflow-hidden shadow-sm">
+    <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
       <button onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-indigo-800 hover:bg-indigo-50 transition-colors">
         <span>
@@ -1736,7 +1736,7 @@ function BacktestPanel({
                   { label: t.btActive,   val: stats.active,                cls: "text-yellow-600 font-bold" },
                   { label: t.btExpired,  val: stats.expired,               cls: "text-gray-400" },
                 ].map(s => (
-                  <div key={s.label} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+                  <div key={s.label} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 border border-gray-100 dark:border-gray-700 text-center">
                     <div className={`text-base font-bold ${s.cls}`}>{s.val}</div>
                     <div className="text-gray-500 text-[10px] mt-0.5">{s.label}</div>
                   </div>
@@ -1751,7 +1751,7 @@ function BacktestPanel({
                   { label: t.btWinRate, val: `${stats.winRate.toFixed(1)}%`,                   cls: stats.winRate >= 50 ? "text-green-700 font-bold" : "text-red-600 font-bold" },
                   { label: t.btAvgRR,   val: stats.avgRR.toFixed(2),                           cls: stats.avgRR >= 0 ? "text-indigo-700 font-bold" : "text-red-600 font-bold" },
                 ].map(s => (
-                  <div key={s.label} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+                  <div key={s.label} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 border border-gray-100 dark:border-gray-700 text-center">
                     <div className={`text-base font-bold ${s.cls}`}>{s.val}</div>
                     <div className="text-gray-500 text-[10px] mt-0.5">{s.label}</div>
                   </div>
@@ -1807,7 +1807,7 @@ function BacktestPanel({
                       cls: "text-gray-700",
                     },
                   ].map(s => (
-                    <div key={s.label} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+                    <div key={s.label} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 border border-gray-100 dark:border-gray-700 text-center">
                       <div className={`text-sm font-black ${s.cls}`}>{s.val}</div>
                       <div className="text-[10px] text-gray-500 mt-0.5">{s.label}</div>
                     </div>
@@ -1819,10 +1819,10 @@ function BacktestPanel({
               {stats.resolved > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-1.5">{t.btByScore}</p>
-                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="bg-gray-50 text-gray-600 border-b border-gray-200">
+                        <tr className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                           <th className="px-3 py-1.5 text-left">{t.btScoreRange}</th>
                           <th className="px-3 py-1.5 text-center">{t.btWins}</th>
                           <th className="px-3 py-1.5 text-center">{t.btLosses}</th>
@@ -1981,10 +1981,10 @@ function BacktestPanel({
                   {t.btAllRecords} ({records.length}) {showRecords ? "▲" : "▼"}
                 </button>
                 {showRecords && (
-                  <div className="mt-2 overflow-x-auto rounded-lg border border-gray-200">
+                  <div className="mt-2 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                     <table className="w-full text-xs min-w-[640px]">
                       <thead>
-                        <tr className="bg-gray-50 text-gray-600 border-b border-gray-200 font-semibold">
+                        <tr className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 font-semibold">
                           <th className="px-2 py-1.5 text-left">銘柄</th>
                           <th className="px-2 py-1.5 text-center">Score</th>
                           <th className="px-2 py-1.5 text-right">日付</th>
@@ -2218,15 +2218,15 @@ function ShortcutHelpModal({ t, onClose }: { t: Translations; onClose: () => voi
   ];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-xs mx-4" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-5 w-full max-w-xs mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-gray-800 text-sm">{t.kbTitle}</h3>
+          <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t.kbTitle}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
         </div>
         <div className="border-t border-gray-100 pt-3 space-y-1.5">
           {rows.map(([key, desc]) => (
             <div key={key} className="flex items-center gap-3">
-              <kbd className="px-2 py-0.5 rounded bg-gray-100 border border-gray-300 text-xs font-mono font-bold text-gray-700 min-w-[40px] text-center">{key}</kbd>
+              <kbd className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-xs font-mono font-bold text-gray-700 dark:text-gray-200 min-w-[40px] text-center">{key}</kbd>
               <span className="text-xs text-gray-600">{desc}</span>
             </div>
           ))}
@@ -2856,8 +2856,8 @@ export default function ShortScanner() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <h2 className="text-base md:text-lg font-bold text-gray-800">{t.title}</h2>
-          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{t.subtitle}</p>
+          <h2 className="text-base md:text-lg font-bold text-gray-800 dark:text-gray-100">{t.title}</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">{t.subtitle}</p>
         </div>
         {/* Language toggle (G) */}
         <button onClick={() => setLang(l => l === "ja" ? "en" : "ja")}
@@ -2886,10 +2886,10 @@ export default function ShortScanner() {
             )}
           </button>
           {showAutoMenu && (
-            <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[120px]">
+            <div className="absolute left-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px]">
               {([0,5,10,30,60] as const).map(m => (
                 <button key={m} onClick={() => setAutoInterval(m)}
-                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-indigo-50 transition-colors ${autoIntervalMin === m ? "text-indigo-600 font-bold" : "text-gray-600"}`}>
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-colors ${autoIntervalMin === m ? "text-indigo-600 font-bold" : "text-gray-600 dark:text-gray-300"}`}>
                   {m === 0 ? t.autoOff : `${m}分ごと`}
                 </button>
               ))}
@@ -2904,33 +2904,33 @@ export default function ShortScanner() {
             ⚙️
           </button>
           {showSettingsMenu && (
-            <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[170px]">
+            <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[170px]">
               <button onClick={toggleSound}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-gray-600">
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
                 {soundEnabled ? t.soundOn : t.soundOff}
               </button>
               {notifState !== "granted" ? (
                 <button onClick={requestNotif}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-amber-700">
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-amber-700">
                   {t.notifEnable}
                 </button>
               ) : (
                 <div className="px-3 py-1.5 text-xs text-green-700">{t.notifOn}</div>
               )}
               <button onClick={shareResults} disabled={extended.length === 0}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-40 transition-colors text-gray-600">
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors text-gray-600 dark:text-gray-300">
                 {t.shareBtn}
               </button>
               <button onClick={shareFilterURL}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-gray-600">
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
                 {t.shareUrl}
               </button>
               <a href={MEXC_REG_URL} target="_blank" rel="noopener noreferrer"
-                className="block px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-orange-700">
+                className="block px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-orange-700">
                 {t.mexcReg}
               </a>
               <button onClick={() => { setShowShortcutHelp(true); setShowSettingsMenu(false); }}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors text-gray-500">
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-500 dark:text-gray-400">
                 ⌨️ ショートカット
               </button>
             </div>
@@ -2942,7 +2942,7 @@ export default function ShortScanner() {
       <FilterPresets t={t} lang={lang} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
 
       {/* Filters */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 border border-gray-200 rounded-xl p-3 md:p-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 md:p-4">
         {[
           { label: `${t.athDrop} ≥`, val: `${minDrop}%`, color: "text-red-600", accent: "accent-red-500", min:0, max:100, step:5, v:minDrop, set:setMinDrop },
           { label: `${t.volRatio} ≤`, val: (maxVolRatio/100).toFixed(1), color: "text-orange-600", accent: "accent-orange-500", min:10, max:1000, step:10, v:maxVolRatio, set:setMaxVolRatio },
@@ -3109,21 +3109,21 @@ export default function ShortScanner() {
 
       {/* Results table / heatmap */}
       {!loading && extended.length > 0 && (
-        <div className="rounded-xl border border-gray-200 shadow-sm">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           {/* Legend + view toggle */}
-          <div className="flex flex-wrap items-center gap-3 px-3 md:px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
-            <span className="font-semibold text-gray-600">{t.scoreLabel} (/{DISPLAY_MAX}):</span>
+          <div className="flex flex-wrap items-center gap-3 px-3 md:px-4 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+            <span className="font-semibold text-gray-600 dark:text-gray-300">{t.scoreLabel} (/{DISPLAY_MAX}):</span>
             <span style={{ color:"#b91c1c", fontWeight:700 }}>■ {t.scoreHigh}</span>
             <span style={{ color:"#c2410c", fontWeight:700 }} className="hidden sm:inline">■ {t.scoreMid}</span>
             <span style={{ color:"#6b7280" }} className="hidden sm:inline">■ {t.scoreLow}</span>
             <span className="ml-auto text-gray-400 sm:hidden">{t.scrollHint}</span>
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden ml-auto">
+            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden ml-auto">
               <button onClick={() => setViewMode("table")}
-                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${viewMode==="table"?"bg-indigo-600 text-white":"bg-white text-gray-600 hover:bg-gray-50"}`}>
+                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${viewMode==="table"?"bg-indigo-600 text-white":"bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}>
                 {t.viewTable}
               </button>
               <button onClick={() => setViewMode("heat")}
-                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${viewMode==="heat"?"bg-indigo-600 text-white":"bg-white text-gray-600 hover:bg-gray-50"}`}>
+                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${viewMode==="heat"?"bg-indigo-600 text-white":"bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}>
                 {t.viewHeat}
               </button>
             </div>
@@ -3157,8 +3157,8 @@ export default function ShortScanner() {
           {viewMode === "table" && <div ref={topScrollRef} onScroll={onTopScroll} className="overflow-x-auto overflow-y-hidden border-b border-gray-100 short-scan-scrollbar" style={{height:16}}><div ref={topScrollInnerRef} style={{height:1}} /></div>}
           {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll} className="overflow-x-auto short-scan-table short-scan-scrollbar" style={{ overflowX: "auto" }}><table className="table-auto text-xs" style={{ minWidth: "1100px", width: "100%" }}>
               <thead style={{ whiteSpace: "nowrap" }}>
-                <tr className="bg-white border-b border-gray-200 text-xs font-semibold text-gray-600">
-                  <th className="px-1 py-1 text-left sticky left-0 bg-white z-10 min-w-[80px]">{t.colSymbol}</th>
+                <tr className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                  <th className="px-1 py-1 text-left sticky left-0 bg-white dark:bg-gray-900 z-10 min-w-[80px]">{t.colSymbol}</th>
                   <SortTh label={t.colScore}  sortKey="displayScore"   current={sortBy} onSort={setSortBy} cls="text-center min-w-[55px]" />
                   <th className="px-1 py-1 text-right hidden md:table-cell min-w-[65px]">{t.colPrice}</th>
                   <SortTh label={t.colAth}    sortKey="athDropPct"     current={sortBy} onSort={setSortBy} cls="text-right min-w-[55px]" />

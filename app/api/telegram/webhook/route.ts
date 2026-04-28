@@ -196,6 +196,7 @@ const HELP_TEXT =
   "【コマンド】\n" +
   "  /scan — MEXCショートスキャンTOP5\n" +
   "  /market — 市場環境サマリー\n" +
+  "  /price BTC — 価格のみ即表示（AI分析なし）\n" +
   "  銘柄名 — AI分析（例: BTC, ソラナ）\n\n" +
   "【銘柄分析の例】\n" +
   "  BTC / ETH / SOL / DOGE\n" +
@@ -242,6 +243,22 @@ export async function POST(request: NextRequest) {
   // Handle commands
   if (text === "/start" || text === "/help") {
     await bot.sendMessage(chatId, HELP_TEXT);
+    return new Response("OK", { status: 200 });
+  }
+
+  // ── /price <symbol>: CoinGecko価格のみ即返し（AI分析なし）──
+  if (text.startsWith("/price") || text.startsWith("/p ")) {
+    const symbol = text.replace(/^\/(price|p)\s*/i, "").trim();
+    if (!symbol) {
+      await bot.sendMessage(chatId, "使い方: /price BTC\n銘柄名を指定してください");
+      return new Response("OK", { status: 200 });
+    }
+    const priceText = await fetchCoinPrice(symbol);
+    if (priceText) {
+      await sendTelegramMessage(bot, chatId, priceText);
+    } else {
+      await bot.sendMessage(chatId, `❌ 「${symbol}」の価格情報が見つかりませんでした`);
+    }
     return new Response("OK", { status: 200 });
   }
 

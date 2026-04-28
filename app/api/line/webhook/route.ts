@@ -158,7 +158,7 @@ async function fetchCoinPrice(query: string): Promise<string | null> {
 /** Call the Vercel AI analysis endpoint */
 async function fetchAiAnalysis(query: string): Promise<string> {
   try {
-    const res = await fetch("https://crypto-terminal-psi.vercel.app/api/chat", {
+    const res = await fetch("https://bell-sig.vercel.app/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query }),
