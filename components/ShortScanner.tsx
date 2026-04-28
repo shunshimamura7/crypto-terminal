@@ -1786,7 +1786,7 @@ function BacktestPanel({
   const [simOpen,     setSimOpen]     = useState(false);
   const [simCapital,  setSimCapital]  = useState(1000);
   const [simPos,      setSimPos]      = useState(100);
-  const [btPresetTab, setBtPresetTab] = useState<"all" | "low_lev" | "new_listing" | "high_lev">("all");
+  const [btPresetTab, setBtPresetTab] = useState<"all" | "low_lev" | "new_listing">("all");
 
   const tabStats = useMemo(
     () => calculateStats(records, btPresetTab === "all" ? "all" : btPresetTab),
@@ -1831,7 +1831,6 @@ function BacktestPanel({
                 { key: "all",         label: "全体" },
                 { key: "low_lev",     label: "🐢低レバ" },
                 { key: "new_listing", label: "🆕新規上場" },
-                { key: "high_lev",    label: "🔥高レバ" },
               ] as const).map(tab => (
                 <button
                   key={tab.key}
@@ -2219,14 +2218,6 @@ const DEFAULT_PRESETS: FilterPreset[] = [
     sortBy: "displayScore",
     summaryFilter: null,
     isNew30: true,
-  },
-  {
-    name: "🔥 高レバ (5-10×)",
-    icon: "🔥",
-    description: "ATH70%超下落+流動性十分の強いショート。高レバ向け",
-    minDrop: 70, maxVolRatio: 30, minVol24k: 500, maxDays: 9999, minOiK: 200,
-    sortBy: "displayScore",
-    summaryFilter: null,
   },
 ];
 const CUSTOM_PRESETS_KEY = "shortScanPresets";
