@@ -520,7 +520,7 @@ export default function LabPage() {
               </tr>
             </thead>
             <tbody>
-              {(["20-23", "17-19", "14-16", "11-13", "8-10"] as const).map((range) => {
+              {(["22-23", "20-21", "18-19", "16-17", "14-15", "12-13", "10-11", "8-9"] as const).map((range) => {
                 const s     = stats.byScore[range] ?? { wins: 0, losses: 0, winRate: 0 };
                 const total = s.wins + s.losses;
                 const wr    = s.winRate;

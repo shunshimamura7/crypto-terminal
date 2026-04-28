@@ -5,12 +5,17 @@
     "app/api/short-scan/route.ts": { "maxDuration": 120 },
     "app/api/bitget-scan/route.ts": { "maxDuration": 120 },
     "app/api/fr-alert/route.ts": { "maxDuration": 30 },
-    "app/api/sector/route.ts": { "maxDuration": 120 }
+    "app/api/sector/route.ts": { "maxDuration": 120 },
+    "app/api/telegram/scan/route.ts": { "maxDuration": 120 }
   },
   "crons": [
     {
       "path": "/api/tg-monitor",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/telegram/scan",
+      "schedule": "0 */4 * * *"
     }
   ]
 }

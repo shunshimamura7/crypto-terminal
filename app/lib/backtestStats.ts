@@ -19,9 +19,15 @@ export interface BacktestStats {
   byScore: Record<string, { wins: number; losses: number; winRate: number }>;
   periodStart: number | null;
   periodEnd:   number | null;
+  // Phase3 Task2: 高度指標
+  profitFactor: number;
+  recoveryFactor: number;
+  calmarRatio: number;
+  avgDaysToResolve: number;
+  medianDaysToResolve: number;
 }
 
-const SCORE_RANGES = ["8-10", "11-13", "14-16", "17-19", "20-23"] as const;
+const SCORE_RANGES = ["8-9", "10-11", "12-13", "14-15", "16-17", "18-19", "20-21", "22-23"] as const;
 
 export function calculateStats(records: BacktestRecord[]): BacktestStats {
   const active   = records.filter(r => r.status === "active");
@@ -66,20 +72,73 @@ export function calculateStats(records: BacktestRecord[]): BacktestStats {
     if (!worstTrade || loss > worstTrade.loss) worstTrade = { symbol: r.symbol, loss };
   }
 
-  // スコア帯別勝率
+  // スコア帯別勝率 (2pt刻み)
   const byScore: Record<string, { wins: number; losses: number; winRate: number }> = {};
   for (const range of SCORE_RANGES) {
-    const [min, max] = range.split("-").map(Number);
-    const inRange    = resolved.filter(r => r.score >= min && r.score <= max);
-    const rangeWins  = inRange.filter(r => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit");
+    const [minStr, maxStr] = range.split("-");
+    const min = parseInt(minStr);
+    const max = parseInt(maxStr);
+    const inRange = resolved.filter(r => r.score >= min && r.score <= max);
+    const w = inRange.filter(r => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit").length;
+    const l = inRange.filter(r => r.status === "sl_hit").length;
     byScore[range] = {
-      wins:    rangeWins.length,
-      losses:  inRange.length - rangeWins.length,
-      winRate: inRange.length > 0 ? (rangeWins.length / inRange.length) * 100 : 0,
+      wins:    w,
+      losses:  l,
+      winRate: w + l > 0 ? (w / (w + l)) * 100 : 0,
     };
   }
 
   const timestamps = records.map(r => r.recordedAt);
+
+  // ── Phase3 Task2: 高度指標 ──
+
+  // Profit Factor
+  let totalProfit = 0;
+  let totalLoss   = 0;
+  for (const r of resolved) {
+    if (!r.resolvedPrice) continue;
+    const pnlPct = ((r.entryPrice - r.resolvedPrice) / r.entryPrice) * 100;
+    if (pnlPct > 0) totalProfit += pnlPct;
+    else totalLoss += Math.abs(pnlPct);
+  }
+  const profitFactor = totalLoss > 0 ? totalProfit / totalLoss : totalProfit > 0 ? Infinity : 0;
+
+  // 最大DD (エクイティカーブ R ベース)
+  let equity = 0;
+  let peak   = 0;
+  let maxDD  = 0;
+  const sortedResolved = [...resolved].sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
+  for (const r of sortedResolved) {
+    equity += realizedR(r);
+    if (equity > peak) peak = equity;
+    const dd = peak - equity;
+    if (dd > maxDD) maxDD = dd;
+  }
+
+  const netR = realizedRRs.reduce((a, b) => a + b, 0);
+  const recoveryFactor = maxDD > 0 ? netR / maxDD : netR > 0 ? Infinity : 0;
+
+  // Calmar Ratio
+  const periodDays = timestamps.length >= 2
+    ? (Math.max(...timestamps) - Math.min(...timestamps)) / (1000 * 60 * 60 * 24)
+    : 0;
+  const annualReturnR = periodDays > 0 ? netR * (365 / periodDays) : 0;
+  const calmarRatio   = maxDD > 0 ? annualReturnR / maxDD : 0;
+
+  // 平均・中央値決着日数
+  const resolveDays = resolved
+    .filter(r => r.resolvedAt)
+    .map(r => ((r.resolvedAt ?? r.recordedAt) - r.recordedAt) / (1000 * 60 * 60 * 24));
+  const avgDaysToResolve = resolveDays.length > 0
+    ? resolveDays.reduce((a, b) => a + b, 0) / resolveDays.length
+    : 0;
+  const sortedDays = [...resolveDays].sort((a, b) => a - b);
+  const mid = sortedDays.length;
+  const medianDaysToResolve = mid > 0
+    ? mid % 2 === 0
+      ? (sortedDays[mid / 2 - 1] + sortedDays[mid / 2]) / 2
+      : sortedDays[Math.floor(mid / 2)]
+    : 0;
 
   return {
     totalRecords: records.length,
@@ -98,5 +157,10 @@ export function calculateStats(records: BacktestRecord[]): BacktestStats {
     byScore,
     periodStart: timestamps.length > 0 ? Math.min(...timestamps) : null,
     periodEnd:   timestamps.length > 0 ? Math.max(...timestamps) : null,
+    profitFactor,
+    recoveryFactor,
+    calmarRatio,
+    avgDaysToResolve,
+    medianDaysToResolve,
   };
 }

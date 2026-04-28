@@ -1511,20 +1511,21 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
 }
 
 // ─── Summary Bar (修正5) ─────────────────────────────────────────────────────
-function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter }: {
+function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strongThreshold = 10 }: {
   candidates: ExtendedCandidate[];
   t: Translations;
   onFilter: (key: "strong" | "long" | "pattern" | "allTf" | "spike") => void;
   isLongBias: (c: ExtendedCandidate) => boolean;
   summaryFilter: "strong" | "long" | "pattern" | "allTf" | "spike" | null;
+  strongThreshold?: number;
 }) {
   const counts = useMemo(() => ({
-    strong: candidates.filter(c => c.displayScore >= 10).length,
-    long:   candidates.filter(c => isLongBias(c)).length,
+    strong:  candidates.filter(c => c.displayScore >= strongThreshold).length,
+    long:    candidates.filter(c => isLongBias(c)).length,
     pattern: candidates.filter(c => !!c.chartPattern).length,
-    allTf:  candidates.filter(c => c.trendMultiTF?.alignment === 3).length,
-    spike:  candidates.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral").length,
-  }), [candidates, isLongBias]);
+    allTf:   candidates.filter(c => c.trendMultiTF?.alignment === 3).length,
+    spike:   candidates.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral").length,
+  }), [candidates, isLongBias, strongThreshold]);
 
   const items: Array<{ key: "strong"|"long"|"pattern"|"allTf"|"spike"; label: string; count: number; cls: string }> = [
     { key: "strong",  label: t.summaryShort,   count: counts.strong,  cls: "text-red-600 bg-red-50 border-red-200" },
@@ -1780,6 +1781,39 @@ function BacktestPanel({
                   </div>
                 )}
               </div>
+
+              {/* Phase3 Task2: 高度パフォーマンス指標 */}
+              {stats.resolved >= 3 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  {[
+                    {
+                      label: "Profit Factor",
+                      val: stats.profitFactor === Infinity ? "∞" : stats.profitFactor.toFixed(2),
+                      cls: stats.profitFactor >= 1.5 ? "text-green-700" : stats.profitFactor >= 1 ? "text-yellow-600" : "text-red-600",
+                    },
+                    {
+                      label: "Recovery Factor",
+                      val: stats.recoveryFactor === Infinity ? "∞" : stats.recoveryFactor.toFixed(2),
+                      cls: stats.recoveryFactor >= 2 ? "text-green-700" : stats.recoveryFactor >= 1 ? "text-yellow-600" : "text-red-600",
+                    },
+                    {
+                      label: "Calmar Ratio",
+                      val: stats.calmarRatio.toFixed(2),
+                      cls: stats.calmarRatio >= 2 ? "text-green-700" : stats.calmarRatio >= 1 ? "text-yellow-600" : "text-red-600",
+                    },
+                    {
+                      label: "平均決着日数",
+                      val: `${stats.avgDaysToResolve.toFixed(1)}d`,
+                      cls: "text-gray-700",
+                    },
+                  ].map(s => (
+                    <div key={s.label} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+                      <div className={`text-sm font-black ${s.cls}`}>{s.val}</div>
+                      <div className="text-[10px] text-gray-500 mt-0.5">{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Score range table */}
               {stats.resolved > 0 && (
@@ -2370,9 +2404,10 @@ export default function ShortScanner() {
   const [btRecords, setBtRecords] = useState<BacktestRecord[]>([]);
   const btStats = useMemo(() => calculateStats(btRecords), [btRecords]);
 
-  // Market context for DangerZone
+  // Market context for DangerZone + Phase3 Regime
   const [marketBtcChange, setMarketBtcChange] = useState<number>(0);
   const [marketFearGreed, setMarketFearGreed] = useState<number | null>(null);
+  const [regimeFilterOn,  setRegimeFilterOn]  = useState(false);
 
   // Toast (施策10)
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -2536,6 +2571,21 @@ export default function ShortScanner() {
   }
 
 
+  // Phase3 Task1: 市場レジーム (既存の market-env データから導出)
+  const marketRegime = useMemo(() => {
+    if (marketBtcChange === 0 && marketFearGreed === null) return null;
+    let regime: "RISK_ON" | "NEUTRAL" | "RISK_OFF" = "NEUTRAL";
+    let scoreAdjust = 0;
+    if (marketFearGreed !== null && marketFearGreed >= 65 && marketBtcChange >= 2) {
+      regime = "RISK_ON"; scoreAdjust = 2;
+    } else if ((marketFearGreed !== null && marketFearGreed <= 35) || marketBtcChange <= -3) {
+      regime = "RISK_OFF"; scoreAdjust = -2;
+    }
+    return { fng: marketFearGreed, btcChange24h: marketBtcChange, regime, scoreAdjust };
+  }, [marketBtcChange, marketFearGreed]);
+
+  const strongThreshold = regimeFilterOn && marketRegime ? 10 + marketRegime.scoreAdjust : 10;
+
   // Extended candidates — server already applied filter params; no client-side re-filter
   const extended = useMemo((): ExtendedCandidate[] => {
     if (!data?.candidates) return [];
@@ -2584,7 +2634,7 @@ export default function ShortScanner() {
     let result = sorted;
     if (summaryFilter) {
       switch (summaryFilter) {
-        case "strong":  result = sorted.filter(c => c.displayScore >= 10); break;
+        case "strong":  result = sorted.filter(c => c.displayScore >= strongThreshold); break;
         case "long":    result = sorted.filter(c => isLongBias(c)); break;
         case "pattern": result = sorted.filter(c => !!c.chartPattern); break;
         case "allTf":   result = sorted.filter(c => c.trendMultiTF?.alignment === 3); break;
@@ -2599,7 +2649,7 @@ export default function ShortScanner() {
       });
     }
     return result;
-  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, filterSettledOnly, filterFsRatio5x]);
+  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, filterSettledOnly, filterFsRatio5x, strongThreshold]);
 
   const totalPages = Math.ceil(extended.length / ITEMS_PER_PAGE);
   const paginatedItems = extended.slice(
@@ -2660,6 +2710,7 @@ export default function ShortScanner() {
       candidateCount: extended.length,
     });
   }, [extended, marketBtcChange, marketFearGreed]);
+
 
   // v6: 新規recordにstrategyタグを後付けパッチ
   useEffect(() => {
@@ -2926,6 +2977,36 @@ export default function ShortScanner() {
           >
             {t.sortPhase}
           </button>
+          {/* Phase3 Task1: 市場環境連動トグル */}
+          {marketRegime && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setRegimeFilterOn(v => !v)}
+                className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold transition-colors ${
+                  regimeFilterOn
+                    ? "bg-indigo-500 text-white border-indigo-500"
+                    : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-indigo-50"
+                }`}
+              >
+                🌡️ 環境連動 {regimeFilterOn ? "ON" : "OFF"}
+              </button>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                marketRegime.regime === "RISK_ON"  ? "bg-green-100 text-green-700" :
+                marketRegime.regime === "RISK_OFF" ? "bg-red-100 text-red-700"     :
+                                                     "bg-gray-100 text-gray-600"
+              }`}>
+                {marketRegime.regime === "RISK_ON"  ? "🟢 Risk-On" :
+                 marketRegime.regime === "RISK_OFF" ? "🔴 Risk-Off" : "🟡 Neutral"}
+                {marketRegime.fng !== null && ` F&G:${marketRegime.fng}`}
+                {` BTC:${marketRegime.btcChange24h >= 0 ? "+" : ""}${marketRegime.btcChange24h.toFixed(1)}%`}
+              </span>
+              {regimeFilterOn && marketRegime.scoreAdjust !== 0 && (
+                <span className="text-[10px] text-gray-400">
+                  閾値{marketRegime.scoreAdjust > 0 ? "+" : ""}{marketRegime.scoreAdjust}pt
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -2972,6 +3053,7 @@ export default function ShortScanner() {
             isLongBias={isLongBias}
             onFilter={(key) => setSummaryFilter(f => f === key ? null : key)}
             summaryFilter={summaryFilter}
+            strongThreshold={strongThreshold}
           />
           {summaryFilter && (
             <button onClick={() => setSummaryFilter(null)}

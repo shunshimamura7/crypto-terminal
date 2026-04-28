@@ -193,19 +193,20 @@ async function handleMessage(
 
 const HELP_TEXT =
   "🤖 Crypto Terminal Bot\n\n" +
-  "銘柄名を送るだけで価格とAI分析を取得できます。\n\n" +
-  "例:\n" +
-  "  BTC\n" +
-  "  ソラナ\n" +
-  "  ethereum\n" +
-  "  DOGE\n\n" +
+  "【コマンド】\n" +
+  "  /scan — MEXCショートスキャンTOP5\n" +
+  "  /market — 市場環境サマリー\n" +
+  "  銘柄名 — AI分析（例: BTC, ソラナ）\n\n" +
+  "【銘柄分析の例】\n" +
+  "  BTC / ETH / SOL / DOGE\n" +
+  "  ソラナ / イーサリアム\n\n" +
   "提供情報:\n" +
-  "  📊 CoinGecko リアルタイム価格\n" +
-  "  🐋 スマートマネー & ホエール動向\n" +
-  "  🔓 トークンアンロック スケジュール\n" +
-  "  🔵 ホルダー分散 & 上位ウォレット\n" +
-  "  🗣️ 著名人・インフルエンサー発言\n" +
-  "  💼 VC・機関投資家の動向";
+  "  📊 リアルタイム価格\n" +
+  "  🐋 スマートマネー動向\n" +
+  "  🔓 アンロックスケジュール\n" +
+  "  🔵 ホルダー分散\n" +
+  "  🎯 ショートスキャン\n" +
+  "  📈 市場環境";
 
 export async function GET() {
   return new Response("Crypto Terminal Telegram Webhook OK", { status: 200 });
@@ -241,6 +242,78 @@ export async function POST(request: NextRequest) {
   // Handle commands
   if (text === "/start" || text === "/help") {
     await bot.sendMessage(chatId, HELP_TEXT);
+    return new Response("OK", { status: 200 });
+  }
+
+  // ── /scan: ショートスキャンTOP5 ──
+  if (text === "/scan" || text === "/short") {
+    await bot.sendMessage(chatId, "🔍 ショートスキャン実行中...");
+    try {
+      const scanRes = await fetch("https://bell-sig.vercel.app/api/short-scan", {
+        signal: AbortSignal.timeout(55000),
+      });
+      const scanData = await scanRes.json();
+      if (!scanData.success || !scanData.candidates?.length) {
+        await bot.sendMessage(chatId, "❌ スキャン結果が取得できませんでした");
+        return new Response("OK", { status: 200 });
+      }
+      const top5 = scanData.candidates.slice(0, 5);
+      const lines = top5.map((c: { symbol: string; shortScore: number; currentPrice: number; athDropPct: number; fundingRate: number | null; volumeChangeRatio: number; trendDirection: string }, i: number) => {
+        const sym = c.symbol.replace("_USDT", "");
+        const fr  = c.fundingRate !== null ? `${(c.fundingRate * 100).toFixed(4)}%` : "N/A";
+        return (
+          `${i + 1}. ${sym}\n` +
+          `   Score: ${c.shortScore} | $${c.currentPrice}\n` +
+          `   ATH: ${c.athDropPct.toFixed(0)}% | FR: ${fr}\n` +
+          `   Vol比: ${c.volumeChangeRatio.toFixed(2)}× | TF: ${c.trendDirection}`
+        );
+      });
+      const msg =
+        `🎯 MEXC SHORT SCAN TOP5\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        lines.join("\n━━━━━━━━━━━━━━━━━━━━\n") +
+        `\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📊 対象: ${scanData.meta?.filtered ?? "?"}銘柄\n` +
+        `⏰ ${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`;
+      await sendTelegramMessage(bot, chatId, msg);
+    } catch (err) {
+      await bot.sendMessage(chatId, `❌ スキャンエラー: ${err instanceof Error ? err.message : "Unknown"}`);
+    }
+    return new Response("OK", { status: 200 });
+  }
+
+  // ── /market: 市場環境概要 ──
+  if (text === "/market" || text === "/env") {
+    try {
+      const envRes = await fetch("https://bell-sig.vercel.app/api/market-env", {
+        signal: AbortSignal.timeout(10000),
+      });
+      const env = await envRes.json();
+      const fng    = env?.fng;
+      const fngStr = fng ? `${fng.value}/100 (${fng.valueText ?? "—"})` : "N/A";
+      const btcP   = env?.btcPrice   ? `$${Number(env.btcPrice).toLocaleString()}`  : "N/A";
+      const ethP   = env?.ethPrice   ? `$${Number(env.ethPrice).toLocaleString()}`  : "N/A";
+      const btcC   = env?.btcChange24h != null ? `${Number(env.btcChange24h) >= 0 ? "+" : ""}${Number(env.btcChange24h).toFixed(2)}%` : "N/A";
+      const ethC   = env?.ethChange24h != null ? `${Number(env.ethChange24h) >= 0 ? "+" : ""}${Number(env.ethChange24h).toFixed(2)}%` : "N/A";
+      const fngVal = fng?.value ?? null;
+      const btcChg = Number(env?.btcChange24h ?? 0);
+      let shortEnv = "🟡 普通";
+      if (btcChg <= -5 || (fngVal !== null && fngVal <= 24)) shortEnv = "🔴 危険（パニック相場）";
+      else if (btcChg >= 5  || (fngVal !== null && fngVal <= 49)) shortEnv = "🟠 注意";
+      else if (fngVal !== null && fngVal >= 75) shortEnv = "🟢 良好（過熱→ショート有利）";
+      const msg =
+        `📊 市場環境サマリー\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `₿ BTC: ${btcP} (${btcC})\n` +
+        `Ξ ETH: ${ethP} (${ethC})\n` +
+        `😱 F&G: ${fngStr}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `ショート環境: ${shortEnv}\n` +
+        `⏰ ${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`;
+      await sendTelegramMessage(bot, chatId, msg);
+    } catch (err) {
+      await bot.sendMessage(chatId, `❌ 市況取得エラー: ${err instanceof Error ? err.message : "Unknown"}`);
+    }
     return new Response("OK", { status: 200 });
   }
 
