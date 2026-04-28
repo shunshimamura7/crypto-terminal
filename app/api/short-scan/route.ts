@@ -63,8 +63,8 @@ const MAJOR_PAIRS = new Set([
 ]);
 
 // Stage 2 concurrency: 40 parallel / 30ms delay
-// 400 targets / 40 = 10 batches × ~7s = ~70s well within 120s deadline
-const MAX_KLINE_TARGETS = 400;
+// 500 targets / 40 = 13 batches × ~7s = ~91s well within 120s deadline
+const MAX_KLINE_TARGETS = 500;
 const BATCH = 40;
 const BATCH_DELAY = 30;
 
@@ -321,7 +321,7 @@ export async function GET(req: NextRequest) {
   const qMinOiK      = Number(req.nextUrl.searchParams.get("minOiK")     ?? "0");
 
   // Stage 1 volume threshold: looser for new30
-  const PRE_FILTER_VOL_USD = isNew30 ? 10_000 : 50_000;
+  const PRE_FILTER_VOL_USD = isNew30 ? 10_000 : 20_000;
 
   const now = Date.now();
   const nowSec      = Math.floor(now / 1000);

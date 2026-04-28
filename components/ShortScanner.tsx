@@ -2207,7 +2207,7 @@ const DEFAULT_PRESETS: FilterPreset[] = [
     name: "🐢 低レバ (1-2×)",
     icon: "🐢",
     description: "ATH30%下落+出来高枯渇のスイングショート。低レバ推奨",
-    minDrop: 30, maxVolRatio: 70, minVol24k: 50, maxDays: 9999, minOiK: 20,
+    minDrop: 30, maxVolRatio: 150, minVol24k: 50, maxDays: 9999, minOiK: 20,
     sortBy: "displayScore",
     summaryFilter: null,
   },
@@ -2553,7 +2553,7 @@ export default function ShortScanner() {
   ): "low_lev" | "new_listing" | "high_lev" | "unknown" {
     if (isNew30 || daysMax <= 30) return "new_listing";
     if (dropMin >= 70 && volRatioMax <= 30 && vol24kMin >= 500 && oiKMin >= 200) return "high_lev";
-    if (dropMin >= 30 && volRatioMax <= 70 && vol24kMin >= 100 && oiKMin >= 50) return "low_lev";
+    if (dropMin >= 30 && volRatioMax <= 150 && vol24kMin >= 50 && oiKMin >= 20) return "low_lev";
     return "unknown";
   }
 

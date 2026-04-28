@@ -81,7 +81,7 @@ export function recordNewCandidates(
         case "low_lev":
           return c.shortScore >= 10
             && c.athDropPct <= -30
-            && c.volumeChangeRatio < 0.7
+            && c.volumeChangeRatio < 1.5
             && c.volume24h >= 50_000
             && c.openInterest >= 20_000;
         case "new_listing":
