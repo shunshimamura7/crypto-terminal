@@ -13,6 +13,7 @@ export interface CgMarketData {
   mexcSharePct: number | null;     // MEXC出来高シェア%
   cgId: string | null;
   mcFdvRatio: number | null;       // MC/FDV比（小さいほど希薄化リスク大）
+  exchangeFlowSignal: "inflow" | "outflow" | "neutral" | null; // MEXC出来高集中度
 }
 
 interface CoinListEntry { id: string; symbol: string; name: string }
@@ -93,10 +94,18 @@ function parseCoinDetail(detail: any, mexcSymbol: string): CgMarketData {
 
   const mcFdvRatio = (marketCap && fdv && fdv > 0) ? marketCap / fdv : null;
 
+  let exchangeFlowSignal: CgMarketData["exchangeFlowSignal"] = null;
+  if (mexcSharePct !== null) {
+    if (mexcSharePct > 80) exchangeFlowSignal = "inflow";
+    else if (mexcSharePct > 50) exchangeFlowSignal = "neutral";
+    else exchangeFlowSignal = "outflow";
+  }
+
   return {
     spotVolume, marketCap, fdv, twitterFollowers, telegramMembers, mexcSharePct,
     cgId: detail?.id ?? null,
     mcFdvRatio,
+    exchangeFlowSignal,
   };
 }
 
@@ -125,14 +134,14 @@ export async function fetchCoinGeckoData(
       const base = sym.replace(/_USDT$/, "");
       const id = resolveCgId(base, list);
       if (!id) {
-        result.set(sym, { spotVolume: null, marketCap: null, fdv: null, twitterFollowers: null, telegramMembers: null, mexcSharePct: null, cgId: null, mcFdvRatio: null });
+        result.set(sym, { spotVolume: null, marketCap: null, fdv: null, twitterFollowers: null, telegramMembers: null, mexcSharePct: null, cgId: null, mcFdvRatio: null, exchangeFlowSignal: null });
         return;
       }
       const detail = await fetchCoinDetail(id, apiKey);
       if (detail) {
         result.set(sym, parseCoinDetail(detail, sym));
       } else {
-        result.set(sym, { spotVolume: null, marketCap: null, fdv: null, twitterFollowers: null, telegramMembers: null, mexcSharePct: null, cgId: null, mcFdvRatio: null });
+        result.set(sym, { spotVolume: null, marketCap: null, fdv: null, twitterFollowers: null, telegramMembers: null, mexcSharePct: null, cgId: null, mcFdvRatio: null, exchangeFlowSignal: null });
       }
     }));
     done += batch.length;

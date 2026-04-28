@@ -624,6 +624,50 @@ export function passesFilter(
   );
 }
 
+// ─── TWAP Execution Simulator ─────────────────────────────────────────────────
+
+export interface SlippageEstimate {
+  orderSizeUsd: number;
+  estimatedSlippagePct: number;
+  impactLevel: "low" | "medium" | "high" | "extreme";
+  twapRecommendation: string;
+  avgBarVolume: number;
+}
+
+export function estimateSlippage(
+  orderSizeUsd: number,
+  volumes4h: number[],
+  openInterest: number,
+): SlippageEstimate {
+  const recentVols = volumes4h.slice(-10).filter(v => v > 0);
+  const avgBarVolume = recentVols.length > 0 ? recentVols.reduce((a, b) => a + b, 0) / recentVols.length : 0;
+
+  const volRatio = avgBarVolume > 0 ? orderSizeUsd / avgBarVolume : 1;
+  const oiRatio  = openInterest > 0 ? orderSizeUsd / openInterest : 1;
+
+  let slip: number;
+  if      (volRatio <= 0.01) slip = volRatio * 10;
+  else if (volRatio <= 0.1)  slip = 0.1 + (volRatio - 0.01) * 10;
+  else if (volRatio <= 0.5)  slip = 1   + (volRatio - 0.1)  * 10;
+  else                       slip = 5   + (volRatio - 0.5)  * 20;
+
+  if (oiRatio > 0.05) slip *= 1.5;
+  if (oiRatio > 0.1)  slip *= 2;
+  const estimatedSlippagePct = Math.min(slip, 20);
+
+  const impactLevel: SlippageEstimate["impactLevel"] =
+    estimatedSlippagePct >= 5 ? "extreme" :
+    estimatedSlippagePct >= 2 ? "high"    :
+    estimatedSlippagePct >= 0.5 ? "medium" : "low";
+
+  const twapRecommendation =
+    estimatedSlippagePct < 0.5 ? "✅ 成行OK" :
+    estimatedSlippagePct < 2   ? "⚠️ 指値推奨" :
+    `🔴 TWAP推奨: ${Math.min(Math.ceil(estimatedSlippagePct / 0.5), 10)}チャンクに分割`;
+
+  return { orderSizeUsd, estimatedSlippagePct, impactLevel, twapRecommendation, avgBarVolume };
+}
+
 // フィルタ条件 (新規上場30日スキャン)
 export function passesFilterNew30(
   athDropPct: number,

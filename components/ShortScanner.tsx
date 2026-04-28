@@ -25,6 +25,7 @@ import FRWatchToggle from "@/components/FRWatchToggle";
 import { addToWatchlist, removeFromWatchlist, isInWatchlist } from "@/app/lib/watchlist";
 import { detectPhase, phaseBadgeCls } from "@/app/lib/phaseDetector";
 import type { PhaseResult, Phase } from "@/app/lib/phaseDetector";
+import { calcPortfolioVaR } from "@/app/lib/portfolioRisk";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -955,6 +956,40 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
                   {c.atrData.regime === "high" && <span className="text-orange-600 text-[10px] font-medium">SL拡張済</span>}
                 </div>
               )}
+
+              {/* TWAP Execution Simulator */}
+              <div className="mt-3">
+                <p className="text-[10px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5">💹 執行インパクト推定</p>
+                {(() => {
+                  const avgVol4h = c.volume24h / 6;
+                  return (
+                    <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                      {([100, 500, 1000] as const).map(size => {
+                        const volRatio = avgVol4h > 0 ? size / avgVol4h : 1;
+                        const oiR = c.openInterest > 0 ? size / c.openInterest : 1;
+                        let slip = volRatio <= 0.01 ? volRatio * 10 : volRatio <= 0.1 ? 0.1 + (volRatio - 0.01) * 10 : volRatio <= 0.5 ? 1 + (volRatio - 0.1) * 10 : 5 + (volRatio - 0.5) * 20;
+                        if (oiR > 0.05) slip *= 1.5;
+                        if (oiR > 0.1)  slip *= 2;
+                        slip = Math.min(slip, 20);
+                        const icon = slip >= 5 ? "🔴" : slip >= 2 ? "🟠" : slip >= 0.5 ? "🟡" : "🟢";
+                        return (
+                          <div key={size} className={`rounded p-1.5 text-center border ${
+                            slip >= 2 ? "border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800" :
+                            slip >= 0.5 ? "border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800" :
+                            "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                          }`}>
+                            <div className="font-semibold text-gray-700 dark:text-gray-300">${size}</div>
+                            <div className="font-mono font-bold mt-0.5">{icon} {slip.toFixed(2)}%</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-1">
+                  ※ MEXC先物の流動性に基づく推定スリッページ（$100/$500/$1000注文時）
+                </p>
+              </div>
             </div>
           );
         })()}
@@ -1061,7 +1096,15 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
                 <div>MC: <span className="font-mono font-semibold text-gray-800">{cg.marketCap ? fmtVol(cg.marketCap) : "N/A"}</span></div>
                 <div>現物Vol <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className="font-mono font-semibold text-gray-800">{cg.spotVolume ? fmtVol(cg.spotVolume) : "N/A"}</span></div>
                 <div>先物/現物 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className={`font-mono font-semibold ${futuresRatio && futuresRatio > 500 ? "text-red-600" : futuresRatio && futuresRatio > 200 ? "text-orange-500" : "text-gray-800"}`}>{futuresRatio == null ? "—" : futuresRatio > 9999 ? ">9999%" : `${futuresRatio.toFixed(0)}%`}</span></div>
-                {cg.mexcSharePct != null && <div>MEXC集中 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className={`font-mono font-semibold ${cg.mexcSharePct >= 90 ? "text-red-600" : "text-gray-800"}`}>{cg.mexcSharePct.toFixed(1)}%</span></div>}
+                {cg.mexcSharePct != null && (
+                  <div>MEXC集中 <span className="px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>: <span className={`font-mono font-semibold ${cg.mexcSharePct >= 90 ? "text-red-600" : "text-gray-800 dark:text-gray-200"}`}>{cg.mexcSharePct.toFixed(1)}%</span>
+                    {cg.exchangeFlowSignal && cg.exchangeFlowSignal !== "neutral" && (
+                      <span className={`ml-1.5 text-[9px] font-bold ${cg.exchangeFlowSignal === "inflow" ? "text-red-600" : "text-green-600"}`}>
+                        {cg.exchangeFlowSignal === "inflow" ? "🔴 MEXC集中（操作リスク）" : "🟢 取引所分散"}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {cg.mcFdvRatio != null && (
                   <div>MC/FDV: <span className={`font-mono font-semibold ${cg.mcFdvRatio < 0.1 ? "text-red-600 font-bold" : cg.mcFdvRatio < 0.2 ? "text-orange-500" : cg.mcFdvRatio < 0.5 ? "text-yellow-600" : "text-green-600"}`}>{(cg.mcFdvRatio * 100).toFixed(1)}%</span>{c.mcFdvScore > 0 && <span className="ml-1 text-red-500 font-bold">+{c.mcFdvScore}pt</span>}{cg.mcFdvRatio < 0.1 && <span className="ml-1 text-red-600">⚠️ 重度希薄化</span>}</div>
                 )}
@@ -3522,6 +3565,61 @@ export default function ShortScanner() {
         t={t}
         onReset={() => { clearRecords(); setBtRecords([]); }}
       />
+
+      {/* Portfolio VaR — スナップショット5件以上 + アクティブ2銘柄以上で表示 */}
+      {snapshots.length >= 5 && btRecords.filter(r => r.status === "active").length >= 2 && (() => {
+        const activeSymbols = btRecords.filter(r => r.status === "active").map(r => r.symbol);
+        const priceHistories = activeSymbols.map(sym => {
+          const closes = snapshots
+            .map(s => (s.data as Record<string, { price?: number }>)[sym]?.price ?? null)
+            .filter((p): p is number => p !== null && p > 0);
+          return { symbol: sym, closes };
+        }).filter(h => h.closes.length >= 3);
+
+        if (priceHistories.length < 2) return null;
+
+        const varResult = calcPortfolioVaR(priceHistories);
+        if (!varResult) return null;
+
+        return (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-3">
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-2">⚠️ ポートフォリオリスク ({priceHistories.length}銘柄)</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+              <div className="text-center">
+                <div className={`font-bold text-sm ${varResult.var95 > 0.1 ? "text-red-600" : "text-amber-700"}`}>
+                  {(varResult.var95 * 100).toFixed(1)}%
+                </div>
+                <div className="text-gray-500 dark:text-gray-400">VaR 95%</div>
+              </div>
+              <div className="text-center">
+                <div className={`font-bold text-sm ${varResult.var99 > 0.15 ? "text-red-600" : "text-amber-700"}`}>
+                  {(varResult.var99 * 100).toFixed(1)}%
+                </div>
+                <div className="text-gray-500 dark:text-gray-400">VaR 99%</div>
+              </div>
+              <div className="text-center">
+                <div className={`font-bold text-sm ${varResult.maxCorrelation >= 0.7 ? "text-red-600" : "text-amber-700"}`}>
+                  {varResult.maxCorrelation.toFixed(2)}
+                </div>
+                <div className="text-gray-500 dark:text-gray-400">最大相関</div>
+              </div>
+              <div className="text-center">
+                <div className={`font-bold text-sm ${varResult.diversificationRatio > 0.8 ? "text-red-600" : "text-green-600"}`}>
+                  {(varResult.diversificationRatio * 100).toFixed(0)}%
+                </div>
+                <div className="text-gray-500 dark:text-gray-400">相関集中度</div>
+              </div>
+            </div>
+            {varResult.highCorrPairs.length > 0 && (
+              <div className="mt-2 text-[10px] text-red-600 dark:text-red-400">
+                ⚠️ 高相関ペア: {varResult.highCorrPairs.map(p =>
+                  `${p.symbolA.replace("_USDT","")}×${p.symbolB.replace("_USDT","")}(${p.correlation.toFixed(2)})`
+                ).join(", ")}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Toast (施策10) */}
       <ToastContainer toasts={toasts} />
