@@ -1012,7 +1012,10 @@ export default function CryptoSearch() {
                 {loading ? "検索中…" : "検索"}
               </button>
             </form>
-            <div className="flex flex-wrap justify-center gap-2 mt-4">
+            <p className="text-[10px] text-[var(--text-muted)] text-center mt-1.5">
+              ※ AI分析は最大60秒。タイムアウト時は途中結果を表示します
+            </p>
+            <div className="flex flex-wrap justify-center gap-2 mt-3">
               {QUICK_COINS.map(coin => (
                 <button key={coin} onClick={() => search(coin)} disabled={loading || remainingCount === 0}
                   className="px-3 py-1 text-xs font-mono font-bold border border-[var(--border)] rounded-full text-[var(--text-secondary)] bg-[var(--card-bg)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-sky-50 disabled:opacity-40 transition-colors shadow-sm">

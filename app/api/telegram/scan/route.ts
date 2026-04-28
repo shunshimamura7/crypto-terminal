@@ -40,16 +40,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const scanRes = await fetch("https://bell-sig.vercel.app/api/short-scan", {
-      signal: AbortSignal.timeout(110000),
-    });
-    const scanData = await scanRes.json();
+    const [scanRes, new30Res] = await Promise.all([
+      fetch("https://bell-sig.vercel.app/api/short-scan", { signal: AbortSignal.timeout(55000) }),
+      fetch("https://bell-sig.vercel.app/api/short-scan?mode=new30", { signal: AbortSignal.timeout(55000) }),
+    ]);
+    const scanData  = await scanRes.json();
+    const new30Data = await new30Res.json().catch(() => ({ success: false }));
 
     if (!scanData.success || !scanData.candidates?.length) {
       return Response.json({ ok: true, message: "No candidates" });
     }
 
     const candidates = scanData.candidates as Candidate[];
+    const new30Candidates: Candidate[] = (new30Data.success ? new30Data.candidates : [])
+      .filter((c: Candidate) => c.shortScore >= 10)
+      .slice(0, 3);
     const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
     // ── High-score alert ──────────────────────────────────────────────────────
@@ -94,6 +99,20 @@ export async function GET(req: NextRequest) {
       notified = highScore.length;
     }
 
+    // ── 新規上場ハイスコア ────────────────────────────────────────────────
+    if (new30Candidates.length > 0) {
+      const newMsg =
+        `🆕 新規上場 HIGH SCORE\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        new30Candidates.map((c, i) => {
+          const sym = c.symbol.replace("_USDT", "");
+          const fr  = c.fundingRate !== null ? `${(c.fundingRate * 100).toFixed(4)}%` : "N/A";
+          return `${i + 1}. ${sym} ⚡${c.shortScore}pt | $${c.currentPrice} | ATH${c.athDropPct.toFixed(0)}% | FR:${fr}`;
+        }).join("\n") +
+        `\n⏰ ${now}`;
+      await sendTg(token, chatId, newMsg);
+    }
+
     // ── FR転換警告（スクイーズリスク）──────────────────────────────────────
     const frNegative = candidates
       .filter(c => c.fundingRate !== null && c.fundingRate < -0.0005 && c.shortScore >= 8)
@@ -129,13 +148,14 @@ export async function GET(req: NextRequest) {
       await sendTg(token, chatId, dumpMsg);
     }
 
-    if (notified === 0 && frNegative.length === 0 && bigDump.length === 0) {
+    if (notified === 0 && new30Candidates.length === 0 && frNegative.length === 0 && bigDump.length === 0) {
       return Response.json({ ok: true, message: "No alerts triggered" });
     }
 
     return Response.json({
       ok: true,
       notified,
+      new30Alerts: new30Candidates.length,
       frAlerts: frNegative.length,
       dumpAlerts: bigDump.length,
       symbols: highScore.map(c => c.symbol),

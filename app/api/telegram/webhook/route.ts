@@ -194,13 +194,12 @@ async function handleMessage(
 const HELP_TEXT =
   "🤖 Crypto Terminal Bot\n\n" +
   "【コマンド】\n" +
-  "  /scan — MEXCショートスキャンTOP5\n" +
+  "  /scan — 低レバ+新規上場TOP3ずつ\n" +
+  "  /scan low — 低レバTOP5\n" +
+  "  /scan new — 新規上場TOP5\n" +
   "  /market — 市場環境サマリー\n" +
-  "  /price BTC — 価格のみ即表示（AI分析なし）\n" +
+  "  /price BTC — 価格のみ即表示\n" +
   "  銘柄名 — AI分析（例: BTC, ソラナ）\n\n" +
-  "【銘柄分析の例】\n" +
-  "  BTC / ETH / SOL / DOGE\n" +
-  "  ソラナ / イーサリアム\n\n" +
   "提供情報:\n" +
   "  📊 リアルタイム価格\n" +
   "  🐋 スマートマネー動向\n" +
@@ -262,37 +261,75 @@ export async function POST(request: NextRequest) {
     return new Response("OK", { status: 200 });
   }
 
-  // ── /scan: ショートスキャンTOP5 ──
-  if (text === "/scan" || text === "/short") {
-    await bot.sendMessage(chatId, "🔍 ショートスキャン実行中...");
+  // ── /scan [low|new]: ショートスキャン ──
+  if (text === "/scan" || text === "/short" || text.startsWith("/scan ")) {
+    const arg = text.replace(/^\/(scan|short)\s*/i, "").trim().toLowerCase();
+
+    await bot.sendMessage(chatId, "🔍 スキャン実行中...");
+
     try {
-      const scanRes = await fetch("https://bell-sig.vercel.app/api/short-scan", {
-        signal: AbortSignal.timeout(55000),
-      });
-      const scanData = await scanRes.json();
-      if (!scanData.success || !scanData.candidates?.length) {
-        await bot.sendMessage(chatId, "❌ スキャン結果が取得できませんでした");
-        return new Response("OK", { status: 200 });
-      }
-      const top5 = scanData.candidates.slice(0, 5);
-      const lines = top5.map((c: { symbol: string; shortScore: number; currentPrice: number; athDropPct: number; fundingRate: number | null; volumeChangeRatio: number; trendDirection: string }, i: number) => {
+      const [normalRes, new30Res] = await Promise.all([
+        fetch("https://bell-sig.vercel.app/api/short-scan", { signal: AbortSignal.timeout(55000) }),
+        fetch("https://bell-sig.vercel.app/api/short-scan?mode=new30", { signal: AbortSignal.timeout(55000) }),
+      ]);
+
+      const normalData = await normalRes.json();
+      const new30Data  = await new30Res.json();
+
+      type ScanCandidate = {
+        symbol: string; shortScore: number; currentPrice: number;
+        athDropPct: number; fundingRate: number | null; volumeChangeRatio: number;
+        trendDirection: string; openInterest: number; volume24h: number;
+      };
+
+      const lowLevCandidates: ScanCandidate[] = (normalData.success ? normalData.candidates : [])
+        .filter((c: ScanCandidate) =>
+          Math.abs(c.athDropPct) >= 30 &&
+          c.volumeChangeRatio <= 1.5 &&
+          c.volume24h >= 50000 &&
+          c.openInterest >= 20000
+        )
+        .slice(0, arg === "low" ? 5 : 3);
+
+      const newListingCandidates: ScanCandidate[] = (new30Data.success ? new30Data.candidates : [])
+        .slice(0, arg === "new" ? 5 : 3);
+
+      const formatCandidate = (c: ScanCandidate, i: number) => {
         const sym = c.symbol.replace("_USDT", "");
         const fr  = c.fundingRate !== null ? `${(c.fundingRate * 100).toFixed(4)}%` : "N/A";
+        const oi  = c.openInterest >= 1e6 ? `$${(c.openInterest / 1e6).toFixed(1)}M` : `$${(c.openInterest / 1e3).toFixed(0)}K`;
         return (
-          `${i + 1}. ${sym}\n` +
-          `   Score: ${c.shortScore} | $${c.currentPrice}\n` +
-          `   ATH: ${c.athDropPct.toFixed(0)}% | FR: ${fr}\n` +
-          `   Vol比: ${c.volumeChangeRatio.toFixed(2)}× | TF: ${c.trendDirection}`
+          `${i + 1}. ${sym} ⚡${c.shortScore}pt\n` +
+          `   $${c.currentPrice} | ATH${c.athDropPct.toFixed(0)}%\n` +
+          `   FR:${fr} | OI:${oi} | Vol:${c.volumeChangeRatio.toFixed(2)}×`
         );
-      });
-      const msg =
-        `🎯 MEXC SHORT SCAN TOP5\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        lines.join("\n━━━━━━━━━━━━━━━━━━━━\n") +
-        `\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `📊 対象: ${scanData.meta?.filtered ?? "?"}銘柄\n` +
-        `⏰ ${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`;
-      await sendTelegramMessage(bot, chatId, msg);
+      };
+
+      const parts: string[] = [];
+
+      if (arg !== "new" && lowLevCandidates.length > 0) {
+        parts.push(
+          `🐢 低レバ (1-2×) TOP${lowLevCandidates.length}\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          lowLevCandidates.map(formatCandidate).join("\n──────────\n")
+        );
+      }
+
+      if (arg !== "low" && newListingCandidates.length > 0) {
+        parts.push(
+          `🆕 新規上場 (30d) TOP${newListingCandidates.length}\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          newListingCandidates.map(formatCandidate).join("\n──────────\n")
+        );
+      }
+
+      if (parts.length === 0) {
+        await bot.sendMessage(chatId, "候補なし。条件に合う銘柄が現在ありません。");
+      } else {
+        const msg = parts.join("\n\n") +
+          `\n\n⏰ ${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`;
+        await sendTelegramMessage(bot, chatId, msg);
+      }
     } catch (err) {
       await bot.sendMessage(chatId, `❌ スキャンエラー: ${err instanceof Error ? err.message : "Unknown"}`);
     }
