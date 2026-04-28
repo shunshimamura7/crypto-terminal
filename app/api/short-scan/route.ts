@@ -42,14 +42,19 @@ function setCached(key: string, data: any) { _apiCache.set(key, { data, ts: Date
 
 // Non-crypto tokenized assets (equities, commodities, forex, indices)
 const NON_CRYPTO_PATTERNS = [
-  /STOCK$/i,           // TXNSTOCK, VRTSTOCK, ANTHROPICSTOCK, etc.
   /^(GOLD|SILVER|COPPER|XAU|XAG|XPD|XPT)_/i,
   /^(HK50|SPX|NASDAQ|NDX|DJI|FTSE|DAX|NI225|HSI|KOSPI|CAC40|IBEX|ASX200)_/i,
   /^(WTI|BRENT|NATGAS|WHEAT|CORN|SOYBEAN|SUGAR|COFFEE|COTTON|COCOA)_/i,
   /^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|KRW|HKD|CNH|SGD|MXN|BRL|INR|ZAR)_/i,
 ];
+// STOCK文字列を含むシンボルの例外（除外しないcrypto銘柄）
+const STOCK_EXCEPTIONS = new Set<string>([]);
 function isNonCrypto(symbol: string): boolean {
-  return NON_CRYPTO_PATTERNS.some(p => p.test(symbol));
+  if (NON_CRYPTO_PATTERNS.some(p => p.test(symbol))) return true;
+  // _USDTを除去してからSTOCKを含むか確認（NBISSTOCK_USDTなど末尾$が機能しないため）
+  const stripped = symbol.replace(/_USDT$/i, "").toUpperCase();
+  if (/STOCK/.test(stripped) && !STOCK_EXCEPTIONS.has(stripped)) return true;
+  return false;
 }
 
 const MAJOR_PAIRS = new Set([
