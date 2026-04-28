@@ -21,7 +21,7 @@ export interface BacktestStats {
   periodEnd:   number | null;
 }
 
-const SCORE_RANGES = ["8-10", "11-13", "14-16", "17-19"] as const;
+const SCORE_RANGES = ["8-10", "11-13", "14-16", "17-19", "20-23"] as const;
 
 export function calculateStats(records: BacktestRecord[]): BacktestStats {
   const active   = records.filter(r => r.status === "active");

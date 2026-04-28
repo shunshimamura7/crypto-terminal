@@ -3,19 +3,20 @@ import { useState } from "react";
 import ShortScanner from "@/components/ShortScanner";
 
 const SCORING_ITEMS = [
-  { label: "ATH下落",   pts: "3pt", color: "#ef4444" },
-  { label: "出来高枯渇", pts: "3pt", color: "#f97316" },
-  { label: "FR逆張り",  pts: "2pt", color: "#a855f7" },
-  { label: "上場新しさ", pts: "2pt", color: "#3b82f6" },
-  { label: "TF一致度",  pts: "3pt", color: "#10b981" },
-  { label: "OI過剰",    pts: "2pt", color: "#06b6d4" },
-  { label: "取引所独占", pts: "2pt", color: "#22c55e" },
-  { label: "FR連続",    pts: "1pt", color: "#8b5cf6" },
-  { label: "7d急騰",    pts: "2pt", color: "#f43f5e" },
-  { label: "BTC非連動", pts: "1pt", color: "#8b5cf6" },
-  { label: "パターン",  pts: "1pt", color: "#0ea5e9" },
-  { label: "RSI過熱",  pts: "2pt", color: "#f59e0b" },
-  { label: "MC/FDV乖離", pts: "3pt", color: "#dc2626" },
+  { label: "ATH下落",      pts: "3pt", color: "#ef4444" },
+  { label: "出来高枯渇",    pts: "3pt", color: "#f97316" },
+  { label: "FR逆張り",     pts: "2pt", color: "#a855f7" },
+  { label: "上場新しさ",    pts: "2pt", color: "#3b82f6" },
+  { label: "TF一致度",     pts: "3pt", color: "#10b981" },
+  { label: "OI過剰",       pts: "2pt", color: "#06b6d4" },
+  { label: "OI急増",       pts: "2pt", color: "#7c3aed" },
+  { label: "取引所独占",    pts: "2pt", color: "#22c55e" },
+  { label: "FR連続",       pts: "1pt", color: "#8b5cf6" },
+  { label: "7d急騰",       pts: "2pt", color: "#f43f5e" },
+  { label: "BTC非連動",    pts: "1pt", color: "#8b5cf6" },
+  { label: "パターン(SMC)", pts: "3pt", color: "#0ea5e9" },
+  { label: "RSI過熱",      pts: "2pt", color: "#f59e0b" },
+  { label: "MC/FDV乖離",   pts: "3pt", color: "#dc2626" },
 ];
 
 function ScoringBar() {
@@ -39,7 +40,7 @@ function ScoringBar() {
             ))}
             <span className="text-gray-400 ml-1">= 最大 24pt</span>
           </div>
-          <p className="text-[10px] text-gray-400 mt-1">※取引所独占・FR連続・MC/FDV乖離はクライアントサイド加算。CoinGecko連携時は最大28pt。</p>
+          <p className="text-[10px] text-gray-400 mt-1">※取引所独占・FR連続・OI急増・MC/FDV乖離はクライアントサイド加算。CoinGecko連携時は最大34pt。</p>
         </div>
       )}
     </div>
@@ -89,7 +90,7 @@ export default function ShortScanPage() {
               {[
                 { value: "全銘柄", sub: "MEXC先物を網羅", color: "text-indigo-600" },
                 { value: "TOP 20", sub: "スコア順で表示", color: "text-red-600" },
-                { value: "24pt", sub: "独自スコア", color: "text-orange-500" },
+                { value: "34pt", sub: "独自スコア", color: "text-orange-500" },
                 { value: "SL/TP", sub: "Klineから自動算出", color: "text-green-600" },
               ].map(s => (
                 <div key={s.value} className="bg-gray-50 rounded-xl p-2.5 border border-gray-200 text-center">

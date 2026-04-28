@@ -8,30 +8,33 @@ export interface ShortScoreBreakdown {
   frScore: number;         // 0-2
   freshnessScore: number;  // 0-2
   oiScore: number;         // 0-2
+  oiChangeScore: number;   // 0-2 (OI変化率: クライアントサイドスナップショット)
   trendScore: number;      // 0-3 (マルチTF一致度: 3TF全DOWN=3, 2=2, 1=1, 0=0)
   pumpScore: number;       // 0-2 (7d急騰度)
   btcCorrScore: number;    // 0-1 (BTC非連動ボーナス)
-  patternScore: number;    // 0-1 (チャートパターン検知: 施策4)
+  patternScore: number;    // 0-3 (SMCパターン: Task3で拡張)
   rsiScore: number;        // 0-2 (RSI過熱度)
 }
 
-// ─── Chart Pattern (施策4) ────────────────────────────────────────────────────
+// ─── Chart Pattern (施策4 + Phase2 Task3: SMC拡張) ───────────────────────────
 
-export type PatternType = "bear_flag" | "dead_cat" | "descending_wedge";
+export type PatternType = "bear_flag" | "dead_cat" | "descending_wedge" | "break_of_structure" | "fair_value_gap" | "supply_zone";
 
 export interface ChartPattern {
   type: PatternType;
   confidence: number; // 0-1
 }
 
-export function detectChartPattern(
+// detectChartPatterns: 全パターンを返す (Phase2 Task3)
+export function detectChartPatterns(
   closes: number[],
   highs: number[],
   lows: number[],
   priceChange24h: number,
   athDropPct: number,
-): ChartPattern | null {
-  if (closes.length < 10) return null;
+): ChartPattern[] {
+  const patterns: ChartPattern[] = [];
+  if (closes.length < 10) return patterns;
 
   const n = closes.length;
   const split = Math.floor(n * 0.6);
@@ -48,13 +51,13 @@ export function detectChartPattern(
     const p2Change = p2First > 0 ? (p2Last - p2First) / p2First : 0;
     const p2High   = Math.max(...phase2);
     if (p1Drop > 0.30 && Math.abs(p2Change) < 0.15 && p2High < p1High * 0.9) {
-      return { type: "bear_flag", confidence: Math.min(1, p1Drop) };
+      patterns.push({ type: "bear_flag", confidence: Math.min(1, p1Drop) });
     }
   }
 
   // ── Dead Cat Bounce: 大幅下落後の短期反発 ──
   if (athDropPct <= -40 && priceChange24h >= 5) {
-    return { type: "dead_cat", confidence: 0.7 };
+    patterns.push({ type: "dead_cat", confidence: 0.7 });
   }
 
   // ── Descending Wedge: 高値・安値ともに下降しレンジが収縮 ──
@@ -67,15 +70,67 @@ export function detectChartPattern(
     const rangeLast    = rHigh[rHigh.length - 1] - rLow[rLow.length - 1];
     const narrowing    = rangeFirst > 0 && rangeLast < rangeFirst * 0.7;
     if (highDecline && lowDecline && narrowing) {
-      return { type: "descending_wedge", confidence: 0.6 };
+      patterns.push({ type: "descending_wedge", confidence: 0.6 });
     }
   }
 
-  return null;
+  // ── Break of Structure (SMC): 切り下がり高値 + 切り下がり安値 ──
+  if (highs.length >= 6 && lows.length >= 6) {
+    const rH = highs.slice(-6);
+    const rL = lows.slice(-6);
+    const bosHighs = rH[0] > rH[2] && rH[2] > rH[4];
+    const bosLows  = rL[1] > rL[3] && rL[3] > rL[5];
+    if (bosHighs && bosLows) {
+      patterns.push({ type: "break_of_structure", confidence: 0.7 });
+    }
+  }
+
+  // ── Fair Value Gap (SMC): 下方向のギャップ (candle[i-2].low > candle[i].high) ──
+  if (highs.length >= 3) {
+    for (let i = 2; i < highs.length; i++) {
+      if (lows[i - 2] > highs[i]) {
+        const gapPct = closes[i] > 0 ? (lows[i - 2] - highs[i]) / closes[i] : 0;
+        if (gapPct > 0.005) {
+          patterns.push({ type: "fair_value_gap", confidence: Math.min(1, gapPct * 10) });
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Supply Zone (SMC): 現在価格より上の高出来高反発ゾーン (高ひげ判定) ──
+  if (highs.length >= 10) {
+    const current = closes[closes.length - 1];
+    for (let i = Math.max(0, highs.length - 10); i < highs.length - 1; i++) {
+      if (highs[i] > current * 1.02) {
+        const range = highs[i] - lows[i];
+        const upperWick = highs[i] - Math.max(closes[i], (highs[i] + lows[i]) / 2);
+        if (range > 0 && upperWick / range > 0.5) {
+          patterns.push({ type: "supply_zone", confidence: 0.65 });
+          break;
+        }
+      }
+    }
+  }
+
+  return patterns;
 }
 
-// patternScore (0-1)
-export function calcPatternScore(pattern: ChartPattern | null): number {
+// backwards-compat wrapper: 最初のパターンのみ返す
+export function detectChartPattern(
+  closes: number[],
+  highs: number[],
+  lows: number[],
+  priceChange24h: number,
+  athDropPct: number,
+): ChartPattern | null {
+  const all = detectChartPatterns(closes, highs, lows, priceChange24h, athDropPct);
+  return all.length > 0 ? all[0] : null;
+}
+
+// patternScore (0-3): allPatternsがあれば件数、なければ従来の0-1
+export function calcPatternScore(pattern: ChartPattern | null, allPatterns?: ChartPattern[]): number {
+  if (allPatterns !== undefined) return Math.min(3, allPatterns.length);
   return pattern !== null ? 1 : 0;
 }
 
@@ -125,7 +180,9 @@ export interface ShortCandidate {
   btcCorrelation: number;    // -1.0〜+1.0 (BTC相関係数)
   trendMultiTF: MultiTFTrend | null;  // マルチタイムフレームトレンド
   volumeSpike: VolumeSpike | null;    // 出来高異常検知 (施策3)
-  chartPattern: ChartPattern | null;      // チャートパターン (施策4)
+  chartPattern: ChartPattern | null;      // チャートパターン (施策4, 後方互換)
+  allPatterns: ChartPattern[];             // 全パターン (Phase2 Task3)
+  atrData: ATRData | null;                 // ATRボラティリティレジーム (Phase2 Task2)
   liquidationZone: LiquidationZone | null; // 清算カスケードゾーン (施策5)
   initialPrice: number | null; // 上場初日の始値 (新規上場モード用)
   dex?: {
@@ -182,6 +239,47 @@ export function calcLiquidationZone(
   }
 
   return null;
+}
+
+// ─── ATR Volatility Regime (Phase2 Task2) ────────────────────────────────────
+
+export type VolatilityRegime = "high" | "medium" | "trending" | "low";
+
+export interface ATRData {
+  atr: number;          // ATR絶対値
+  atrPct: number;       // ATR / currentPrice * 100 (%)
+  regime: VolatilityRegime;
+}
+
+export function calcATR(highs: number[], lows: number[], closes: number[], period = 14): number {
+  if (highs.length < period + 1 || highs.length !== lows.length || highs.length !== closes.length) return 0;
+  const trs: number[] = [];
+  for (let i = 1; i < highs.length; i++) {
+    trs.push(Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])));
+  }
+  const recent = trs.slice(-period);
+  return recent.reduce((a, b) => a + b, 0) / recent.length;
+}
+
+export function classifyVolatilityRegime(atrPct: number): VolatilityRegime {
+  if (atrPct >= 8) return "high";
+  if (atrPct >= 4) return "medium";
+  if (atrPct >= 2) return "trending";
+  return "low";
+}
+
+export function calcATRData(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  currentPrice: number,
+  period = 14,
+): ATRData | null {
+  if (highs.length < period + 1) return null;
+  const atr = calcATR(highs, lows, closes, period);
+  if (atr <= 0 || currentPrice <= 0) return null;
+  const atrPct = (atr / currentPrice) * 100;
+  return { atr, atrPct, regime: classifyVolatilityRegime(atrPct) };
 }
 
 // ─── Volume Profile (施策8) ───────────────────────────────────────────────────
@@ -259,6 +357,7 @@ export function calcTradeSetup(
   lows: number[],
   volumes: number[],
   volumeProfile: VolumeProfile | null,
+  atrData?: ATRData | null,
 ): TradeSetup {
   // ── SL: 高出来高レジスタンス TOP3 high の最大値 × 1.02、または現在価格×1.08 の小さい方 ──
   let resistanceLevel = currentPrice * 1.08;
@@ -274,6 +373,10 @@ export function calcTradeSetup(
       const resistHigh = Math.max(...recent10.map(r => r.high)) * 1.02;
       resistanceLevel = Math.min(resistHigh, currentPrice * 1.08);
     }
+  }
+  // ATR高ボラ時はSLを拡張 (最大+15%)
+  if (atrData && atrData.regime === "high") {
+    resistanceLevel = Math.min(resistanceLevel * 1.1, currentPrice * 1.15);
   }
   const sl = resistanceLevel;
 
@@ -347,6 +450,14 @@ export function calcFreshnessScore(listedDaysAgo: number): number {
 export function calcOIScore(oiRatio: number): number {
   if (oiRatio > 3.0) return 2;
   if (oiRatio > 1.5) return 1;
+  return 0;
+}
+
+// oiChangeScore (0-2): OI変化率スコア (Phase2 Task1: クライアントサイドスナップショットから計算)
+export function calcOIChangeScore(oiChange4hPct: number | null): number {
+  if (oiChange4hPct === null) return 0;
+  if (oiChange4hPct >= 30) return 2;
+  if (oiChange4hPct >= 15) return 1;
   return 0;
 }
 
@@ -438,7 +549,7 @@ export function calcExclusivityScore(listedOnBinance: boolean, listedOnBybit: bo
   return 0;
 }
 
-// Server-side score max: 3+3+2+2+3+2+2+1+1 = 19 (v5施策1+2+4)
+// Server-side score max: 3+3+2+2+2+3+2+1+3+2 = 23 (Phase2: oiChange+2, pattern0-3+2, rsiScore+2)
 export function calcShortScore(
   athDropPct: number,
   volumeChangeRatio: number,
@@ -449,11 +560,12 @@ export function calcShortScore(
   closes4h: number[],
   priceChange7d: number,
   btcCorrelation: number,
-  closes1h: number[],   // 施策2: マルチTF
-  closes1d: number[],   // 施策2: マルチTF
-  highs4h: number[],    // 施策4: パターン検知
-  lows4h: number[],     // 施策4: パターン検知
-  priceChange24h: number, // 施策4: デッドキャット判定
+  closes1h: number[],      // 施策2: マルチTF
+  closes1d: number[],      // 施策2: マルチTF
+  highs4h: number[],       // 施策4: パターン検知
+  lows4h: number[],        // 施策4: パターン検知
+  priceChange24h: number,  // 施策4: デッドキャット判定
+  oiChange4hPct: number | null = null,  // Phase2 Task1: OI変化率 (サーバーはnull固定)
 ): {
   score: number;
   breakdown: ShortScoreBreakdown;
@@ -461,6 +573,7 @@ export function calcShortScore(
   trendDirection: TrendDirection;
   trendMultiTF: MultiTFTrend;
   chartPattern: ChartPattern | null;
+  allPatterns: ChartPattern[];
 } {
   const dropScore      = calcDropScore(athDropPct);
   const volumeDryScore = calcVolumeDryScore(volumeChangeRatio);
@@ -468,6 +581,7 @@ export function calcShortScore(
   const freshnessScore = calcFreshnessScore(listedDaysAgo);
   const oiRatio        = volume24h > 0 ? openInterest / volume24h : 0;
   const oiScore        = calcOIScore(oiRatio);
+  const oiChangeScore  = calcOIChangeScore(oiChange4hPct); // 常に0 (サーバーはnull渡し)
   const pumpScore      = calcPumpScore(priceChange7d);
   const btcCorrScore   = calcBtcCorrScore(btcCorrelation);
 
@@ -478,19 +592,21 @@ export function calcShortScore(
 
   const trendDirection = trendMultiTF.h4; // 後方互換: 4hが主トレンド
 
-  // 施策4: チャートパターン検知
-  const chartPattern = detectChartPattern(closes4h, highs4h, lows4h, priceChange24h, athDropPct);
-  const patternScore  = calcPatternScore(chartPattern);
+  // Phase2 Task3: SMCパターン拡張 (0-3点)
+  const allPatterns  = detectChartPatterns(closes4h, highs4h, lows4h, priceChange24h, athDropPct);
+  const chartPattern = allPatterns.length > 0 ? allPatterns[0] : null;
+  const patternScore = calcPatternScore(null, allPatterns);
 
   const rsiScore = calcRSIScore(closes4h);
 
   return {
-    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + trendScore + pumpScore + btcCorrScore + patternScore + rsiScore,
-    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore },
+    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + oiChangeScore + trendScore + pumpScore + btcCorrScore + patternScore + rsiScore,
+    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, oiChangeScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore },
     oiRatio,
     trendDirection,
     trendMultiTF,
     chartPattern,
+    allPatterns,
   };
 }
 

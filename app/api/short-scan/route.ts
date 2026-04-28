@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calcShortScore, passesFilterNew30, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone } from "@/app/lib/shortScorer";
-import type { ShortCandidate, VolumeProfile, TradeSetup } from "@/app/lib/shortScorer";
+import { calcShortScore, passesFilterNew30, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone, calcATRData } from "@/app/lib/shortScorer";
+import type { ShortCandidate, VolumeProfile, TradeSetup, ATRData } from "@/app/lib/shortScorer";
 import { fetchGtDexData } from "@/app/lib/geckoTerminal";
 
 // ─── BTC相関計算 (施策1) ──────────────────────────────────────────────────────
@@ -135,6 +135,7 @@ async function analyzeCandidate(
   const closes4h: number[] = [];
   let volumeProfile: VolumeProfile | null = null;
   let tradeSetup: TradeSetup | null = null;
+  let atrData: ATRData | null = null;
   let kHighs4h: number[] = [];
   let kLows4h:  number[] = [];
   let kVols4h:  number[] = [];
@@ -154,9 +155,14 @@ async function analyzeCandidate(
     }
   }
 
-  // 施策10: Trade Setup (klineデータがあれば計算)
+  // Phase2 Task2: ATRボラティリティレジーム
+  if (kHighs4h.length >= 15) {
+    atrData = calcATRData(kHighs4h, kLows4h, closes4h, price);
+  }
+
+  // 施策10: Trade Setup (klineデータがあれば計算、ATRデータをSL調整に使用)
   if (kHighs4h.length >= 3) {
-    tradeSetup = calcTradeSetup(price, kHighs4h, kLows4h, kVols4h, volumeProfile);
+    tradeSetup = calcTradeSetup(price, kHighs4h, kLows4h, kVols4h, volumeProfile, atrData);
   }
 
   // 7-day avg daily volume + 7d price change + 施策2: closes1d
@@ -243,9 +249,9 @@ async function analyzeCandidate(
   // 施策3: 出来高異常検知
   const volumeSpike = calcVolumeSpike(volumeChangeRatio, priceChange24h);
 
-  const { score, breakdown, oiRatio, trendDirection, trendMultiTF, chartPattern } = calcShortScore(
+  const { score, breakdown, oiRatio, trendDirection, trendMultiTF, chartPattern, allPatterns } = calcShortScore(
     athDropPct, volumeChangeRatio, fundingRate, listedDaysAgo, openInterest, vol24h, closes4h, priceChange7d, btcCorrelation, closes1h, closes1d,
-    kHighs4h, kLows4h, priceChange24h,  // 施策4: パターン検知
+    kHighs4h, kLows4h, priceChange24h, null,  // 施策4: パターン検知 / oiChange4hPct=null (サーバー固定)
   );
 
   // 施策5: 清算カスケードゾーン推定
@@ -275,6 +281,8 @@ async function analyzeCandidate(
     trendMultiTF,
     volumeSpike,
     chartPattern,
+    allPatterns,
+    atrData,
     liquidationZone,
     shortScore: score,
     scoreBreakdown: breakdown,

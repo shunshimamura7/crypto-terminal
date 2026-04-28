@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { ShortCandidate, ShortScoreBreakdown } from "@/app/lib/shortScorer";
-import { calcExclusivityScore } from "@/app/lib/shortScorer";
+import { calcExclusivityScore, calcOIChangeScore } from "@/app/lib/shortScorer";
 import { saveSnapshot, getSnapshots, getConsecutivePositiveFR } from "@/app/lib/snapshotStorage";
 import type { ScanSnapshot } from "@/app/lib/snapshotStorage";
 import { detectAlerts, getDiffSummary } from "@/app/lib/snapshotDiff";
@@ -117,6 +117,9 @@ const T = {
     patBearFlag: "🚩 ベアフラッグ",
     patDeadCat: "🐱 デッドキャット",
     patDescWedge: "📐 下降ウェッジ",
+    patBOS: "🔴 BOS",
+    patFVG: "⚡ FVG",
+    patSupplyZone: "🏔️ 供給ゾーン",
     btTitle: "📊 バックテスト実績",
     btPeriod: "期間",
     btSummary: "サマリー",
@@ -327,6 +330,9 @@ const T = {
     patBearFlag: "🚩 Bear Flag",
     patDeadCat: "🐱 Dead Cat",
     patDescWedge: "📐 Desc Wedge",
+    patBOS: "🔴 BOS",
+    patFVG: "⚡ FVG",
+    patSupplyZone: "🏔️ Supply Zone",
     btTitle: "📊 Backtest Results",
     btPeriod: "Period",
     btSummary: "Summary",
@@ -466,6 +472,8 @@ interface ExtendedCandidate extends ShortCandidate {
   futuresHeatScore: number;
   snsHeatScore: number;
   mcFdvScore: number;
+  oiChangePct: number | null;
+  oiChangeScore: number;
   displayScore: number;
   phase: PhaseResult;
 }
@@ -485,7 +493,7 @@ interface AnalyzeResult {
 
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 28 : 22; // サーバー19+取引所独占2+FR連続1+先物ヒート2+SNSヒート1+MC/FDV乖離3=28
+const DISPLAY_MAX = HAS_CG ? 34 : 23; // サーバー23+取引所独占2+FR連続1+先物ヒート2+SNSヒート1+MC/FDV乖離3+OI急増2=34
 
 type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest" | "phase";
 
@@ -588,10 +596,11 @@ const SCORE_BARS: Array<{ key: keyof ShortScoreBreakdown; label: string; max: nu
   { key: "frScore",        label: "FR逆張り",   max: 2, color: "#a855f7" },
   { key: "freshnessScore", label: "上場新しさ",  max: 2, color: "#3b82f6" },
   { key: "oiScore",        label: "OI過剰",     max: 2, color: "#06b6d4" },
+  { key: "oiChangeScore",  label: "OI急増",     max: 2, color: "#7c3aed" },
   { key: "trendScore",     label: "TF一致度",   max: 3, color: "#10b981" },
   { key: "pumpScore",      label: "7d急騰",     max: 2, color: "#f43f5e" },
   { key: "btcCorrScore",   label: "BTC非連動",  max: 1, color: "#8b5cf6" },
-  { key: "patternScore",   label: "パターン",   max: 1, color: "#0ea5e9" },
+  { key: "patternScore",   label: "SMCパターン", max: 3, color: "#0ea5e9" },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -753,6 +762,18 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
                 </div>
               </div>
             ))}
+            {/* OI変化率 + パターン一覧 */}
+            {c.oiChangePct !== null && (
+              <div>
+                <div className="flex justify-between text-xs text-gray-600 mb-1">
+                  <span className="truncate">OI変化({c.oiChangePct >= 0 ? "+" : ""}{c.oiChangePct.toFixed(1)}%)</span>
+                  <span className="font-bold">{c.oiChangeScore}/2</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div className="h-1.5 rounded-full" style={{ width: `${(c.oiChangeScore / 2) * 100}%`, background: "#7c3aed" }} />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Radar chart (施策7) */}
@@ -812,6 +833,27 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
             </div>
           )}
         </div>
+
+        {/* SMCパターン一覧 (Phase2 Task3) */}
+        {c.allPatterns && c.allPatterns.length > 0 && (
+          <div className="mt-2 mb-1 flex flex-wrap gap-1.5 items-center">
+            <span className="text-xs text-gray-500 font-medium">📐 検知パターン:</span>
+            {c.allPatterns.map((p, i) => {
+              const label =
+                p.type === "bear_flag"          ? t.patBearFlag :
+                p.type === "dead_cat"           ? t.patDeadCat :
+                p.type === "descending_wedge"   ? t.patDescWedge :
+                p.type === "break_of_structure" ? t.patBOS :
+                p.type === "fair_value_gap"     ? t.patFVG :
+                                                  t.patSupplyZone;
+              return (
+                <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border font-bold bg-sky-50 text-sky-700 border-sky-300 whitespace-nowrap">
+                  {label} <span className="text-sky-500">{(p.confidence * 100).toFixed(0)}%</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         {/* Short signal */}
         <div className="flex items-center gap-2 mt-2 mb-1">
@@ -874,6 +916,20 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
                   </div>
                 ))}
               </div>
+              {c.atrData && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                  <span>ATR: <span className="font-mono font-semibold text-gray-700">{c.atrData.atrPct.toFixed(2)}%</span></span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                    c.atrData.regime === "high"     ? "bg-red-100 text-red-700 border-red-300"         :
+                    c.atrData.regime === "medium"   ? "bg-orange-100 text-orange-700 border-orange-300" :
+                    c.atrData.regime === "trending" ? "bg-blue-100 text-blue-700 border-blue-300"       :
+                                                      "bg-gray-100 text-gray-600 border-gray-200"
+                  }`}>
+                    {c.atrData.regime === "high" ? "🔥 高ボラ" : c.atrData.regime === "medium" ? "📊 中ボラ" : c.atrData.regime === "trending" ? "📈 トレンド域" : "😴 低ボラ"}
+                  </span>
+                  {c.atrData.regime === "high" && <span className="text-orange-600 text-[10px] font-medium">SL拡張済</span>}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -2494,9 +2550,25 @@ export default function ShortScanner() {
       const futuresHeatScore = cgData ? calcFuturesHeatScore(c.volume24h, cgData.spotVolume) : 0;
       const snsHeatScore = cgData ? calcSnsHeatScore(cgData.twitterFollowers, cgData.telegramMembers, c.priceChange7d) : 0;
       const mcFdvScore = cgData ? calcMcFdvScore(cgData.mcFdvRatio) : 0;
-      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore;
+      // Phase2 Task1: OI変化率をスナップショットから計算
+      let oiChangePct: number | null = null;
+      for (let i = snapshots.length - 1; i >= 0; i--) {
+        const entry = snapshots[i].data[c.symbol];
+        if (entry && entry.oi > 0 && c.openInterest !== entry.oi) {
+          oiChangePct = ((c.openInterest - entry.oi) / entry.oi) * 100;
+          break;
+        }
+      }
+      const oiChangeScore = calcOIChangeScore(oiChangePct);
+      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore + oiChangeScore;
       const phase = detectPhase(c.fundingRate, null, null, c.priceChange24h);
-      return { ...c, listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, mcFdvScore, displayScore, phase };
+      return {
+        ...c,
+        scoreBreakdown: { ...c.scoreBreakdown, oiChangeScore },
+        listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, mcFdvScore,
+        oiChangePct, oiChangeScore,
+        displayScore, phase,
+      };
     });
     const sorted = mapped.sort((a, b) => {
       switch (sortBy) {
@@ -3077,9 +3149,9 @@ export default function ShortScanner() {
                               const { label, cls } = btStatusLabel(bts, t);
                               return <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>{label}</span>;
                             })()}
-                            {c.chartPattern && (
+                            {c.allPatterns && c.allPatterns.length > 0 && (
                               <span className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-sky-50 text-sky-700 border-sky-300">
-                                {c.chartPattern.type === "bear_flag" ? t.patBearFlag : c.chartPattern.type === "dead_cat" ? t.patDeadCat : t.patDescWedge}
+                                📐 {c.allPatterns.length}パターン
                               </span>
                             )}
                             {isLongBias(c) && (
