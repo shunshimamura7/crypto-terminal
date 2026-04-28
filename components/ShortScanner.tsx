@@ -2207,7 +2207,7 @@ const DEFAULT_PRESETS: FilterPreset[] = [
     name: "🐢 低レバ (1-2×)",
     icon: "🐢",
     description: "ATH30%下落+出来高枯渇のスイングショート。低レバ推奨",
-    minDrop: 30, maxVolRatio: 70, minVol24k: 100, maxDays: 9999, minOiK: 50,
+    minDrop: 30, maxVolRatio: 70, minVol24k: 50, maxDays: 9999, minOiK: 20,
     sortBy: "displayScore",
     summaryFilter: null,
   },
