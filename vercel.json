@@ -12,10 +12,6 @@
     {
       "path": "/api/tg-monitor",
       "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/telegram/scan",
-      "schedule": "0 */4 * * *"
     }
   ]
 }
