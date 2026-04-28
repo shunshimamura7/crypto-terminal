@@ -57,6 +57,9 @@ export interface BacktestRecord {
     trendAlignment: number | null;
     exclusivityScore: number;
   };
+
+  // プリセット識別
+  preset: "low_lev" | "new_listing" | "high_lev" | "unknown";
 }
 
 export function getRecords(): BacktestRecord[] {
@@ -65,7 +68,8 @@ export function getRecords(): BacktestRecord[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as BacktestRecord[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((r: BacktestRecord) => ({ ...r, preset: r.preset ?? "unknown" }));
   } catch { return []; }
 }
 

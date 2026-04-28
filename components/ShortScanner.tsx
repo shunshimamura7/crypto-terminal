@@ -224,12 +224,6 @@ const T = {
     autoCountdown: "次回スキャン",
     // 施策6: プリセット
     presetsLabel: "プリセット",
-    presetStandard: "通常スキャン",
-    presetStrict: "厳選ショート",
-    presetNewListing: "新規上場ハンター",
-    presetEntryReady: "本日のおすすめ",
-    presetSqueeze: "スクイーズ警戒",
-    presetMexcOnly: "MEXC独占",
     presetSave: "+ 保存",
     presetNamePrompt: "プリセット名を入力",
     presetDelConfirm: "このプリセットを削除しますか？",
@@ -432,12 +426,6 @@ const T = {
     autoOff: "OFF",
     autoCountdown: "Next scan",
     presetsLabel: "Presets",
-    presetStandard: "Standard",
-    presetStrict: "Strict Short",
-    presetNewListing: "New Listing",
-    presetEntryReady: "Today's Picks",
-    presetSqueeze: "Squeeze Watch",
-    presetMexcOnly: "MEXC Exclusive",
     presetSave: "+ Save",
     presetNamePrompt: "Enter preset name",
     presetDelConfirm: "Delete this preset?",
@@ -1798,15 +1786,25 @@ function BacktestPanel({
   const [simOpen,     setSimOpen]     = useState(false);
   const [simCapital,  setSimCapital]  = useState(1000);
   const [simPos,      setSimPos]      = useState(100);
+  const [btPresetTab, setBtPresetTab] = useState<"all" | "low_lev" | "new_listing" | "high_lev">("all");
+
+  const tabStats = useMemo(
+    () => calculateStats(records, btPresetTab === "all" ? "all" : btPresetTab),
+    [records, btPresetTab],
+  );
+  const tabRecords = btPresetTab === "all" ? records : records.filter(r => r.preset === btPresetTab);
+
+  // Use tab-filtered stats for display; fall back to global stats for header
+  const displayStats = btPresetTab === "all" ? stats : tabStats;
 
   const periodStr = (() => {
-    if (!stats.periodStart) return "—";
-    const s = fmtDate(stats.periodStart);
-    const e = fmtDate(stats.periodEnd ?? Date.now());
+    if (!displayStats.periodStart) return "—";
+    const s = fmtDate(displayStats.periodStart);
+    const e = fmtDate(displayStats.periodEnd ?? Date.now());
     return `${s} 〜 ${e}`;
   })();
 
-  const sorted = [...records].sort((a, b) => b.recordedAt - a.recordedAt);
+  const sorted = [...tabRecords].sort((a, b) => b.recordedAt - a.recordedAt);
 
   return (
     <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
@@ -1817,7 +1815,7 @@ function BacktestPanel({
           {records.length > 0 && (
             <span className="ml-2 text-xs font-normal text-indigo-500">
               {t.btTotal}: {records.length} / {t.btWinRate}: {stats.winRate.toFixed(0)}%
-              {stats.active > 0 && <span className="ml-2 text-yellow-600">⏳{stats.active}</span>}
+              {stats.active > 0 && <span className="ml-2 text-yellow-600">⏳{stats.active}件</span>}
             </span>
           )}
         </span>
@@ -1826,8 +1824,37 @@ function BacktestPanel({
 
       {open && (
         <div className="px-4 pb-4 pt-1 space-y-3">
+          {/* Preset tabs */}
+          {records.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-1">
+              {([
+                { key: "all",         label: "全体" },
+                { key: "low_lev",     label: "🐢低レバ" },
+                { key: "new_listing", label: "🆕新規上場" },
+                { key: "high_lev",    label: "🔥高レバ" },
+              ] as const).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setBtPresetTab(tab.key)}
+                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
+                    btPresetTab === tab.key
+                      ? "bg-indigo-500 text-white border-indigo-500"
+                      : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600 hover:bg-indigo-50"
+                  }`}
+                >
+                  {tab.label}
+                  <span className="ml-1 opacity-60">
+                    ({tab.key === "all" ? records.length : records.filter(r => r.preset === tab.key).length})
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {records.length === 0 ? (
             <p className="text-xs text-gray-400 py-3">{t.btNoData}</p>
+          ) : tabRecords.length === 0 ? (
+            <p className="text-xs text-gray-400 py-3">このプリセットの記録はまだありません</p>
           ) : (
             <>
               {/* Period */}
@@ -1836,10 +1863,10 @@ function BacktestPanel({
               {/* Summary grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 {[
-                  { label: t.btTotal,    val: records.length,              cls: "text-gray-700" },
-                  { label: t.btResolved, val: stats.resolved,              cls: "text-gray-700" },
-                  { label: t.btActive,   val: stats.active,                cls: "text-yellow-600 font-bold" },
-                  { label: t.btExpired,  val: stats.expired,               cls: "text-gray-400" },
+                  { label: t.btTotal,    val: tabRecords.length,              cls: "text-gray-700" },
+                  { label: t.btResolved, val: displayStats.resolved,          cls: "text-gray-700" },
+                  { label: t.btActive,   val: displayStats.active,            cls: "text-yellow-600 font-bold" },
+                  { label: t.btExpired,  val: displayStats.expired,           cls: "text-gray-400" },
                 ].map(s => (
                   <div key={s.label} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 border border-gray-100 dark:border-gray-700 text-center">
                     <div className={`text-base font-bold ${s.cls}`}>{s.val}</div>
@@ -1851,10 +1878,10 @@ function BacktestPanel({
               {/* TP / SL breakdown */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 {[
-                  { label: "TP1+",  val: `${stats.tp1Hits + stats.tp2Hits + stats.tp3Hits}件`, cls: "text-green-700" },
-                  { label: "SL",    val: `${stats.slHits}件`,                                   cls: "text-red-600" },
-                  { label: t.btWinRate, val: `${stats.winRate.toFixed(1)}%`,                   cls: stats.winRate >= 50 ? "text-green-700 font-bold" : "text-red-600 font-bold" },
-                  { label: t.btAvgRR,   val: stats.avgRR.toFixed(2),                           cls: stats.avgRR >= 0 ? "text-indigo-700 font-bold" : "text-red-600 font-bold" },
+                  { label: "TP1+",  val: `${displayStats.tp1Hits + displayStats.tp2Hits + displayStats.tp3Hits}件`, cls: "text-green-700" },
+                  { label: "SL",    val: `${displayStats.slHits}件`,                                   cls: "text-red-600" },
+                  { label: t.btWinRate, val: `${displayStats.winRate.toFixed(1)}%`,                   cls: displayStats.winRate >= 50 ? "text-green-700 font-bold" : "text-red-600 font-bold" },
+                  { label: t.btAvgRR,   val: displayStats.avgRR.toFixed(2),                           cls: displayStats.avgRR >= 0 ? "text-indigo-700 font-bold" : "text-red-600 font-bold" },
                 ].map(s => (
                   <div key={s.label} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 border border-gray-100 dark:border-gray-700 text-center">
                     <div className={`text-base font-bold ${s.cls}`}>{s.val}</div>
@@ -1867,48 +1894,48 @@ function BacktestPanel({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                 <div className="bg-gray-50 rounded-lg p-2 border border-gray-100">
                   <span className="text-gray-500">{t.btExpectancy}: </span>
-                  <span className={`font-bold ${stats.expectancy >= 0 ? "text-green-700" : "text-red-600"}`}>
-                    {stats.expectancy >= 0 ? "+" : ""}{stats.expectancy.toFixed(2)}R
+                  <span className={`font-bold ${displayStats.expectancy >= 0 ? "text-green-700" : "text-red-600"}`}>
+                    {displayStats.expectancy >= 0 ? "+" : ""}{displayStats.expectancy.toFixed(2)}R
                   </span>
                 </div>
-                {stats.bestTrade && (
+                {displayStats.bestTrade && (
                   <div className="bg-green-50 rounded-lg p-2 border border-green-100">
                     <span className="text-gray-500">{t.btBest}: </span>
-                    <span className="font-mono font-bold text-green-700">{stats.bestTrade.symbol.replace("_USDT","")}</span>
-                    <span className="text-green-600 ml-1">-{stats.bestTrade.profit.toFixed(1)}%</span>
+                    <span className="font-mono font-bold text-green-700">{displayStats.bestTrade.symbol.replace("_USDT","")}</span>
+                    <span className="text-green-600 ml-1">-{displayStats.bestTrade.profit.toFixed(1)}%</span>
                   </div>
                 )}
-                {stats.worstTrade && (
+                {displayStats.worstTrade && (
                   <div className="bg-red-50 rounded-lg p-2 border border-red-100">
                     <span className="text-gray-500">{t.btWorst}: </span>
-                    <span className="font-mono font-bold text-red-700">{stats.worstTrade.symbol.replace("_USDT","")}</span>
-                    <span className="text-red-600 ml-1">+{stats.worstTrade.loss.toFixed(1)}%</span>
+                    <span className="font-mono font-bold text-red-700">{displayStats.worstTrade.symbol.replace("_USDT","")}</span>
+                    <span className="text-red-600 ml-1">+{displayStats.worstTrade.loss.toFixed(1)}%</span>
                   </div>
                 )}
               </div>
 
               {/* Phase3 Task2: 高度パフォーマンス指標 */}
-              {stats.resolved >= 3 && (
+              {displayStats.resolved >= 3 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   {[
                     {
                       label: "Profit Factor",
-                      val: stats.profitFactor === Infinity ? "∞" : stats.profitFactor.toFixed(2),
-                      cls: stats.profitFactor >= 1.5 ? "text-green-700" : stats.profitFactor >= 1 ? "text-yellow-600" : "text-red-600",
+                      val: displayStats.profitFactor === Infinity ? "∞" : displayStats.profitFactor.toFixed(2),
+                      cls: displayStats.profitFactor >= 1.5 ? "text-green-700" : displayStats.profitFactor >= 1 ? "text-yellow-600" : "text-red-600",
                     },
                     {
                       label: "Recovery Factor",
-                      val: stats.recoveryFactor === Infinity ? "∞" : stats.recoveryFactor.toFixed(2),
-                      cls: stats.recoveryFactor >= 2 ? "text-green-700" : stats.recoveryFactor >= 1 ? "text-yellow-600" : "text-red-600",
+                      val: displayStats.recoveryFactor === Infinity ? "∞" : displayStats.recoveryFactor.toFixed(2),
+                      cls: displayStats.recoveryFactor >= 2 ? "text-green-700" : displayStats.recoveryFactor >= 1 ? "text-yellow-600" : "text-red-600",
                     },
                     {
                       label: "Calmar Ratio",
-                      val: stats.calmarRatio.toFixed(2),
-                      cls: stats.calmarRatio >= 2 ? "text-green-700" : stats.calmarRatio >= 1 ? "text-yellow-600" : "text-red-600",
+                      val: displayStats.calmarRatio.toFixed(2),
+                      cls: displayStats.calmarRatio >= 2 ? "text-green-700" : displayStats.calmarRatio >= 1 ? "text-yellow-600" : "text-red-600",
                     },
                     {
                       label: "平均決着日数",
-                      val: `${stats.avgDaysToResolve.toFixed(1)}d`,
+                      val: `${displayStats.avgDaysToResolve.toFixed(1)}d`,
                       cls: "text-gray-700",
                     },
                   ].map(s => (
@@ -1921,7 +1948,7 @@ function BacktestPanel({
               )}
 
               {/* Score range table */}
-              {stats.resolved > 0 && (
+              {displayStats.resolved > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-1.5">{t.btByScore}</p>
                   <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
@@ -1935,7 +1962,7 @@ function BacktestPanel({
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(stats.byScore).reverse().map(([range, s]) => (
+                        {Object.entries(displayStats.byScore).reverse().map(([range, s]) => (
                           <tr key={range} className="border-b border-gray-100 last:border-0">
                             <td className="px-3 py-1.5 font-mono text-gray-700">{range}</td>
                             <td className="px-3 py-1.5 text-center text-green-600 font-bold">{s.wins}</td>
@@ -1954,12 +1981,12 @@ function BacktestPanel({
               )}
 
               {/* Equity Curve */}
-              {stats.resolved >= 2 && (() => {
+              {displayStats.resolved >= 2 && (() => {
                 const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } =
                   // eslint-disable-next-line @typescript-eslint/no-require-imports
                   require("recharts") as typeof import("recharts");
 
-                const resolved = [...records]
+                const resolved = [...tabRecords]
                   .filter(r => r.status !== "active" && r.resolvedAt !== null && r.resolvedPrice !== null)
                   .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
 
@@ -2001,13 +2028,13 @@ function BacktestPanel({
                   <span className="text-gray-400">{simOpen ? "▲" : "▼"}</span>
                 </button>
                 {simOpen && (() => {
-                  if (stats.resolved < 5) {
+                  if (displayStats.resolved < 5) {
                     return (
                       <div className="px-3 py-3 text-xs text-gray-400 text-center">{t.btSimInsuf}</div>
                     );
                   }
 
-                  const resolved = [...records]
+                  const resolved = [...tabRecords]
                     .filter(r => r.status !== "active" && r.resolvedAt !== null && r.resolvedPrice !== null)
                     .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
 
@@ -2173,61 +2200,31 @@ interface FilterPreset {
   filterFsRatio5x?: boolean;
   sortBy?: SortKey;
   summaryFilter?: "strong" | "long" | "pattern" | "allTf" | "spike" | null;
+  isNew30?: boolean;
 }
 const DEFAULT_PRESETS: FilterPreset[] = [
   {
-    name: "本日のおすすめ",
-    icon: "🔥",
-    description: "スコア10+の強いショート候補のみ表示。迷ったらこれ",
-    minDrop: 20, maxVolRatio: 150, minVol24k: 50, maxDays: 9999, minOiK: 0,
-    sortBy: "displayScore",
-    summaryFilter: "strong",
-  },
-  {
-    name: "スキャルプ(即日〜3日)",
-    icon: "⚡",
-    description: "新規上場直後のポンプ崩壊狙い。上場7日以内",
-    minDrop: 5, maxVolRatio: 500, minVol24k: 10, maxDays: 7, minOiK: 0,
-    sortBy: "priceChange24h",
-    summaryFilter: null,
-  },
-  {
-    name: "スイング(1-2週間)",
-    icon: "📉",
-    description: "FR過熱+出来高枯渇の安定ショート。上場30日+",
-    minDrop: 30, maxVolRatio: 70, minVol24k: 100, maxDays: 9999, minOiK: 30,
+    name: "🐢 低レバ (1-2×)",
+    icon: "🐢",
+    description: "ATH30%下落+出来高枯渇のスイングショート。低レバ推奨",
+    minDrop: 30, maxVolRatio: 70, minVol24k: 100, maxDays: 9999, minOiK: 50,
     sortBy: "displayScore",
     summaryFilter: null,
   },
   {
-    name: "新規上場ハンター",
+    name: "🆕 新規上場 (30d)",
     icon: "🆕",
-    description: "上場30日以内。出来高閾値緩め",
+    description: "上場30日以内のポンプ崩壊狙い。new30モード",
     minDrop: 10, maxVolRatio: 150, minVol24k: 10, maxDays: 30, minOiK: 0,
     sortBy: "displayScore",
     summaryFilter: null,
+    isNew30: true,
   },
   {
-    name: "MEXC独占",
-    icon: "🎪",
-    description: "Binance/Bybitに未上場。流動性の薄さが武器",
-    minDrop: 20, maxVolRatio: 100, minVol24k: 50, maxDays: 9999, minOiK: 0,
-    sortBy: "displayScore",
-    summaryFilter: null,
-  },
-  {
-    name: "デッドキャット",
-    icon: "🐱",
-    description: "パターン検知+全TF下降のみ表示",
-    minDrop: 40, maxVolRatio: 100, minVol24k: 50, maxDays: 9999, minOiK: 0,
-    sortBy: "athDropPct",
-    summaryFilter: "pattern",
-  },
-  {
-    name: "FR収穫",
-    icon: "💰",
-    description: "FR高止まり銘柄。デルタニュートラル or 純ショート",
-    minDrop: 10, maxVolRatio: 200, minVol24k: 100, maxDays: 9999, minOiK: 50,
+    name: "🔥 高レバ (5-10×)",
+    icon: "🔥",
+    description: "ATH70%超下落+流動性十分の強いショート。高レバ向け",
+    minDrop: 70, maxVolRatio: 30, minVol24k: 500, maxDays: 9999, minOiK: 200,
     sortBy: "displayScore",
     summaryFilter: null,
   },
@@ -2241,13 +2238,9 @@ function saveCustomPresets(presets: FilterPreset[]) {
 }
 
 const EN_NAMES: Record<string, string> = {
-  "本日のおすすめ": "Today's Picks",
-  "スキャルプ(即日〜3日)": "Scalp (1-3d)",
-  "スイング(1-2週間)": "Swing (1-2w)",
-  "新規上場ハンター": "New Listing",
-  "MEXC独占": "MEXC Only",
-  "デッドキャット": "Dead Cat",
-  "FR収穫": "FR Harvest",
+  "🐢 低レバ (1-2×)": "🐢 Low Lev (1-2×)",
+  "🆕 新規上場 (30d)": "🆕 New Listing (30d)",
+  "🔥 高レバ (5-10×)": "🔥 High Lev (5-10×)",
 };
 
 function FilterPresets({ t, lang, customPresets, onApply, onSaveCurrent, onDeleteCustom }: {
@@ -2266,8 +2259,7 @@ function FilterPresets({ t, lang, customPresets, onApply, onSaveCurrent, onDelet
   };
 
   const presetLabel = (p: FilterPreset) => {
-    const displayName = lang === "en" ? (EN_NAMES[p.name] ?? p.name) : p.name;
-    return `${p.icon} ${displayName}`;
+    return lang === "en" ? (EN_NAMES[p.name] ?? p.name) : p.name;
   };
 
   return (
@@ -2484,7 +2476,13 @@ export default function ShortScanner() {
   }
   function applyPresetAndScan(p: FilterPreset) {
     applyPreset(p);
-    if (!loading) scan(undefined, { minDrop: p.minDrop, maxVolRatio: p.maxVolRatio, minVol24k: p.minVol24k, maxDays: p.maxDays, minOiK: p.minOiK });
+    if (!loading) {
+      if (p.isNew30) {
+        scan("new30");
+      } else {
+        scan(undefined, { minDrop: p.minDrop, maxVolRatio: p.maxVolRatio, minVol24k: p.minVol24k, maxDays: p.maxDays, minOiK: p.minOiK });
+      }
+    }
   }
   function saveCurrentPreset() {
     const name = window.prompt(t.presetNamePrompt);
@@ -2550,6 +2548,15 @@ export default function ShortScanner() {
       }).catch(() => {});
   }, []);
 
+  function detectPreset(
+    dropMin: number, volRatioMax: number, vol24kMin: number, oiKMin: number, daysMax: number, isNew30: boolean,
+  ): "low_lev" | "new_listing" | "high_lev" | "unknown" {
+    if (isNew30 || daysMax <= 30) return "new_listing";
+    if (dropMin >= 70 && volRatioMax <= 30 && vol24kMin >= 500 && oiKMin >= 200) return "high_lev";
+    if (dropMin >= 30 && volRatioMax <= 70 && vol24kMin >= 100 && oiKMin >= 50) return "low_lev";
+    return "unknown";
+  }
+
   const scan = useCallback(async (mode?: "new30", filterOverrides?: { minDrop: number; maxVolRatio: number; minVol24k: number; maxDays: number; minOiK: number }) => {
     setLoading(true);
     setError("");
@@ -2599,7 +2606,13 @@ export default function ShortScanner() {
       try {
         checkAndUpdateRecords(json.candidates);
         const beforeCount = getRecords().length;
-        recordNewCandidates(json.candidates);
+        const effectiveDrop = filterOverrides?.minDrop ?? minDrop;
+        const effectiveVolRatio = filterOverrides?.maxVolRatio ?? maxVolRatio;
+        const effectiveVol24k = filterOverrides?.minVol24k ?? minVol24k;
+        const effectiveOiK = filterOverrides?.minOiK ?? minOiK;
+        const effectiveDays = filterOverrides?.maxDays ?? maxDays;
+        const currentPreset = detectPreset(effectiveDrop, effectiveVolRatio, effectiveVol24k, effectiveOiK, effectiveDays, mode === "new30");
+        recordNewCandidates(json.candidates, currentPreset);
         const newRecords = getRecords();
         const recorded = newRecords.length - beforeCount;
         setBtRecords(newRecords);

@@ -62,7 +62,10 @@ export function checkAndUpdateRecords(candidates: ShortCandidate[]): void {
 }
 
 // Step 2: record new candidates with score >= threshold
-export function recordNewCandidates(candidates: ShortCandidate[]): BacktestRecord[] {
+export function recordNewCandidates(
+  candidates: ShortCandidate[],
+  preset: "low_lev" | "new_listing" | "high_lev" | "unknown" = "unknown",
+): BacktestRecord[] {
   const records = getRecords();
   const activeSymbols = new Set(records.filter(r => r.status === "active").map(r => r.symbol));
   const recentCutoff = Date.now() - 24 * 60 * 60 * 1000;
@@ -70,7 +73,29 @@ export function recordNewCandidates(candidates: ShortCandidate[]): BacktestRecor
   const now = Date.now();
 
   const newRecords: BacktestRecord[] = candidates
-    .filter(c => c.shortScore >= SCORE_THRESHOLD && c.tradeSetup !== null && !activeSymbols.has(c.symbol) && !recentSymbols.has(c.symbol))
+    .filter(c => {
+      if (c.tradeSetup === null) return false;
+      if (activeSymbols.has(c.symbol)) return false;
+      if (recentSymbols.has(c.symbol)) return false;
+      switch (preset) {
+        case "low_lev":
+          return c.shortScore >= 10
+            && c.athDropPct <= -30
+            && c.volumeChangeRatio < 0.7
+            && c.volume24h >= 100_000
+            && c.openInterest >= 50_000;
+        case "new_listing":
+          return c.shortScore >= 8 && c.listedDaysAgo <= 30;
+        case "high_lev":
+          return c.shortScore >= 12
+            && c.athDropPct <= -70
+            && c.volumeChangeRatio < 0.3
+            && c.volume24h >= 500_000
+            && c.openInterest >= 200_000;
+        default:
+          return c.shortScore >= SCORE_THRESHOLD;
+      }
+    })
     .map(c => {
       const ts = c.tradeSetup!;
       return {
@@ -93,6 +118,7 @@ export function recordNewCandidates(candidates: ShortCandidate[]): BacktestRecor
         maxProfit:    null,
         currentPrice: c.currentPrice,
         lastCheckedAt: now,
+        preset,
       };
     });
 
