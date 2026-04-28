@@ -701,6 +701,31 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
   const [analysisData, setAnalysisData]       = useState<AnalyzeResult | null>(null);
   const [analysisError, setAnalysisError]     = useState<string | null>(null);
 
+  // Orderbook depth (fetched on-demand when panel opens)
+  const [obData, setObData] = useState<{ bidTotal: number; askTotal: number; ratio: number; topAskWall: number | null } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/orderbook?symbol=${c.symbol}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled || !data?.asks || !data?.bids) return;
+        let bidTotal = 0, askTotal = 0;
+        let topAskWall: number | null = null, topAskSize = 0;
+        for (const [p, q] of data.bids as [string, string][]) {
+          bidTotal += parseFloat(p) * parseFloat(q);
+        }
+        for (const [p, q] of data.asks as [string, string][]) {
+          const size = parseFloat(p) * parseFloat(q);
+          askTotal += size;
+          if (size > topAskSize) { topAskWall = parseFloat(p); topAskSize = size; }
+        }
+        setObData({ bidTotal, askTotal, ratio: bidTotal > 0 ? askTotal / bidTotal : 0, topAskWall });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.symbol]);
+
   async function runAnalysis() {
     setAnalysisLoading(true);
     setAnalysisError(null);
@@ -1149,6 +1174,43 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
             <div className="text-xs text-red-500 mt-1">{analysisError}</div>
           )}
         </div>
+
+        {/* Orderbook depth */}
+        {obData && (
+          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <p className="text-[10px] font-semibold text-gray-700 dark:text-gray-300 mb-1">📗 オーダーブック深度</p>
+            <div className="grid grid-cols-3 gap-2 text-[10px]">
+              <div><span className="text-green-600">Bid: ${(obData.bidTotal / 1000).toFixed(0)}K</span></div>
+              <div><span className="text-red-600">Ask: ${(obData.askTotal / 1000).toFixed(0)}K</span></div>
+              <div>
+                <span className={`font-bold ${obData.ratio >= 2 ? "text-red-600" : obData.ratio >= 1.5 ? "text-orange-500" : "text-gray-600 dark:text-gray-400"}`}>
+                  A/B: {obData.ratio.toFixed(2)}×
+                  {obData.ratio >= 2 && " 🔴売り圧"}
+                  {obData.ratio >= 1.5 && obData.ratio < 2 && " 🟡やや売り圧"}
+                </span>
+              </div>
+            </div>
+            {obData.topAskWall != null && (
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                最大売り板: ${obData.topAskWall < 1 ? obData.topAskWall.toFixed(6) : obData.topAskWall.toFixed(2)}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Price deviation (MEXC vs index) */}
+        {c.priceDeviation != null && Math.abs(c.priceDeviation) >= 0.5 && (
+          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 text-[10px]">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">📡 価格乖離 (vs Index): </span>
+            <span className={`font-mono font-bold ${
+              Math.abs(c.priceDeviation) >= 2 ? "text-red-600" :
+              Math.abs(c.priceDeviation) >= 1 ? "text-orange-500" : "text-gray-600 dark:text-gray-400"
+            }`}>
+              {c.priceDeviation >= 0 ? "+" : ""}{c.priceDeviation.toFixed(2)}%
+            </span>
+            {Math.abs(c.priceDeviation) >= 2 && <span className="ml-1 text-red-500">⚠️ 操作リスク</span>}
+          </div>
+        )}
 
         {/* Watchlist + Share */}
         <div className="mt-2 pt-2 border-t border-gray-200 flex flex-wrap gap-2 items-center">

@@ -185,6 +185,7 @@ export interface ShortCandidate {
   atrData: ATRData | null;                 // ATRボラティリティレジーム (Phase2 Task2)
   liquidationZone: LiquidationZone | null; // 清算カスケードゾーン (施策5)
   initialPrice: number | null; // 上場初日の始値 (新規上場モード用)
+  priceDeviation: number | null; // MEXC lastPrice vs indexPrice 乖離%
   dex?: {
     liquidity: number | null;
     liquidityMcRatio: number | null;

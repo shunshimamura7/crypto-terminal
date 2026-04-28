@@ -53,7 +53,8 @@ async function fetchYahoo(symbol: string): Promise<YahooResult> {
 }
 
 export async function GET() {
-  const [mexcData, fngData, cgGlobal, us100R, dxyR, goldR, us10yR] = await Promise.allSettled([
+  const cpKey = process.env.CRYPTOPANIC_API_KEY;
+  const [mexcData, fngData, cgGlobal, us100R, dxyR, goldR, us10yR, newsData] = await Promise.allSettled([
     safeGet(`${MEXC}/api/v1/contract/ticker`),
     safeGet("https://api.alternative.me/fng/"),
     safeGet(CG_GLOBAL, 300),
@@ -61,6 +62,9 @@ export async function GET() {
     fetchYahoo("DX-Y.NYB"),
     fetchYahoo("GC=F"),
     fetchYahoo("^TNX"),
+    cpKey
+      ? safeGet(`https://cryptopanic.com/api/free/v1/posts/?auth_token=${cpKey}&kind=news&filter=hot&public=true`, 300)
+      : Promise.resolve(null),
   ]);
 
   // MEXC tickers
@@ -95,6 +99,24 @@ export async function GET() {
   const btcChange = parseFloat(btcT?.riseFallRate || "0") * 100;
   const ethChange = parseFloat(ethT?.riseFallRate || "0") * 100;
 
+  // CryptoPanic sentiment
+  let sentimentScore: number | null = null;
+  let sentimentLabel: string | null = null;
+  if (newsData.status === "fulfilled" && newsData.value?.results) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const posts = newsData.value.results as Array<{ votes: any }>;
+    let positive = 0, negative = 0;
+    for (const p of posts.slice(0, 20)) {
+      positive += (p.votes?.positive ?? 0) as number;
+      negative += (p.votes?.negative ?? 0) as number;
+    }
+    const total = positive + negative;
+    if (total > 0) {
+      sentimentScore = Math.round((positive / total) * 100);
+      sentimentLabel = sentimentScore >= 70 ? "Bullish" : sentimentScore >= 40 ? "Neutral" : "Bearish";
+    }
+  }
+
   return NextResponse.json({
     // existing fields (backward-compatible)
     btcPrice:     parseFloat(btcT?.lastPrice || "0"),
@@ -115,5 +137,7 @@ export async function GET() {
     us10y:        us10y.price,
     us10yValue:   us10y.price,
     us10yChange:  us10y.changePercent,
+    sentimentScore,
+    sentimentLabel,
   });
 }

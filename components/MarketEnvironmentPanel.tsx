@@ -7,6 +7,8 @@ interface MarketData {
   ethPrice: number; ethChange24h: number;
   fng: FngData | null;
   btcDominance: number | null;
+  sentimentScore: number | null;
+  sentimentLabel: string | null;
 }
 
 function calcShortEnv(fng: number | null, btcChange: number) {
@@ -60,6 +62,8 @@ export default function MarketEnvironmentPanel({ cgApiKey }: { cgApiKey?: string
           ethChange24h: env.ethChange24h ?? 0,
           fng: env.fng ?? null,
           btcDominance,
+          sentimentScore: env.sentimentScore ?? null,
+          sentimentLabel: env.sentimentLabel ?? null,
         });
       }
       setLoading(false);
@@ -92,7 +96,7 @@ export default function MarketEnvironmentPanel({ cgApiKey }: { cgApiKey?: string
           )}
 
           {md && env && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div className={`grid gap-3 text-xs ${md.sentimentScore != null ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-4"}`}>
               {/* BTC */}
               <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
                 <div className="text-gray-500 font-semibold mb-0.5">₿ BTC</div>
@@ -129,6 +133,26 @@ export default function MarketEnvironmentPanel({ cgApiKey }: { cgApiKey?: string
                   </>
                 ) : <div className="text-gray-400 text-xs">取得中...</div>}
               </div>
+
+              {/* News Sentiment */}
+              {md.sentimentScore != null && (
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <div className="text-gray-500 font-semibold mb-0.5">📰 センチメント</div>
+                  <div className={`font-bold text-sm ${
+                    md.sentimentScore >= 70 ? "text-green-600" :
+                    md.sentimentScore >= 40 ? "text-yellow-600" : "text-red-600"
+                  }`}>
+                    {md.sentimentScore}%
+                    <span className="text-xs font-semibold ml-1">{md.sentimentLabel}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1.5 overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{
+                      width: `${md.sentimentScore}%`,
+                      background: md.sentimentScore >= 70 ? "#16a34a" : md.sentimentScore >= 40 ? "#ca8a04" : "#dc2626",
+                    }} />
+                  </div>
+                </div>
+              )}
 
               {/* 環境判定 */}
               <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">

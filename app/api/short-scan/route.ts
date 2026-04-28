@@ -101,6 +101,8 @@ async function analyzeCandidate(
 
   const price = parseFloat(ticker.lastPrice || ticker.indexPrice || "0");
   if (!price) return null;
+  const indexPrice = parseFloat(ticker.indexPrice || "0");
+  const priceDeviation = (indexPrice > 0 && price > 0) ? ((price - indexPrice) / indexPrice) * 100 : null;
 
   const vol24h = (() => {
     const a = parseFloat(ticker.amount24 || "0");
@@ -286,6 +288,7 @@ async function analyzeCandidate(
     liquidationZone,
     shortScore: score,
     scoreBreakdown: breakdown,
+    priceDeviation,
   };
 }
 
