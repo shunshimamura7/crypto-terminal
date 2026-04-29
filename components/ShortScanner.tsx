@@ -251,6 +251,16 @@ const T = {
     filterFsRatio5x: "先/現 5倍以上",
     colPhase: "Phase",
     sortPhase: "Phase順",
+    recPanelTitle: "🎯 今狙うショート",
+    recPanelCount: "件",
+    recPanelEmpty: "推奨銘柄なし",
+    recPanelExpand: "▼ 開く",
+    recPanelCollapse: "▲ 閉じる",
+    recPanelEntry: "Entry",
+    recPanelSL: "SL",
+    recPanelTP1: "TP1",
+    recPanelRR: "R:R",
+    recPanelOpenMexc: "MEXCで開く",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -452,6 +462,16 @@ const T = {
     filterFsRatio5x: "F/S ≥ 5×",
     colPhase: "Phase",
     sortPhase: "Phase",
+    recPanelTitle: "🎯 Top Short Picks",
+    recPanelCount: "",
+    recPanelEmpty: "No recommended picks",
+    recPanelExpand: "▼ Expand",
+    recPanelCollapse: "▲ Collapse",
+    recPanelEntry: "Entry",
+    recPanelSL: "SL",
+    recPanelTP1: "TP1",
+    recPanelRR: "R:R",
+    recPanelOpenMexc: "Open in MEXC",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -2086,6 +2106,132 @@ function SymbolHealthPanel({ healthData, onClear }: { healthData: Map<string, Sy
           <p className="text-xs text-gray-400">スキャンを実行するとデータが蓄積されます。</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Recommended Short Picks Panel ───────────────────────────────────────────
+function RecommendedPanel({
+  candidates, t, btcChange24h,
+}: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number }) {
+  const [open, setOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("bell:recommendedPanel:open") !== "false";
+  });
+
+  const toggleOpen = () => {
+    setOpen(v => {
+      const next = !v;
+      try { localStorage.setItem("bell:recommendedPanel:open", String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const picks = useMemo(
+    () => candidates
+      .filter(c => getShortRecommendation(c, btcChange24h) === "recommended")
+      .sort((a, b) => b.displayScore - a.displayScore)
+      .slice(0, 10),
+    [candidates, btcChange24h],
+  );
+
+  const rrColor = (rr: number) =>
+    rr >= 1.0 ? "text-green-600" : rr >= 0.5 ? "text-yellow-600" : "text-red-500";
+
+  return (
+    <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={toggleOpen}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between px-4 py-3 min-h-[44px] text-sm font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <span className="text-emerald-700 dark:text-emerald-400">{t.recPanelTitle}</span>
+          {picks.length > 0 ? (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
+              {picks.length}{t.recPanelCount}
+            </span>
+          ) : (
+            <span className="text-xs text-gray-400 font-normal">{t.recPanelEmpty}</span>
+          )}
+        </span>
+        <span className="text-xs text-gray-400">{open ? t.recPanelCollapse : t.recPanelExpand}</span>
+      </button>
+
+      {/* Cards */}
+      {open && picks.length > 0 && (
+        <div className="px-3 pb-3 pt-1 space-y-2">
+          {picks.map(c => {
+            const base    = c.symbol.replace(/_USDT$/, "");
+            const entry   = c.currentPrice;
+            const sl      = c.tradeSetup?.sl   ?? entry * 1.08;
+            const tp1     = c.tradeSetup?.tp1  ?? entry * 0.92;
+            const rr      = c.tradeSetup?.rrRatio ?? (entry - tp1) / (sl - entry);
+            const slPct   = ((sl  - entry) / entry) * 100;
+            const tp1Pct  = ((entry - tp1) / entry) * 100;
+            const frPct   = c.fundingRate != null ? c.fundingRate * 100 : null;
+            const frColor = frPct == null ? "text-gray-400"
+              : frPct > 0 ? "text-purple-600" : "text-red-500";
+
+            return (
+              <div key={c.symbol}
+                className="rounded-lg border border-l-4 border-emerald-200 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 p-3">
+                {/* 上段: 銘柄名 + スコア + 価格 */}
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-black text-sm text-gray-900 dark:text-gray-50">{base}/USDT</span>
+                    <span style={scoreBadgeStyle(c.displayScore)}>{c.displayScore}/{DISPLAY_MAX}</span>
+                  </div>
+                  <span className="font-mono text-sm font-semibold text-gray-700 dark:text-gray-200">{fmtPrice(c.currentPrice)}</span>
+                </div>
+
+                {/* 中段: ATH比 + FR */}
+                <div className="flex items-center gap-3 text-xs mb-2">
+                  <span className="text-red-600 font-semibold">ATH {c.athDropPct.toFixed(1)}%</span>
+                  <span className={`font-semibold ${frColor}`}>
+                    FR {frPct != null ? `${frPct >= 0 ? "+" : ""}${frPct.toFixed(4)}%` : "—"}
+                  </span>
+                </div>
+
+                {/* 下段: Entry / SL / TP1 / R:R + ボタン */}
+                <div className="flex items-end justify-between gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-xs">
+                    <div>
+                      <span className="text-gray-500 block">{t.recPanelEntry}</span>
+                      <span className="font-mono font-bold text-gray-800 dark:text-gray-100">{fmtPrice(entry)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">{t.recPanelSL} <span className="text-red-500">+{slPct.toFixed(1)}%</span></span>
+                      <span className="font-mono font-bold text-red-600">{fmtPrice(sl)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">{t.recPanelTP1} <span className="text-green-600">-{tp1Pct.toFixed(1)}%</span></span>
+                      <span className="font-mono font-bold text-green-600">{fmtPrice(tp1)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">{t.recPanelRR}</span>
+                      <span className={`font-mono font-black ${rrColor(rr)}`}>{rr.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <a
+                    href={mexcUrl(base)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="shrink-0 bg-gray-900 text-white text-xs px-3 py-1.5 rounded hover:bg-gray-700 transition-colors whitespace-nowrap"
+                  >
+                    {t.recPanelOpenMexc}
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {open && picks.length === 0 && (
+        <div className="px-4 py-4 text-xs text-gray-400 text-center">{t.recPanelEmpty}</div>
+      )}
     </div>
   );
 }
@@ -3929,6 +4075,11 @@ export default function ShortScanner() {
             <span>{t.lastUpdate}: {new Date(data.scanTime).toLocaleTimeString("ja-JP")}</span>
           </span>
         </div>
+      )}
+
+      {/* Recommended Panel */}
+      {data && !loading && extended.length > 0 && (
+        <RecommendedPanel candidates={extended} t={t} btcChange24h={marketBtcChange} />
       )}
 
       {/* Summary bar (修正5) */}
