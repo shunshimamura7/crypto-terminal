@@ -6,6 +6,7 @@ export interface BacktestStats {
   totalRecords: number;
   resolved: number;
   active: number;
+  pending: number;
   expired: number;
   tp1Hits: number;
   tp2Hits: number;
@@ -25,6 +26,9 @@ export interface BacktestStats {
   calmarRatio: number;
   avgDaysToResolve: number;
   medianDaysToResolve: number;
+  // 信頼度
+  apiVerifiedCount: number;
+  scanOnlyCount: number;
 }
 
 const SCORE_RANGES = ["8-9", "10-11", "12-13", "14-15", "16-17", "18-19", "20-21", "22-23"] as const;
@@ -37,8 +41,10 @@ export function calculateStats(
     ? records.filter(r => r.preset === presetFilter)
     : records;
   records = filtered;
-  const active   = records.filter(r => r.status === "active");
-  const resolved = records.filter(r => r.status !== "active");
+  const isPending = (s: string) => s.startsWith("pending_");
+  const active   = records.filter(r => r.status === "active" || isPending(r.status));
+  const pending  = records.filter(r => isPending(r.status));
+  const resolved = records.filter(r => r.status !== "active" && !isPending(r.status));
   const wins     = resolved.filter(r => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit");
   const losses   = resolved.filter(r => r.status === "sl_hit");
   const expired  = resolved.filter(r => r.status === "expired");
@@ -151,6 +157,7 @@ export function calculateStats(
     totalRecords: records.length,
     resolved:  resolved.length,
     active:    active.length,
+    pending:   pending.length,
     expired:   expired.length,
     tp1Hits:   resolved.filter(r => r.status === "tp1_hit").length,
     tp2Hits:   resolved.filter(r => r.status === "tp2_hit").length,
@@ -169,5 +176,7 @@ export function calculateStats(
     calmarRatio,
     avgDaysToResolve,
     medianDaysToResolve,
+    apiVerifiedCount: resolved.filter(r => r.priceSource === "direct_api").length,
+    scanOnlyCount:    resolved.filter(r => !r.priceSource || r.priceSource === "scan").length,
   };
 }

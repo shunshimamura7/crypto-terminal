@@ -2,11 +2,16 @@
 
 import type { StrategyTag } from "./strategies/types";
 import type { DangerLevel } from "./strategies/dangerZone";
+import type { CoinNewsContext, LiquidityInfo } from "./shortScorer";
 
 const STORAGE_KEY = "bell:backtest:records";
 const MAX_RECORDS = 1000;
 
-export type BacktestStatus = "active" | "tp1_hit" | "tp2_hit" | "tp3_hit" | "sl_hit" | "expired";
+export type BacktestStatus =
+  | "active"
+  | "tp1_hit" | "tp2_hit" | "tp3_hit" | "sl_hit"
+  | "expired"
+  | "pending_tp1" | "pending_tp2" | "pending_tp3" | "pending_sl";
 
 export interface BacktestRecord {
   id: string;
@@ -60,6 +65,42 @@ export interface BacktestRecord {
 
   // プリセット識別
   preset: "low_lev" | "new_listing" | "high_lev" | "unknown";
+
+  // 価格ソース（undefined = レガシー・スキャン結果のみ）
+  priceSource?: "scan" | "direct_api";
+
+  // ★ v2.0: スコア内訳（全15指標）
+  scoreBreakdown?: {
+    dropScore?: number; volumeDryScore?: number; frScore?: number;
+    freshnessScore?: number; oiScore?: number; oiChangeScore?: number;
+    trendScore?: number; pumpScore?: number; btcCorrScore?: number;
+    patternScore?: number; rsiScore?: number;
+    exclusivityScore?: number; frBonus?: number;
+    futuresHeatScore?: number; snsHeatScore?: number; mcFdvScore?: number;
+    unlockScore?: number;
+  };
+
+  // ★ v2.0: エントリー時市場コンテキスト
+  marketContext?: {
+    btcPrice: number; ethPrice: number;
+    fearGreed: number | null; fearGreedLabel: string | null;
+    btcChange24h: number;
+    marketPhase: "risk_on" | "neutral" | "risk_off";
+  };
+
+  // ★ v2.0: スコアリングバージョン
+  version?: string;
+
+  // ★ v2.0: CoinGeckoカテゴリ
+  categories?: string[];
+
+  // ★ v2.0: SL到達理由の自動分類
+  slReason?: string;
+
+  // ★ v2.1: エントリー時の追加コンテキスト
+  unlockData?: { daysUntil: number | null; percent: number | null; date: string | null };
+  newsContext?: CoinNewsContext;
+  liquidityInfo?: LiquidityInfo;
 }
 
 export function getRecords(): BacktestRecord[] {
