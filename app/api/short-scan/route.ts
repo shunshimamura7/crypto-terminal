@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calcShortScore, passesFilterNew30, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone, calcATRData } from "@/app/lib/shortScorer";
+import { calcShortScore, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone, calcATRData } from "@/app/lib/shortScorer";
 import type { ShortCandidate, VolumeProfile, TradeSetup, ATRData } from "@/app/lib/shortScorer";
 import { fetchGtDexData } from "@/app/lib/geckoTerminal";
+import { fetchUnlockData } from "@/app/lib/tokenomist";
+import { fetchLiquidityInfo } from "@/app/lib/orderbook";
+import { fetchCoinNews } from "@/app/lib/newsCheck";
+import { calcUnlockScore } from "@/app/lib/shortScorer";
 
 // ─── BTC相関計算 (施策1) ──────────────────────────────────────────────────────
 function priceToReturns(closes: number[]): number[] {
@@ -27,10 +31,10 @@ export const maxDuration = 120;
 
 const MEXC = "https://contract.mexc.com";
 
-// ─── In-memory cache (warm instance reuse, 5-min TTL) ────────────────────────
+// ─── In-memory cache (warm instance reuse, 10-min TTL) ───────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _apiCache = new Map<string, { data: any; ts: number }>();
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 10 * 60 * 1000;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getCached(key: string): any | null {
   const e = _apiCache.get(key);
@@ -39,6 +43,33 @@ function getCached(key: string): any | null {
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function setCached(key: string, data: any) { _apiCache.set(key, { data, ts: Date.now() }); }
+
+// ─── Phase A: 4h klineキャッシュ (10-min TTL) ────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _kline4hCache = new Map<string, { value: any; ts: number }>();
+const KLINE4H_TTL = 10 * 60 * 1000;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchKline4h(symbol: string, day14AgoSec: number, nowSec: number): Promise<any> {
+  const key = `kline4h_${symbol}`;
+  const cached = _kline4hCache.get(key);
+  if (cached && Date.now() - cached.ts < KLINE4H_TTL) return cached.value;
+
+  let res = await mexcGet(
+    `/api/v1/contract/kline/${symbol}?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`,
+    10000,
+  );
+  // Retry once on null (timeout/network error); empty-data responses are not retried
+  if (res === null) {
+    await sleep(3000);
+    res = await mexcGet(
+      `/api/v1/contract/kline/${symbol}?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`,
+      10000,
+    );
+  }
+  _kline4hCache.set(key, { value: res, ts: Date.now() });
+  return res;
+}
 
 // Non-crypto tokenized assets (equities, commodities, forex, indices)
 const NON_CRYPTO_PATTERNS = [
@@ -113,6 +144,8 @@ async function analyzeCandidate(
   nowSec: number,
   isNew30: boolean,
   btcReturns: number[],  // 施策1: BTC収益率系列
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prefetchedKline4h?: any,  // Phase Aで取得済みの4h klineデータ
 ): Promise<ShortCandidate | null> {
   const { symbol, listedDaysAgo } = meta;
 
@@ -132,11 +165,14 @@ async function analyzeCandidate(
 
   // 速度最適化: 1h=2日分(~48本), 1d=14日分, FR=tickerから取得済みなのでスキップ
   const day2AgoSec = nowSec - 2 * 86_400;
-  const [kline1hRes, kline4hRes, kline1dRes, frRes] = await Promise.allSettled([
+  const [kline1hRes, kline4hRes, kline1dRes, frRes, liquidityRes] = await Promise.allSettled([
     mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour1&start=${day2AgoSec}&end=${nowSec}`, 7000),
-    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 7000),
+    prefetchedKline4h !== undefined
+      ? Promise.resolve(prefetchedKline4h)
+      : mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 7000),
     mexcGet(`/api/v1/contract/kline/${symbol}?interval=Day1&start=${day14AgoSec}&end=${nowSec}`, 7000),
     mexcGet(`/api/v1/contract/funding_rate/${symbol}`, 4000),
+    fetchLiquidityInfo(symbol),
   ]);
 
   // 施策2: 1h closes
@@ -259,8 +295,7 @@ async function analyzeCandidate(
   const volumeChangeRatio = volumeAvg7d > 0 ? vol24h / volumeAvg7d : 1;
   const openInterest = parseFloat(ticker.holdVol || "0") * price;
 
-  // new30モードのみ上場日数で弾く（通常モードはクライアント側でフィルタ）
-  if (isNew30 && !passesFilterNew30(athDropPct, volumeChangeRatio, vol24h, listedDaysAgo)) return null;
+  // フィルタはStage1（listedDaysAgo）とpost-stage2（params-based）で行う
 
   // 施策1: BTC相関係数
   let btcCorrelation = 0;
@@ -311,6 +346,10 @@ async function analyzeCandidate(
     shortScore: score,
     scoreBreakdown: breakdown,
     priceDeviation,
+    nextUnlockDays: null,
+    nextUnlockPercent: null,
+    nextUnlockDate: null,
+    liquidityInfo: liquidityRes.status === "fulfilled" && liquidityRes.value != null ? liquidityRes.value : undefined,
   };
 }
 
@@ -319,14 +358,20 @@ export async function GET(req: NextRequest) {
   const isNew30 = mode === "new30";
 
   // Filter params sent by client sliders (normal mode only; new30 uses passesFilterNew30)
-  const qMinDrop     = Number(req.nextUrl.searchParams.get("minDrop")     ?? "30");
-  const qMaxVolRatio = Number(req.nextUrl.searchParams.get("maxVolRatio") ?? "70");
-  const qMinVol24k   = Number(req.nextUrl.searchParams.get("minVol24k")   ?? "100");
+  const qMinDrop     = Number(req.nextUrl.searchParams.get("minDrop")     ?? "10");
+  const qMaxVolRatio = Number(req.nextUrl.searchParams.get("maxVolRatio") ?? "500");
+  const qMinVol24k   = Number(req.nextUrl.searchParams.get("minVol24k")   ?? "50");
   const qMaxDays     = Number(req.nextUrl.searchParams.get("maxDays")     ?? "9999");
-  const qMinOiK      = Number(req.nextUrl.searchParams.get("minOiK")     ?? "0");
+  const qMinOiK      = Number(req.nextUrl.searchParams.get("minOiK")      ?? "0");
 
-  // Stage 1 volume threshold: looser for new30
-  const PRE_FILTER_VOL_USD = isNew30 ? 10_000 : 20_000;
+  // Symbol health tiers: activeSymbols (Tier1 ≥70%) and deadSymbols (Tier3 <10%) from client
+  const qActiveSymbols = req.nextUrl.searchParams.get("activeSymbols") ?? "";
+  const qDeadSymbols   = req.nextUrl.searchParams.get("deadSymbols")   ?? "";
+  const activeSet = new Set<string>(qActiveSymbols ? qActiveSymbols.split(",").filter(Boolean).map(s => `${s}_USDT`) : []);
+  const deadSet   = new Set<string>(qDeadSymbols   ? qDeadSymbols.split(",").filter(Boolean).map(s => `${s}_USDT`)   : []);
+
+  // Stage 1 volume threshold: driven by client param
+  const PRE_FILTER_VOL_USD = qMinVol24k * 1_000;
 
   const now = Date.now();
   const nowSec      = Math.floor(now / 1000);
@@ -420,8 +465,8 @@ export async function GET(req: NextRequest) {
     const ct = createTimeMap[sym] || 0;
     const listedDaysAgo = ct > 0 ? Math.floor((now - ct) / 86_400_000) : 9999;
 
-    // For new30 mode, pre-filter by listing date at Stage 1
-    if (isNew30 && listedDaysAgo > 30) continue;
+    // Pre-filter by listing date when maxDays is explicitly set
+    if (qMaxDays < 9999 && listedDaysAgo > qMaxDays) continue;
 
     const riseFallRate = parseFloat((t as { riseFallRate?: string }).riseFallRate || "0");
     candidates.push({ symbol: sym, listedDaysAgo, vol24hEst, riseFallRate });
@@ -435,26 +480,87 @@ export async function GET(req: NextRequest) {
     candidates.sort((a, b) => a.riseFallRate - b.riseFallRate);
   }
 
+  // 出来高降順でソート → 安定した分析対象選定、スリッページ大銘柄を除外
+  candidates.sort((a, b) => b.vol24hEst - a.vol24hEst);
   const klineTargets = candidates.slice(0, MAX_KLINE_TARGETS);
   console.log(`[short-scan] ── Stage1 ── passed: ${stage1Passed}, nonCrypto excluded: ${nonCryptoFiltered} (vol≥$${PRE_FILTER_VOL_USD.toLocaleString()}${isNew30 ? ", listed≤30d" : ""}), kline targets: ${klineTargets.length}/${MAX_KLINE_TARGETS}`);
 
-  // ── Stage 2: fetch klines + FR ───────────────────────────────────────────────
+  const DEADLINE = Date.now() + 110_000;
+
+  // ── Tier-based Phase A ordering ──────────────────────────────────────────────
+  // Tier 1: active symbols (≥70% success rate from client) — process first
+  // Tier 2: monitoring / unknown — process second
+  // Tier 3: dead symbols (<10% success rate from client) — skip entirely
+  let tier1Count = 0, tier2Count = 0, tier3Count = 0;
+  const orderedTargets: CandidateMeta[] = [];
+  if (activeSet.size > 0 || deadSet.size > 0) {
+    const tier1: CandidateMeta[] = [];
+    const tier2: CandidateMeta[] = [];
+    for (const m of klineTargets) {
+      if (activeSet.has(m.symbol)) { tier1.push(m); tier1Count++; }
+      else if (deadSet.has(m.symbol)) { tier3Count++; } // skip
+      else { tier2.push(m); tier2Count++; }
+    }
+    orderedTargets.push(...tier1, ...tier2);
+    console.log(`[short-scan] ── Tier ── T1(active)=${tier1Count}, T2(monitoring)=${tier2Count}, T3(dead/skipped)=${tier3Count}`);
+  } else {
+    orderedTargets.push(...klineTargets);
+    tier2Count = klineTargets.length;
+  }
+
+  // ── Phase A: 4h kline一括取得（60並列・50msディレイ）─────────────────────────
+  const PHASE_A_BATCH = 60;
+  const PHASE_A_DELAY = 50;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const validWithKline4h: Array<{ meta: CandidateMeta; kline4h: any }> = [];
+  let phaseACacheHits = 0, phaseAFetched = 0, phaseAFailed = 0;
+
+  for (let i = 0; i < orderedTargets.length; i += PHASE_A_BATCH) {
+    if (Date.now() >= DEADLINE) {
+      console.warn(`[short-scan] Phase A deadline reached at ${i}/${orderedTargets.length}`);
+      break;
+    }
+    const batch = orderedTargets.slice(i, i + PHASE_A_BATCH);
+    const phaseAResults = await Promise.allSettled(
+      batch.map(async meta => {
+        const key = `kline4h_${meta.symbol}`;
+        const cached = _kline4hCache.get(key);
+        const isCached = !!cached && Date.now() - cached.ts < KLINE4H_TTL;
+        const kline4h = await fetchKline4h(meta.symbol, day14AgoSec, nowSec);
+        return { meta, kline4h, isCached };
+      })
+    );
+    for (const r of phaseAResults) {
+      if (r.status === "fulfilled") {
+        const { meta, kline4h, isCached } = r.value;
+        const hasData = Array.isArray(kline4h?.data?.close) && kline4h.data.close.length > 0;
+        if (isCached) phaseACacheHits++; else phaseAFetched++;
+        if (hasData) validWithKline4h.push({ meta, kline4h });
+        else phaseAFailed++;
+      } else {
+        phaseAFailed++;
+      }
+    }
+    if (i + PHASE_A_BATCH < klineTargets.length) await sleep(PHASE_A_DELAY);
+  }
+  console.log(`[short-scan] ── Phase A ── 4h kline fetched: ${phaseAFetched}/${orderedTargets.length}, cached: ${phaseACacheHits}, failed: ${phaseAFailed}, valid: ${validWithKline4h.length}`);
+
+  // ── Phase B (Stage 2): 補助データ取得 + フル分析（validのみ対象）──────────────
   const results: ShortCandidate[] = [];
   let stage2Fetched = 0;
   let stage2Failed  = 0;
+  console.log(`[short-scan] ── Phase B ── supplementary data for ${validWithKline4h.length} symbols`);
 
-  const DEADLINE = Date.now() + 110_000;
-
-  for (let i = 0; i < klineTargets.length; i += BATCH) {
+  for (let i = 0; i < validWithKline4h.length; i += BATCH) {
     if (Date.now() >= DEADLINE) {
-      console.warn(`[short-scan] deadline reached at batch ${i}/${klineTargets.length}`);
+      console.warn(`[short-scan] deadline reached at batch ${i}/${validWithKline4h.length}`);
       break;
     }
 
-    const batch = klineTargets.slice(i, i + BATCH);
+    const batch = validWithKline4h.slice(i, i + BATCH);
     const settled = await Promise.allSettled(
-      batch.map(meta =>
-        analyzeCandidate(meta, tickerMap[meta.symbol], day14AgoSec, day7AgoSec, nowSec, isNew30, btcReturns)
+      batch.map(({ meta, kline4h }) =>
+        analyzeCandidate(meta, tickerMap[meta.symbol], day14AgoSec, day7AgoSec, nowSec, isNew30, btcReturns, kline4h)
       )
     );
 
@@ -468,7 +574,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (i + BATCH < klineTargets.length) await sleep(BATCH_DELAY);
+    if (i + BATCH < validWithKline4h.length) await sleep(BATCH_DELAY);
   }
 
   // ── Diagnostic log: kline success rate + filter breakdown ───────────────────
@@ -493,15 +599,13 @@ export async function GET(req: NextRequest) {
   // When kline data is unavailable, skip that filter condition to avoid false negatives:
   //   ath14dFromKline=false → kline4h failed → ath14d=price → athDropPct=0 → skip ATH filter
   //   vol7dFromKline=false  → kline1d failed → volumeChangeRatio=1.0 fallback → skip volRatio filter
-  const filteredResults = isNew30
-    ? results
-    : results.filter(c =>
-        (!c.ath14dFromKline || Math.abs(c.athDropPct) >= qMinDrop) &&
-        (!c.vol7dFromKline  || c.volumeChangeRatio * 100 <= qMaxVolRatio) &&
-        c.volume24h >= qMinVol24k * 1_000 &&
-        c.listedDaysAgo <= qMaxDays &&
-        c.openInterest >= qMinOiK * 1_000
-      );
+  const filteredResults = results.filter(c =>
+    (!c.ath14dFromKline || Math.abs(c.athDropPct) >= qMinDrop) &&
+    (!c.vol7dFromKline  || c.volumeChangeRatio * 100 <= qMaxVolRatio) &&
+    c.volume24h >= qMinVol24k * 1_000 &&
+    c.listedDaysAgo <= qMaxDays &&
+    c.openInterest >= qMinOiK * 1_000
+  );
 
   const sorted = filteredResults.sort((a, b) => b.shortScore - a.shortScore);
 
@@ -522,6 +626,53 @@ export async function GET(req: NextRequest) {
   );
   // Re-sort after potential score updates
   sorted.sort((a, b) => b.shortScore - a.shortScore);
+
+  // ── Stage 3.2: Unlock data for Top50 (Tokenomist, 5-min cache, key optional) ─
+  const UNLOCK_BATCH = 5;
+  const UNLOCK_DELAY_MS = 500;
+  const top50ForUnlock = sorted.slice(0, 50);
+
+  if (Date.now() < DEADLINE) {
+    for (let i = 0; i < top50ForUnlock.length; i += UNLOCK_BATCH) {
+      if (Date.now() >= DEADLINE) break;
+      const batch = top50ForUnlock.slice(i, i + UNLOCK_BATCH);
+      const unlockResults = await Promise.allSettled(
+        batch.map(c => fetchUnlockData(c.symbol.replace(/_USDT$/, "")))
+      );
+      unlockResults.forEach((r, idx) => {
+        const c = batch[idx];
+        if (r.status === "fulfilled" && r.value) {
+          c.nextUnlockDays    = r.value.nextUnlockDays;
+          c.nextUnlockPercent = r.value.nextUnlockPercent;
+          c.nextUnlockDate    = r.value.nextUnlockDate;
+          const us = calcUnlockScore(r.value.nextUnlockDays, r.value.nextUnlockPercent);
+          if (us > 0) {
+            c.scoreBreakdown.unlockScore = us;
+            c.shortScore += us;
+          }
+        }
+      });
+      if (i + UNLOCK_BATCH < top50ForUnlock.length) await sleep(UNLOCK_DELAY_MS);
+    }
+    // Re-sort after unlock score patch
+    sorted.sort((a, b) => b.shortScore - a.shortScore);
+  }
+
+  // ── Stage 3.5: News context for top 20 (CryptoPanic, optional, 30-min cache) ─
+  if (Date.now() < DEADLINE) {
+    await Promise.allSettled(
+      sorted.slice(0, 20).map(async c => {
+        try {
+          const news = await fetchCoinNews(c.symbol);
+          // Only attach if there's actual signal to avoid noise
+          if (news.positiveCount > 0 || news.negativeCount > 0 ||
+              news.hasMajorListing || news.hasPartnership || news.hasSecurity) {
+            c.newsContext = news;
+          }
+        } catch { /* ignore */ }
+      })
+    );
+  }
 
   const top100 = sorted.slice(0, 100);
 
@@ -547,9 +698,13 @@ export async function GET(req: NextRequest) {
     meta: {
       totalTickerPairs,
       stage1Passed,
+      phaseAValid: validWithKline4h.length,
+      phaseASucceededSymbols: validWithKline4h.map(v => v.meta.symbol),
       stage2Fetched,
       stage2Failed,
       filtered: filteredResults.length,
+      tier1Count,
+      tier3Skipped: tier3Count,
     },
   });
 }
