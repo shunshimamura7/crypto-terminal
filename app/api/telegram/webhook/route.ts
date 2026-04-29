@@ -197,6 +197,7 @@ const HELP_TEXT =
   "  /scan — 低レバ+新規上場TOP3ずつ\n" +
   "  /scan low — 低レバTOP5\n" +
   "  /scan new — 新規上場TOP5\n" +
+  "  /stats — スキャン統計・市場環境\n" +
   "  /market — 市場環境サマリー\n" +
   "  /price BTC — 価格のみ即表示\n" +
   "  銘柄名 — AI分析（例: BTC, ソラナ）\n\n" +
@@ -257,6 +258,48 @@ export async function POST(request: NextRequest) {
       await sendTelegramMessage(bot, chatId, priceText);
     } else {
       await bot.sendMessage(chatId, `❌ 「${symbol}」の価格情報が見つかりませんでした`);
+    }
+    return new Response("OK", { status: 200 });
+  }
+
+  // ── /stats: 市場環境サマリー ──
+  if (text === "/stats") {
+    try {
+      const envRes = await fetch("https://bell-sig.vercel.app/api/market-env", {
+        signal: AbortSignal.timeout(10000),
+      });
+      const env = await envRes.json();
+
+      const fng    = env?.fng;
+      const btcP   = env?.btcPrice   ? `$${Number(env.btcPrice).toLocaleString()}`  : "N/A";
+      const ethP   = env?.ethPrice   ? `$${Number(env.ethPrice).toLocaleString()}`  : "N/A";
+      const btcC   = env?.btcChange24h != null ? `${env.btcChange24h >= 0 ? "+" : ""}${Number(env.btcChange24h).toFixed(2)}%` : "N/A";
+      const fngVal = fng?.value ?? null;
+      const btcChg = Number(env?.btcChange24h ?? 0);
+
+      let envLabel = "🟡 普通";
+      if (btcChg <= -5 || (fngVal !== null && fngVal <= 24)) envLabel = "🔴 危険";
+      else if (btcChg >= 5 || (fngVal !== null && fngVal <= 49)) envLabel = "🟠 注意";
+      else if (fngVal !== null && fngVal >= 75) envLabel = "🟢 良好";
+
+      const sentimentStr = env?.sentimentScore != null
+        ? `${env.sentimentScore}% (${env.sentimentLabel})`
+        : "N/A";
+
+      const msg =
+        `📊 市場統計\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `₿ BTC: ${btcP} (${btcC})\n` +
+        `Ξ ETH: ${ethP}\n` +
+        `😱 F&G: ${fng ? `${fng.value}/100 (${fng.valueText})` : "N/A"}\n` +
+        `📰 センチメント: ${sentimentStr}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `ショート環境: ${envLabel}\n` +
+        `⏰ ${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`;
+
+      await sendTelegramMessage(bot, chatId, msg);
+    } catch (err) {
+      await bot.sendMessage(chatId, `❌ エラー: ${err instanceof Error ? err.message : "Unknown"}`);
     }
     return new Response("OK", { status: 200 });
   }

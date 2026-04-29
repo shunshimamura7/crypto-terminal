@@ -4,6 +4,8 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const SCORE_THRESHOLD = 13;
+const NOTIFY_COOLDOWN = 8 * 60 * 60 * 1000; // 8時間
+const _notifiedCache = new Map<string, number>(); // symbol → last notified timestamp
 const MAX_NOTIFY = 5;
 
 type Candidate = {
@@ -55,18 +57,31 @@ export async function GET(req: NextRequest) {
     const new30Candidates: Candidate[] = (new30Data.success ? new30Data.candidates : [])
       .filter((c: Candidate) => c.shortScore >= 10)
       .slice(0, 3);
-    const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+    const nowStr = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
     // ── High-score alert ──────────────────────────────────────────────────────
     const highScore = candidates.filter(c => c.shortScore >= SCORE_THRESHOLD).slice(0, MAX_NOTIFY);
+
+    // スロットリング: 8時間以内に通知済みの銘柄をスキップ
+    const now = Date.now();
+    const freshHighScore = highScore.filter(c => {
+      const lastNotified = _notifiedCache.get(c.symbol);
+      return !(lastNotified && now - lastNotified < NOTIFY_COOLDOWN);
+    });
+    for (const c of freshHighScore) _notifiedCache.set(c.symbol, now);
+    // 24時間以上前のエントリをクリーンアップ
+    for (const [sym, ts] of _notifiedCache) {
+      if (now - ts > 24 * 60 * 60 * 1000) _notifiedCache.delete(sym);
+    }
+
     let notified = 0;
 
-    if (highScore.length > 0) {
+    if (freshHighScore.length > 0) {
       const PATTERN_LABELS: Record<string, string> = {
         bear_flag: "🚩BF", dead_cat: "🐱DC", descending_wedge: "📐DW",
         break_of_structure: "💥BOS", fair_value_gap: "🕳FVG", supply_zone: "🏗SZ",
       };
-      const lines = highScore.map((c, i) => {
+      const lines = freshHighScore.map((c, i) => {
         const sym      = c.symbol.replace("_USDT", "");
         const fr       = c.fundingRate !== null ? `${(c.fundingRate * 100).toFixed(4)}%` : "N/A";
         const patterns = c.allPatterns?.map(p => PATTERN_LABELS[p.type] ?? p.type).join(" ") ?? "";
@@ -92,11 +107,11 @@ export async function GET(req: NextRequest) {
         lines.join("\n━━━━━━━━━━━━━━━━━━━━\n") +
         `\n━━━━━━━━━━━━━━━━━━━━\n` +
         `閾値: ${SCORE_THRESHOLD}pt以上\n` +
-        `⏰ ${now}`;
+        `⏰ ${nowStr}`;
 
       const ok = await sendTg(token, chatId, msg);
       if (!ok) return Response.json({ error: "Telegram send failed" }, { status: 500 });
-      notified = highScore.length;
+      notified = freshHighScore.length;
     }
 
     // ── 新規上場ハイスコア ────────────────────────────────────────────────
@@ -109,7 +124,7 @@ export async function GET(req: NextRequest) {
           const fr  = c.fundingRate !== null ? `${(c.fundingRate * 100).toFixed(4)}%` : "N/A";
           return `${i + 1}. ${sym} ⚡${c.shortScore}pt | $${c.currentPrice} | ATH${c.athDropPct.toFixed(0)}% | FR:${fr}`;
         }).join("\n") +
-        `\n⏰ ${now}`;
+        `\n⏰ ${nowStr}`;
       await sendTg(token, chatId, newMsg);
     }
 
@@ -127,7 +142,7 @@ export async function GET(req: NextRequest) {
           const fr  = c.fundingRate !== null ? `${(c.fundingRate * 100).toFixed(4)}%` : "N/A";
           return `  ${sym}: FR ${fr} / Score ${c.shortScore}`;
         }).join("\n") +
-        `\n⏰ ${now}`;
+        `\n⏰ ${nowStr}`;
       await sendTg(token, chatId, frMsg);
     }
 
@@ -144,7 +159,7 @@ export async function GET(req: NextRequest) {
           const sym = c.symbol.replace("_USDT", "");
           return `  ${sym}: ${c.priceChange24h.toFixed(1)}% / $${c.currentPrice} / Score ${c.shortScore}`;
         }).join("\n") +
-        `\n⏰ ${now}`;
+        `\n⏰ ${nowStr}`;
       await sendTg(token, chatId, dumpMsg);
     }
 
@@ -155,10 +170,11 @@ export async function GET(req: NextRequest) {
     return Response.json({
       ok: true,
       notified,
+      skipped: highScore.length - freshHighScore.length,
       new30Alerts: new30Candidates.length,
       frAlerts: frNegative.length,
       dumpAlerts: bigDump.length,
-      symbols: highScore.map(c => c.symbol),
+      symbols: freshHighScore.map(c => c.symbol),
     });
 
   } catch (err) {
