@@ -2,6 +2,35 @@
 
 export type TrendDirection = "UP" | "DOWN" | "NEUTRAL";
 
+// ─── Shared interfaces (used server + client) ────────────────────────────────
+
+export interface UnlockData {
+  nextUnlockDate: string | null;
+  nextUnlockDays: number | null;
+  nextUnlockPercent: number | null;
+  nextUnlockAmount: number | null;
+}
+
+export interface CoinNewsContext {
+  positiveCount: number;
+  negativeCount: number;
+  hasMajorListing: boolean;
+  hasPartnership: boolean;
+  hasSecurity: boolean;
+  newsUrls: string[];
+}
+
+export interface LiquidityInfo {
+  sellSlippage10k: number;
+  sellSlippage50k: number;
+  buySlippage10k: number;
+  buySlippage50k: number;
+  bidDepth: number;
+  askDepth: number;
+  spread: number;
+  maxSafePosition: number;
+}
+
 export interface ShortScoreBreakdown {
   dropScore: number;       // 0-3
   volumeDryScore: number;  // 0-3
@@ -14,6 +43,7 @@ export interface ShortScoreBreakdown {
   btcCorrScore: number;    // 0-1 (BTC非連動ボーナス)
   patternScore: number;    // 0-3 (SMCパターン: Task3で拡張)
   rsiScore: number;        // 0-2 (RSI過熱度)
+  unlockScore: number;     // 0-3 (アンロック供給圧: Post-Stage2でTop50のみ付与)
 }
 
 // ─── Chart Pattern (施策4 + Phase2 Task3: SMC拡張) ───────────────────────────
@@ -192,8 +222,16 @@ export interface ShortCandidate {
     topPair: string | null;
     dexVolume24h: number | null;
   };
-  shortScore: number;        // server max 20 (after DEX liquidity bonus)
+  shortScore: number;        // server max 26 (23 + unlock 3) after Post-Stage2 patch
   scoreBreakdown: ShortScoreBreakdown;
+  // ─── アンロックフィールド (Post-Stage2 Top50のみ付与) ─────────────────────
+  nextUnlockDays: number | null;
+  nextUnlockPercent: number | null;
+  nextUnlockDate: string | null;
+  // ─── optional enrichment (Phase B / Stage 3.5) ───────────────────────────
+  unlockData?: UnlockData;
+  newsContext?: CoinNewsContext;
+  liquidityInfo?: LiquidityInfo;
 }
 
 // ─── Liquidation Zone (施策5) ─────────────────────────────────────────────────
@@ -381,26 +419,67 @@ export function calcTradeSetup(
   }
   const sl = resistanceLevel;
 
-  // ── TP1: POC または POCの下のサポートバケット (出来高多い帯の下限) ──
-  let tp1 = currentPrice * 0.85;
-  if (volumeProfile) {
-    const supportBuckets = volumeProfile.buckets
-      .filter(b => b.high < currentPrice)
-      .sort((a, b) => b.vol - a.vol);
-    if (supportBuckets.length > 0) {
-      tp1 = supportBuckets[0].low;
+  // ── TP1/2/3: ATRベース (atrDataあり) or パーセントフォールバック ──
+  let tp1: number;
+  let tp2: number;
+  let tp3: number;
+
+  if (atrData && atrData.atr > 0) {
+    // ATR × 1.0 / 2.0 / 4.0 — R:R 1.0以上を目指す
+    tp1 = currentPrice - atrData.atr * 1.0;
+    tp2 = currentPrice - atrData.atr * 2.0;
+    tp3 = currentPrice - atrData.atr * 4.0;
+
+    // ボリュームプロファイルでTP1を微調整
+    if (volumeProfile) {
+      const supportBuckets = volumeProfile.buckets
+        .filter(b => b.high < currentPrice && b.high >= currentPrice * 0.80)
+        .sort((a, b) => b.vol - a.vol);
+      if (supportBuckets.length > 0) {
+        const vtp1 = Math.max(supportBuckets[0].low, currentPrice * 0.80);
+        tp1 = Math.min(tp1, vtp1); // TP1はより浅い方を採用
+      }
     }
-  }
 
-  // ── TP2: 直近安値 (最近20本のKline中最低値) ──
-  let tp2 = currentPrice * 0.70;
-  if (lows.length >= 2) {
-    const recent20 = lows.slice(-Math.min(20, lows.length)).filter(v => v > 0);
-    if (recent20.length > 0) tp2 = Math.min(...recent20);
-  }
+    // 直近安値でTP2を調整（より深い方）
+    if (lows.length >= 2) {
+      const recent20 = lows.slice(-Math.min(20, lows.length)).filter(v => v > 0);
+      if (recent20.length > 0) {
+        tp2 = Math.min(tp2, Math.min(...recent20));
+      }
+    }
 
-  // ── TP3: 現在価格×0.55 or 直近安値×0.9 の大きい方（より保守的） ──
-  const tp3 = Math.max(currentPrice * 0.55, tp2 * 0.9);
+    // 最低フロア: TP1≥-25%, TP2≥-45%, TP3≥-65%
+    tp1 = Math.max(tp1, currentPrice * 0.75);
+    tp2 = Math.max(tp2, currentPrice * 0.55);
+    tp3 = Math.max(tp3, currentPrice * 0.35);
+    // 最大シーリング: TP1<-2% (エントリーから少なくとも下に)
+    tp1 = Math.min(tp1, currentPrice * 0.98);
+    // TP順序保証: tp3 < tp2 < tp1 < currentPrice
+    tp2 = Math.min(tp2, tp1 * 0.97);
+    tp3 = Math.min(tp3, tp2 * 0.95);
+  } else {
+    // フォールバック: パーセントベース
+    tp1 = currentPrice * 0.93; // デフォルト -7%
+    if (volumeProfile) {
+      const supportBuckets = volumeProfile.buckets
+        .filter(b => b.high < currentPrice && b.high >= currentPrice * 0.90)
+        .sort((a, b) => b.vol - a.vol);
+      if (supportBuckets.length > 0) {
+        tp1 = Math.max(supportBuckets[0].low, currentPrice * 0.90);
+      }
+    }
+    tp1 = Math.max(tp1, currentPrice * 0.90);
+    tp1 = Math.min(tp1, currentPrice * 0.95);
+
+    tp2 = currentPrice * 0.70;
+    if (lows.length >= 2) {
+      const recent20 = lows.slice(-Math.min(20, lows.length)).filter(v => v > 0);
+      if (recent20.length > 0) tp2 = Math.min(...recent20);
+    }
+
+    tp3 = Math.max(currentPrice * 0.55, tp2 * 0.9);
+  }
 
   // ── R:R 計算 ──
   const risk   = sl - currentPrice;
@@ -543,6 +622,22 @@ export function calcRSIScore(closes4h: number[]): number {
   return 0;
 }
 
+// unlockScore (0-3): アンロック供給圧スコア (Post-Stage2 patch, Top50のみ)
+// ショート観点: アンロック直前は大量売り圧が予想される = ショート有利
+// ただし3日以内は外部スクイーズ誘発リスクもあるため最高点でも禁止判定と組み合わせる
+export function calcUnlockScore(
+  daysUntilUnlock: number | null,
+  pctOfSupply: number | null,
+): number {
+  if (daysUntilUnlock === null || pctOfSupply === null) return 0;
+  if (pctOfSupply < 1) return 0; // 1%未満は影響軽微
+  if (daysUntilUnlock <= 7  && pctOfSupply >= 5)  return 3; // 7日以内 + 5%以上: 強烈供給圧
+  if ((daysUntilUnlock <= 30 && pctOfSupply >= 10) ||
+      (daysUntilUnlock <= 14 && pctOfSupply >= 3)) return 2; // 30日以内 10%+ or 14日以内 3%+
+  if (daysUntilUnlock <= 60 && pctOfSupply >= 5)  return 1; // 60日以内 5%+
+  return 0;
+}
+
 // exclusivityScore (0-2): 取引所独占度 (施策2, client-side)
 export function calcExclusivityScore(listedOnBinance: boolean, listedOnBybit: boolean): number {
   if (!listedOnBinance && !listedOnBybit) return 2;
@@ -602,7 +697,7 @@ export function calcShortScore(
 
   return {
     score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + oiChangeScore + trendScore + pumpScore + btcCorrScore + patternScore + rsiScore,
-    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, oiChangeScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore },
+    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, oiChangeScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore, unlockScore: 0 },
     oiRatio,
     trendDirection,
     trendMultiTF,
@@ -618,9 +713,9 @@ export function passesFilter(
   volume24h: number,
 ): boolean {
   return (
-    athDropPct <= -30 &&
-    volumeChangeRatio < 0.7 &&
-    volume24h >= 100_000
+    athDropPct <= -10 &&
+    volumeChangeRatio < 5.0 &&
+    volume24h >= 50_000
   );
 }
 

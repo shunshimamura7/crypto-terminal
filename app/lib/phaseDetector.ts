@@ -51,10 +51,10 @@ export function detectPhase(
 
 export function phaseBadgeCls(phase: Phase): string {
   switch (phase) {
-    case "SETTLED":     return "bg-green-50 text-green-700 border-green-300";
-    case "ACCUMULATING":return "bg-yellow-50 text-yellow-700 border-yellow-300";
-    case "CHAOTIC":     return "bg-orange-50 text-orange-700 border-orange-300";
-    case "SQUEEZING":   return "bg-red-50 text-red-700 border-red-300";
+    case "SETTLED":     return "bg-slate-100 text-slate-600 border-slate-200";
+    case "ACCUMULATING":return "bg-yellow-50 text-yellow-700 border-yellow-200";
+    case "CHAOTIC":     return "bg-purple-50 text-purple-600 border-purple-200";
+    case "SQUEEZING":   return "bg-pink-50 text-pink-600 border-pink-200";
     default:            return "bg-gray-50 text-gray-400 border-gray-200";
   }
 }

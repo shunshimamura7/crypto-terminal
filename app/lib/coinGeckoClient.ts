@@ -14,6 +14,7 @@ export interface CgMarketData {
   cgId: string | null;
   mcFdvRatio: number | null;       // MC/FDV比（小さいほど希薄化リスク大）
   exchangeFlowSignal: "inflow" | "outflow" | "neutral" | null; // MEXC出来高集中度
+  categories?: string[];           // CoinGeckoカテゴリ（上位10件）
 }
 
 interface CoinListEntry { id: string; symbol: string; name: string }
@@ -101,11 +102,16 @@ function parseCoinDetail(detail: any, mexcSymbol: string): CgMarketData {
     else exchangeFlowSignal = "outflow";
   }
 
+  const categories: string[] = Array.isArray(detail?.categories)
+    ? (detail.categories as string[]).slice(0, 10)
+    : [];
+
   return {
     spotVolume, marketCap, fdv, twitterFollowers, telegramMembers, mexcSharePct,
     cgId: detail?.id ?? null,
     mcFdvRatio,
     exchangeFlowSignal,
+    categories,
   };
 }
 
@@ -174,10 +180,11 @@ export function calcSnsHeatScore(
 }
 
 // MC/FDV乖離スコア: FDV/MC比が高い（MC/FDV比が低い）ほど希薄化リスク大 → ショートに有利
-export function calcMcFdvScore(mcFdvRatio: number | null): number {
-  if (mcFdvRatio === null || mcFdvRatio <= 0) return 0;
-  if (mcFdvRatio < 0.1) return 3;  // FDVがMCの10倍以上
-  if (mcFdvRatio < 0.2) return 2;  // FDVがMCの5倍以上
-  if (mcFdvRatio < 0.5) return 1;  // FDVがMCの2倍以上
+export function calcMcFdvScore(marketCap: number, fdv: number | null): number {
+  if (!fdv || fdv <= 0 || marketCap <= 0) return 0;
+  const ratio = marketCap / fdv;
+  if (ratio <= 0.1) return 3;  // FDVがMCの10倍以上
+  if (ratio <= 0.2) return 2;  // FDVがMCの5倍以上
+  if (ratio <= 0.5) return 1;  // FDVがMCの2倍以上
   return 0;
 }
