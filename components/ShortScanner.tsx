@@ -9,8 +9,9 @@ import type { DiffAlert } from "@/app/lib/snapshotDiff";
 import { fetchCoinGeckoData, calcFuturesHeatScore, calcSnsHeatScore, calcMcFdvScore } from "@/app/lib/coinGeckoClient";
 import type { CgMarketData } from "@/app/lib/coinGeckoClient";
 import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
-import { checkAndUpdateRecords, recordNewCandidates, recordNewCandidatesWithStrategy } from "@/app/lib/backtestChecker";
+import { checkAndUpdateRecords, recordNewCandidates, recordNewCandidatesWithStrategy, patchBacktestCgData } from "@/app/lib/backtestChecker";
 import type { ExtendedCandidateLike } from "@/app/lib/backtestChecker";
+import { getCurrentMarketContext } from "@/app/lib/marketContext";
 import { getRecords, saveRecords, clearRecords } from "@/app/lib/backtestStorage";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import { findBestStrategy, evaluateDangerZone, ALL_STRATEGIES } from "@/app/lib/strategies";
@@ -26,6 +27,10 @@ import { addToWatchlist, removeFromWatchlist, isInWatchlist } from "@/app/lib/wa
 import { detectPhase, phaseBadgeCls } from "@/app/lib/phaseDetector";
 import type { PhaseResult, Phase } from "@/app/lib/phaseDetector";
 import { calcPortfolioVaR } from "@/app/lib/portfolioRisk";
+import { recordScanResults, getHealthMap, getActiveSymbols, getDeadSymbols, clearHealth, isDangerSymbol, getDangerSymbols, buildDangerListFromRecords, removeFromDangerList } from "@/app/lib/symbolHealth";
+import type { SymbolHealth, DangerSymbol } from "@/app/lib/symbolHealth";
+import { analyzeBacktestRecords } from "@/app/lib/backtestAnalysis";
+import type { BacktestAnalysis } from "@/app/lib/backtestAnalysis";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -469,7 +474,7 @@ interface ExtendedCandidate extends ShortCandidate {
 
 interface ScanResponse {
   success: boolean; scanTime: string; candidates: ShortCandidate[];
-  meta: { totalTickerPairs?: number; totalScanned?: number; filtered: number; stage1Passed?: number; stage2Fetched?: number; stage2Failed?: number };
+  meta: { totalTickerPairs?: number; totalScanned?: number; filtered: number; stage1Passed?: number; phaseAValid?: number; phaseASucceededSymbols?: string[]; stage2Fetched?: number; stage2Failed?: number; tier1Count?: number; tier3Skipped?: number };
   error?: string; mode?: string;
 }
 
@@ -482,9 +487,9 @@ interface AnalyzeResult {
 
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 34 : 23; // サーバー23+取引所独占2+FR連続1+先物ヒート2+SNSヒート1+MC/FDV乖離3+OI急増2=34
+const DISPLAY_MAX = HAS_CG ? 31 : 25; // サーバー25(+unlock3)+CG(先物ヒート2+SNSヒート1+MC/FDV乖離3)=31
 
-type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest" | "phase";
+type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest" | "fundingRate" | "volume24h" | "phase";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 function fmtPrice(n: number): string {
@@ -590,6 +595,7 @@ const SCORE_BARS: Array<{ key: keyof ShortScoreBreakdown; label: string; max: nu
   { key: "pumpScore",      label: "7d急騰",     max: 2, color: "#f43f5e" },
   { key: "btcCorrScore",   label: "BTC非連動",  max: 1, color: "#8b5cf6" },
   { key: "patternScore",   label: "SMCパターン", max: 3, color: "#0ea5e9" },
+  { key: "unlockScore",    label: "アンロック",  max: 3, color: "#fbbf24" },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -684,7 +690,7 @@ function LoadingProgress({ t, elapsed }: { t: Translations; elapsed: number }) {
 function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle }: { c: ExtendedCandidate; snapshots: ScanSnapshot[]; alerts: DiffAlert[]; t: Translations; watchlistSet: Set<string>; onWatchlistToggle: (sym: string) => void }) {
   const diff = getDiffSummary(c.symbol, c, snapshots);
   const symAlerts = alerts.filter(a => a.symbol === c.symbol);
-  const colSpan = 15;
+  const colSpan = 16;
 
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisData, setAnalysisData]       = useState<AnalyzeResult | null>(null);
@@ -766,6 +772,11 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
               { label: "取引所独占度", val: c.exclusivityScore, max: 2, color: "#22c55e" },
               { label: "FR連続ボーナス", val: c.frBonus, max: 1, color: "#8b5cf6" },
               { label: "RSI過熱", val: c.scoreBreakdown.rsiScore ?? 0, max: 2, color: "#f59e0b" },
+              ...(HAS_CG ? [
+                { label: "先物ヒート", val: c.futuresHeatScore, max: 2, color: "#0ea5e9" },
+                { label: "SNSヒート", val: c.snsHeatScore, max: 1, color: "#ec4899" },
+                { label: "MC/FDV乖離", val: c.mcFdvScore, max: 3, color: "#dc2626" },
+              ] : []),
             ].map(({ label, val, max, color }) => (
               <div key={label}>
                 <div className="flex justify-between text-xs text-gray-600 mb-1">
@@ -1041,6 +1052,60 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
                   ({lz.distancePct > 0 ? "+" : ""}{lz.distancePct.toFixed(1)}%)
                 </span>
               </div>
+            </div>
+          );
+        })()}
+
+        {/* 板流動性 (MEXC Orderbook) */}
+        {c.liquidityInfo && (() => {
+          const li = c.liquidityInfo!;
+          const spreadCls = li.spread > 0.5 ? "text-red-600 font-bold" : li.spread > 0.2 ? "text-orange-500" : "text-green-600";
+          const maxPosCls = li.maxSafePosition < 5000 ? "text-red-600 font-bold" : li.maxSafePosition < 20000 ? "text-orange-500" : "text-green-600";
+          return (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="text-xs font-semibold text-teal-700">📊 板流動性</span>
+                {li.spread > 0.5 && <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-red-100 text-red-700 border-red-300">⚠️ 広スプレッド</span>}
+                {li.maxSafePosition < 5000 && <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-red-100 text-red-700 border-red-300">🔴 流動性危険</span>}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600">
+                <div>スプレッド: <span className={`font-mono font-semibold ${spreadCls}`}>{li.spread.toFixed(3)}%</span></div>
+                <div>最大安全POS: <span className={`font-mono font-semibold ${maxPosCls}`}>${(li.maxSafePosition / 1000).toFixed(0)}K</span></div>
+                <div>Bid深度: <span className="font-mono font-semibold text-gray-800">${(li.bidDepth / 1000).toFixed(0)}K</span></div>
+                <div>Ask深度: <span className="font-mono font-semibold text-gray-800">${(li.askDepth / 1000).toFixed(0)}K</span></div>
+                <div>$10K売スリッページ: <span className={`font-mono font-semibold ${li.sellSlippage10k > 1 ? "text-red-600" : li.sellSlippage10k > 0.3 ? "text-orange-500" : "text-green-600"}`}>{li.sellSlippage10k.toFixed(3)}%</span></div>
+                <div>$50K売スリッページ: <span className={`font-mono font-semibold ${li.sellSlippage50k > 2 ? "text-red-600" : li.sellSlippage50k > 0.5 ? "text-orange-500" : "text-green-600"}`}>{li.sellSlippage50k.toFixed(3)}%</span></div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ニュース (CryptoPanic) */}
+        {c.newsContext && (() => {
+          const n = c.newsContext!;
+          return (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="text-xs font-semibold text-indigo-700">📰 ニュース動向</span>
+                {n.hasMajorListing && <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-red-100 text-red-700 border-red-300">🚫 上場ニュース</span>}
+                {n.hasSecurity && <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-orange-100 text-orange-700 border-orange-300">⚠️ 脆弱性</span>}
+                {n.hasPartnership && <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-blue-100 text-blue-700 border-blue-300">🤝 提携</span>}
+              </div>
+              <div className="flex items-center gap-4 text-xs text-gray-600 mb-1">
+                <span>👍 ポジティブ: <span className="font-bold text-green-600">{n.positiveCount}</span></span>
+                <span>👎 ネガティブ: <span className="font-bold text-red-600">{n.negativeCount}</span></span>
+              </div>
+              {n.newsUrls.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {n.newsUrls.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      className="text-[10px] text-blue-500 hover:text-blue-700 underline truncate max-w-xs">
+                      記事{i + 1} ↗
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -1659,13 +1724,14 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
 }
 
 // ─── Summary Bar (修正5) ─────────────────────────────────────────────────────
-function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strongThreshold = 10 }: {
+function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strongThreshold = 10, btcChange24h = 0 }: {
   candidates: ExtendedCandidate[];
   t: Translations;
   onFilter: (key: "strong" | "long" | "pattern" | "allTf" | "spike") => void;
   isLongBias: (c: ExtendedCandidate) => boolean;
   summaryFilter: "strong" | "long" | "pattern" | "allTf" | "spike" | null;
   strongThreshold?: number;
+  btcChange24h?: number;
 }) {
   const counts = useMemo(() => ({
     strong:  candidates.filter(c => c.displayScore >= strongThreshold).length,
@@ -1674,6 +1740,12 @@ function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strong
     allTf:   candidates.filter(c => c.trendMultiTF?.alignment === 3).length,
     spike:   candidates.filter(c => c.volumeSpike && c.volumeSpike.direction !== "neutral").length,
   }), [candidates, isLongBias, strongThreshold]);
+
+  const recCounts = useMemo(() => ({
+    recommended: candidates.filter(c => getShortRecommendation(c, btcChange24h) === "recommended").length,
+    caution:     candidates.filter(c => getShortRecommendation(c, btcChange24h) === "caution").length,
+    banned:      candidates.filter(c => getShortRecommendation(c, btcChange24h) === "banned").length,
+  }), [candidates, btcChange24h]);
 
   const items: Array<{ key: "strong"|"long"|"pattern"|"allTf"|"spike"; label: string; count: number; cls: string }> = [
     { key: "strong",  label: t.summaryShort,   count: counts.strong,  cls: "text-red-600 bg-red-50 border-red-200" },
@@ -1699,6 +1771,10 @@ function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strong
           </button>
         );
       })}
+      <span className="text-gray-300">|</span>
+      <span className="text-green-700 font-semibold">✅推奨 <span className="font-bold">{recCounts.recommended}</span></span>
+      <span className="text-orange-600 font-semibold">⚠️注意 <span className="font-bold">{recCounts.caution}</span></span>
+      <span className="text-red-600 font-semibold">🚫禁止 <span className="font-bold">{recCounts.banned}</span></span>
     </div>
   );
 }
@@ -1726,6 +1802,70 @@ function calcLongBias(c: ExtendedCandidate): LongBiasScore {
 
 function isLongBias(c: ExtendedCandidate): boolean {
   return calcLongBias(c).total >= 3;
+}
+
+type ShortRec = "banned" | "caution" | "recommended" | "neutral";
+
+function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRec {
+  const fr = c.fundingRate;
+  const unlockDays = c.nextUnlockDays;
+  const unlockPct  = c.nextUnlockPercent ?? 0;
+
+  // ── 禁止条件 ───────────────────────────────────────────────────────────────
+  // 危険銘柄リスト (SL3回以上)
+  if (isDangerSymbol(c.symbol)) return "banned";
+  // 上場24h以内 → 異常値が出やすい
+  if (c.listedDaysAgo < 1) return "banned";
+  // BTC急騰 +5%以上 → くそコインのβで吹き上げリスク
+  if (btcChange24h >= 5) return "banned";
+  // アンロック3日以内 ≥3% → スクイーズ誘発リスク
+  if (unlockDays != null && unlockDays <= 3 && unlockPct >= 3) return "banned";
+  // メジャー取引所上場ニュース → 急騰リスク
+  if (c.newsContext?.hasMajorListing) return "banned";
+  // FRマイナス(スクイーズリスク) or ロング優位
+  if ((fr !== null && fr < -0.0005) || isLongBias(c)) return "banned";
+  // 流動性危険: maxSafePosition < $5K
+  if (c.liquidityInfo?.maxSafePosition != null && c.liquidityInfo.maxSafePosition < 5_000) return "banned";
+
+  // ── 注意条件 ───────────────────────────────────────────────────────────────
+  // スコア14pt以上: サンプル少なく信頼性不明確のため保留扱い
+  if (c.displayScore >= 14) return "caution";
+  // アンロック7日以内 ≥3%
+  if (unlockDays != null && unlockDays <= 7 && unlockPct >= 3) return "caution";
+  // アンロック30日以内 (任意%)
+  if (unlockDays != null && unlockDays <= 30) return "caution";
+  // パートナーシップ/提携ニュース
+  if (c.newsContext?.hasPartnership) return "caution";
+  // スプレッド高い (>0.5%)
+  if (c.liquidityInfo?.spread != null && c.liquidityInfo.spread > 0.5) return "caution";
+  // FR < 0 or 出来高急増 or 上場3日以内 or OI過剰
+  if ((fr !== null && fr < 0) || c.volumeChangeRatio > 5.0 || c.listedDaysAgo <= 3 || c.oiRatio > 500) return "caution";
+
+  // ── 推奨 ───────────────────────────────────────────────────────────────────
+  if (c.displayScore >= 10 && (fr === null || fr >= 0)) return "recommended";
+  return "neutral";
+}
+
+const SHORT_REC_BORDER: Record<ShortRec, string> = {
+  banned:      "4px solid #ef4444",
+  caution:     "4px solid #f97316",
+  recommended: "4px solid #22c55e",
+  neutral:     "4px solid transparent",
+};
+
+function ShortRecBadge({ rec }: { rec: ShortRec }) {
+  if (rec === "neutral") return null;
+  const cfg: Record<Exclude<ShortRec, "neutral">, { cls: string; label: string }> = {
+    banned:      { cls: "bg-red-600 text-white border-red-700",         label: "🚫ショート禁止" },
+    caution:     { cls: "bg-orange-500 text-white border-orange-600",   label: "⚠️要注意" },
+    recommended: { cls: "bg-emerald-500 text-white border-emerald-600", label: "✅ショート推奨" },
+  };
+  const { cls, label } = cfg[rec as Exclude<ShortRec, "neutral">];
+  return (
+    <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>
+      {label}
+    </span>
+  );
 }
 
 function LongBiasPanel({ candidates, t }: { candidates: ExtendedCandidate[]; t: Translations }) {
@@ -1800,28 +1940,51 @@ function fmtDate(ts: number): string {
 
 function btStatusLabel(status: BacktestRecord["status"], t: Translations): { label: string; cls: string } {
   switch (status) {
-    case "tp3_hit": return { label: t.btTp3, cls: "text-green-700 bg-green-50 border-green-300" };
-    case "tp2_hit": return { label: t.btTp2, cls: "text-green-700 bg-green-50 border-green-300" };
-    case "tp1_hit": return { label: t.btTp1, cls: "text-green-700 bg-green-50 border-green-200" };
-    case "sl_hit":  return { label: t.btSl,  cls: "text-red-700 bg-red-50 border-red-300" };
-    case "expired": return { label: t.btExpiredStatus, cls: "text-gray-500 bg-gray-100 border-gray-300" };
-    default:        return { label: t.btActiveStatus,  cls: "text-yellow-700 bg-yellow-50 border-yellow-300" };
+    case "tp3_hit":     return { label: t.btTp3,          cls: "text-green-700 bg-green-50 border-green-300" };
+    case "tp2_hit":     return { label: t.btTp2,          cls: "text-green-700 bg-green-50 border-green-300" };
+    case "tp1_hit":     return { label: t.btTp1,          cls: "text-green-700 bg-green-50 border-green-200" };
+    case "sl_hit":      return { label: t.btSl,           cls: "text-red-700 bg-red-50 border-red-300" };
+    case "expired":     return { label: t.btExpiredStatus, cls: "text-gray-500 bg-gray-100 border-gray-300" };
+    case "pending_tp1":
+    case "pending_tp2":
+    case "pending_tp3":
+    case "pending_sl":  return { label: "⏳確認中",         cls: "text-blue-600 bg-blue-50 border-blue-300" };
+    default:            return { label: t.btActiveStatus,  cls: "text-yellow-700 bg-yellow-50 border-yellow-300" };
   }
 }
 
 function exportBtCSV(records: BacktestRecord[]): void {
-  const hdr = ["Symbol","Score","ScoreMax","RecordedAt","EntryPrice","SL","TP1","TP2","TP3","R:R","Trend","Status","ResolvedAt","ResolvedPrice","PnL%","MaxProfit%","MaxDrawdown%","Days"].join(",");
+  const hdr = [
+    "Symbol","Score","ScoreMax","Version","RecordedAt","EntryPrice","SL","TP1","TP2","TP3","R:R","Trend","Status","ResolvedAt","ResolvedPrice","PnL%","MaxProfit%","MaxDrawdown%","Days","SLReason",
+    "dropScore","volumeDryScore","frScore","freshnessScore","oiScore","oiChangeScore","trendScore","pumpScore","btcCorrScore","patternScore","rsiScore","exclusivityScore","frBonus","futuresHeatScore","snsHeatScore","mcFdvScore",
+    "btcPrice","ethPrice","fearGreed","marketPhase","btcChange24h","categories",
+    "unlockDays","unlockPercent","positiveNews","negativeNews","maxSafePosition","spread",
+  ].join(",");
   const rows = records.map(r => {
     const days = Math.floor((Date.now() - r.recordedAt) / 86_400_000);
     const pnl  = r.resolvedPrice != null ? ((r.entryPrice - r.resolvedPrice) / r.entryPrice * 100).toFixed(2) : "";
+    const bd   = r.scoreBreakdown ?? {};
+    const mc   = r.marketContext;
     return [
-      r.symbol.replace("_USDT",""), r.score, r.scoreMax,
+      r.symbol.replace("_USDT",""), r.score, r.scoreMax, r.version ?? "",
       new Date(r.recordedAt).toISOString(),
       r.entryPrice, r.sl, r.tp1, r.tp2, r.tp3,
       r.rrRatio.toFixed(2), r.trendDirection, r.status,
-      r.resolvedAt   ? new Date(r.resolvedAt).toISOString()  : "",
+      r.resolvedAt    ? new Date(r.resolvedAt).toISOString() : "",
       r.resolvedPrice ?? "", pnl,
       r.maxProfit?.toFixed(2) ?? "", r.maxDrawdown?.toFixed(2) ?? "", days,
+      r.slReason ?? "",
+      bd.dropScore ?? "", bd.volumeDryScore ?? "", bd.frScore ?? "", bd.freshnessScore ?? "",
+      bd.oiScore ?? "", bd.oiChangeScore ?? "", bd.trendScore ?? "", bd.pumpScore ?? "",
+      bd.btcCorrScore ?? "", bd.patternScore ?? "", bd.rsiScore ?? "",
+      bd.exclusivityScore ?? "", bd.frBonus ?? "", bd.futuresHeatScore ?? "",
+      bd.snsHeatScore ?? "", bd.mcFdvScore ?? "",
+      mc?.btcPrice ?? "", mc?.ethPrice ?? "", mc?.fearGreed ?? "",
+      mc?.marketPhase ?? "", mc?.btcChange24h?.toFixed(2) ?? "",
+      (r.categories ?? []).join(";"),
+      r.unlockData?.daysUntil ?? "", r.unlockData?.percent ?? "",
+      r.newsContext?.positiveCount ?? "", r.newsContext?.negativeCount ?? "",
+      r.liquidityInfo?.maxSafePosition?.toFixed(0) ?? "", r.liquidityInfo?.spread?.toFixed(4) ?? "",
     ].join(",");
   });
   const blob = new Blob(["﻿" + [hdr, ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -1830,6 +1993,241 @@ function exportBtCSV(records: BacktestRecord[]): void {
     download: `mexc-backtest-${new Date().toISOString().slice(0, 10)}.csv`,
   });
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ─── Symbol Health Panel ─────────────────────────────────────────────────────
+function SymbolHealthPanel({ healthData, onClear }: { healthData: Map<string, SymbolHealth>; onClear: () => void }) {
+  const entries = [...healthData.values()];
+  const activeEntries  = entries.filter(h => h.attempts >= 3 && h.successes / h.attempts >= 0.7)
+    .sort((a, b) => b.successes / b.attempts - a.successes / a.attempts);
+  const deadEntries    = entries.filter(h => h.attempts >= 3 && h.successes / h.attempts < 0.1)
+    .sort((a, b) => a.successes / a.attempts - b.successes / b.attempts);
+  const watchEntries   = entries.filter(h => h.attempts < 3 || (h.successes / h.attempts >= 0.1 && h.successes / h.attempts < 0.7));
+
+  function exportCsv() {
+    const rows = entries.sort((a, b) => b.successes / Math.max(b.attempts, 1) - a.successes / Math.max(a.attempts, 1));
+    const header = "symbol,attempts,successes,successRate,lastChecked";
+    const body = rows.map(h => [
+      h.symbol.replace(/_USDT$/, ""),
+      h.attempts,
+      h.successes,
+      (h.attempts > 0 ? (h.successes / h.attempts * 100).toFixed(0) : "0") + "%",
+      new Date(h.lastChecked).toLocaleString("ja-JP"),
+    ].join(",")).join("\n");
+    const blob = new Blob([header + "\n" + body], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `symbol_health_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  return (
+    <div className="rounded-xl border border-purple-200 bg-purple-50 dark:bg-purple-950 dark:border-purple-800 overflow-hidden">
+      <div className="px-4 py-3 flex items-center justify-between border-b border-purple-200 dark:border-purple-700">
+        <h3 className="font-bold text-purple-800 dark:text-purple-200 text-sm">📊 銘柄ヘルス管理</h3>
+        <div className="flex items-center gap-2">
+          <button onClick={exportCsv}
+            className="text-xs px-2 py-0.5 rounded bg-purple-100 border border-purple-300 text-purple-700 hover:bg-purple-200 transition-colors">
+            📋 CSV
+          </button>
+          <button onClick={() => { if (confirm("銘柄ヘルスデータを全削除しますか？")) onClear(); }}
+            className="text-xs px-2 py-0.5 rounded bg-red-100 border border-red-300 text-red-600 hover:bg-red-200 transition-colors">
+            🗑️ リセット
+          </button>
+        </div>
+      </div>
+      <div className="p-3 space-y-3">
+        {/* Stats summary */}
+        <div className="flex flex-wrap gap-3 text-xs">
+          <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-300 font-semibold">
+            ✅ アクティブ（≥70%）: {activeEntries.length}件
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 border border-yellow-300 font-semibold">
+            🔍 監視中（10-70%）: {watchEntries.length}件
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 font-semibold">
+            💀 死亡（&lt;10%）: {deadEntries.length}件
+          </span>
+        </div>
+
+        {/* Active symbols */}
+        {activeEntries.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-green-700 mb-1.5">✅ アクティブ銘柄（Phase Aで安定してデータ取得できる）</p>
+            <div className="flex flex-wrap gap-1">
+              {activeEntries.slice(0, 60).map(h => (
+                <span key={h.symbol} title={`成功率: ${(h.successes / h.attempts * 100).toFixed(0)}% (${h.successes}/${h.attempts})`}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-800 border border-green-300 cursor-help">
+                  {h.symbol.replace(/_USDT$/, "")} {(h.successes / h.attempts * 100).toFixed(0)}%
+                </span>
+              ))}
+              {activeEntries.length > 60 && <span className="text-[10px] text-gray-400">+{activeEntries.length - 60}件</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Dead symbols */}
+        {deadEntries.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-red-700 mb-1.5">💀 死亡銘柄（Phase Aをスキップ — データ取得失敗が多い）</p>
+            <div className="flex flex-wrap gap-1">
+              {deadEntries.slice(0, 40).map(h => (
+                <span key={h.symbol} title={`成功率: ${(h.successes / h.attempts * 100).toFixed(0)}% (${h.successes}/${h.attempts})`}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 border border-red-300 cursor-help">
+                  {h.symbol.replace(/_USDT$/, "")} {(h.successes / h.attempts * 100).toFixed(0)}%
+                </span>
+              ))}
+              {deadEntries.length > 40 && <span className="text-[10px] text-gray-400">+{deadEntries.length - 40}件</span>}
+            </div>
+          </div>
+        )}
+
+        {entries.length === 0 && (
+          <p className="text-xs text-gray-400">スキャンを実行するとデータが蓄積されます。</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Loss Analysis Panel ──────────────────────────────────────────────────────
+function LossAnalysisPanel({ analysis, records }: { analysis: BacktestAnalysis; records: BacktestRecord[] }) {
+  const { verifiedStats, topCombos, phaseLossPatterns, timezoneWinRates } = analysis;
+
+  const dangerList = getDangerSymbols().filter(d =>
+    records.some(r => r.symbol === d.symbol)
+  );
+
+  return (
+    <div className="space-y-4 text-xs">
+      {/* API検証済みのみの統計 */}
+      <div>
+        <p className="font-semibold text-gray-600 mb-1.5">🔍 API検証済みのみの統計 ({verifiedStats.count}件)</p>
+        {verifiedStats.count < 3 ? (
+          <p className="text-gray-400">API検証済みレコードが3件未満のためデータ不足</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: "勝率",          val: `${verifiedStats.winRate.toFixed(1)}%`,   cls: verifiedStats.winRate >= 50 ? "text-green-700" : "text-red-600" },
+              { label: "Profit Factor", val: verifiedStats.profitFactor === Infinity ? "∞" : verifiedStats.profitFactor.toFixed(2), cls: verifiedStats.profitFactor >= 1 ? "text-green-700" : "text-red-600" },
+              { label: "平均R:R",       val: verifiedStats.avgRR.toFixed(2),            cls: verifiedStats.avgRR >= 0 ? "text-indigo-700" : "text-red-600" },
+            ].map(s => (
+              <div key={s.label} className="bg-blue-50 rounded-lg p-2 border border-blue-100 text-center">
+                <div className={`text-sm font-black ${s.cls}`}>{s.val}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 市場フェーズ別負けパターン */}
+      <div>
+        <p className="font-semibold text-gray-600 mb-1.5">📊 市場フェーズ別負けパターン</p>
+        <div className="grid grid-cols-3 gap-2">
+          {phaseLossPatterns.map(p => (
+            <div key={p.phase} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+              <div className={`text-sm font-black ${p.wins > p.losses ? "text-green-700" : p.losses > 0 ? "text-red-600" : "text-gray-400"}`}>
+                {p.wins + p.losses > 0 ? `${p.winRate.toFixed(0)}%` : "—"}
+              </div>
+              <div className="text-[10px] text-gray-500">{p.label}</div>
+              <div className="text-[10px] text-gray-400">{p.wins}勝 {p.losses}負</div>
+              {p.losses > 0 && (
+                <div className="text-[10px] text-red-500">平均損失 +{p.avgLossPct.toFixed(1)}%</div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 時間帯別勝率 */}
+      <div>
+        <p className="font-semibold text-gray-600 mb-1.5">🕐 時間帯別勝率 (エントリー時刻)</p>
+        <div className="grid grid-cols-3 gap-2">
+          {timezoneWinRates.map(z => (
+            <div key={z.zone} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+              <div className={`text-sm font-black ${z.wins > z.losses ? "text-green-700" : z.wins + z.losses > 0 ? "text-red-600" : "text-gray-400"}`}>
+                {z.wins + z.losses > 0 ? `${z.winRate.toFixed(0)}%` : "—"}
+              </div>
+              <div className="text-[10px] text-gray-500">{z.label}</div>
+              <div className="text-[9px] text-gray-400">{z.hours}</div>
+              <div className="text-[10px] text-gray-400">{z.wins}勝 {z.losses}負</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* スコア×指標マトリクス */}
+      {topCombos.length > 0 && (
+        <div>
+          <p className="font-semibold text-gray-600 mb-1.5">🎯 指標組み合わせ別勝率</p>
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="w-full text-xs min-w-[360px]">
+              <thead>
+                <tr className="bg-gray-50 text-gray-600 border-b border-gray-200">
+                  <th className="px-2 py-1.5 text-left">組み合わせ</th>
+                  <th className="px-2 py-1.5 text-center">勝</th>
+                  <th className="px-2 py-1.5 text-center">負</th>
+                  <th className="px-2 py-1.5 text-right">勝率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topCombos.map(c => (
+                  <tr key={c.label} className="border-b border-gray-100 last:border-0">
+                    <td className="px-2 py-1.5 text-gray-700 font-mono text-[10px]">{c.label}</td>
+                    <td className="px-2 py-1.5 text-center text-green-600 font-bold">{c.wins}</td>
+                    <td className="px-2 py-1.5 text-center text-red-500">{c.total - c.wins}</td>
+                    <td className="px-2 py-1.5 text-right font-bold">
+                      <span className={c.winRate >= 50 ? "text-green-700" : "text-red-600"}>
+                        {c.winRate.toFixed(0)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 危険銘柄リスト */}
+      {dangerList.length > 0 && (
+        <div>
+          <p className="font-semibold text-gray-600 mb-1.5">☠️ 危険銘柄リスト (SL3回以上)</p>
+          <div className="overflow-x-auto rounded-lg border border-red-200">
+            <table className="w-full text-xs min-w-[300px]">
+              <thead>
+                <tr className="bg-red-50 text-red-700 border-b border-red-200">
+                  <th className="px-2 py-1.5 text-left">銘柄</th>
+                  <th className="px-2 py-1.5 text-center">SL回数</th>
+                  <th className="px-2 py-1.5 text-left">理由</th>
+                  <th className="px-2 py-1.5 text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dangerList.map(d => (
+                  <tr key={d.symbol} className="border-b border-red-100 last:border-0">
+                    <td className="px-2 py-1.5 font-mono font-bold text-red-800">{d.symbol.replace("_USDT","")}</td>
+                    <td className="px-2 py-1.5 text-center text-red-600 font-bold">{d.slCount}回</td>
+                    <td className="px-2 py-1.5 text-gray-600 text-[10px]">{d.reason}</td>
+                    <td className="px-2 py-1.5 text-center">
+                      <button
+                        onClick={() => removeFromDangerList(d.symbol)}
+                        className="text-[9px] px-1.5 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                        title="リストから除外"
+                      >
+                        解除
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Backtest Panel ───────────────────────────────────────────────────────────
@@ -1843,6 +2241,9 @@ function BacktestPanel({
   const [simCapital,    setSimCapital]    = useState(1000);
   const [simPos,        setSimPos]        = useState(100);
   const [btPresetTab, setBtPresetTab] = useState<"all" | "low_lev" | "new_listing">("all");
+  const [btMainTab,   setBtMainTab]   = useState<"stats" | "loss">("stats");
+
+  const analysis = useMemo(() => analyzeBacktestRecords(records), [records]);
 
   const tabStats = useMemo(
     () => calculateStats(records, btPresetTab === "all" ? "all" : btPresetTab),
@@ -1882,27 +2283,43 @@ function BacktestPanel({
         <div className="px-4 pb-4 pt-1 space-y-3">
           {/* Preset tabs */}
           {records.length > 0 && (
-            <div className="flex flex-wrap gap-1 pt-1">
-              {([
-                { key: "all",         label: "全体" },
-                { key: "low_lev",     label: "🐢低レバ" },
-                { key: "new_listing", label: "🆕新規上場" },
-              ] as const).map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setBtPresetTab(tab.key)}
-                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
-                    btPresetTab === tab.key
-                      ? "bg-indigo-500 text-white border-indigo-500"
-                      : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600 hover:bg-indigo-50"
-                  }`}
-                >
-                  {tab.label}
-                  <span className="ml-1 opacity-60">
-                    ({tab.key === "all" ? records.length : records.filter(r => r.preset === tab.key).length})
-                  </span>
-                </button>
-              ))}
+            <div className="flex flex-col gap-1.5 pt-1">
+              {/* メインタブ: 統計 / 負け分析 */}
+              <div className="flex gap-1">
+                {([ { key: "stats", label: "📊 統計" }, { key: "loss", label: "🔍 負け分析" } ] as const).map(tab => (
+                  <button key={tab.key} onClick={() => setBtMainTab(tab.key)}
+                    className={`text-[10px] px-3 py-1 rounded border font-semibold transition-colors ${
+                      btMainTab === tab.key
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white dark:bg-gray-800 text-gray-500 border-gray-300 hover:bg-indigo-50"
+                    }`}>
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              {/* プリセットタブ */}
+              <div className="flex flex-wrap gap-1">
+                {([
+                  { key: "all",         label: "全体" },
+                  { key: "low_lev",     label: "🐢低レバ" },
+                  { key: "new_listing", label: "🆕新規上場" },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setBtPresetTab(tab.key)}
+                    className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
+                      btPresetTab === tab.key
+                        ? "bg-indigo-500 text-white border-indigo-500"
+                        : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600 hover:bg-indigo-50"
+                    }`}
+                  >
+                    {tab.label}
+                    <span className="ml-1 opacity-60">
+                      ({tab.key === "all" ? records.length : records.filter(r => r.preset === tab.key).length})
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1910,6 +2327,8 @@ function BacktestPanel({
             <p className="text-xs text-gray-400 py-3">{t.btNoData}</p>
           ) : tabRecords.length === 0 ? (
             <p className="text-xs text-gray-400 py-3">このプリセットの記録はまだありません</p>
+          ) : btMainTab === "loss" ? (
+            <LossAnalysisPanel analysis={analysis} records={tabRecords} />
           ) : (
             <>
               {/* Period */}
@@ -1968,6 +2387,18 @@ function BacktestPanel({
                   </div>
                 )}
               </div>
+
+              {/* 価格検証信頼度 */}
+              {displayStats.resolved > 0 && (
+                <div className="flex flex-wrap items-center gap-3 text-xs px-1 py-1 bg-gray-50 rounded-lg border border-gray-100">
+                  <span className="text-gray-500 font-semibold">🔍 検証精度:</span>
+                  <span className="text-green-700 font-semibold">✅ API検証済み <span className="font-bold">{displayStats.apiVerifiedCount}</span>件</span>
+                  <span className="text-orange-600 font-semibold">⚠️ スキャンのみ <span className="font-bold">{displayStats.scanOnlyCount}</span>件</span>
+                  {displayStats.pending > 0 && (
+                    <span className="text-blue-600 font-semibold">⏳ 確認中 <span className="font-bold">{displayStats.pending}</span>件</span>
+                  )}
+                </div>
+              )}
 
               {/* Phase3 Task2: 高度パフォーマンス指標 */}
               {displayStats.resolved >= 3 && (
@@ -2292,6 +2723,103 @@ function BacktestPanel({
                 )}
               </div>
 
+              {/* ── (A) 市場フェーズ別勝率 ─────────────────────────────── */}
+              {tabRecords.filter(r => r.marketContext).length >= 5 && (() => {
+                const withCtx = tabRecords.filter(r => r.marketContext && r.status !== "active" && !r.status.startsWith("pending_") && r.status !== "expired");
+                const isWin = (r: BacktestRecord) => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit";
+                const phases: Array<{ key: "risk_on" | "neutral" | "risk_off"; label: string; cls: string }> = [
+                  { key: "risk_on",  label: "📈 RISK ON",  cls: "text-green-700" },
+                  { key: "neutral",  label: "⚪ NEUTRAL",  cls: "text-gray-600" },
+                  { key: "risk_off", label: "📉 RISK OFF", cls: "text-red-600" },
+                ];
+                return (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-1.5">📊 市場フェーズ別勝率</p>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      {phases.map(({ key, label, cls }) => {
+                        const recs  = withCtx.filter(r => r.marketContext?.marketPhase === key);
+                        const wins  = recs.filter(isWin).length;
+                        const total = recs.length;
+                        return (
+                          <div key={key} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+                            <div className={`font-bold text-sm ${cls}`}>{total > 0 ? `${((wins / total) * 100).toFixed(0)}%` : "—"}</div>
+                            <div className="text-gray-500 text-[10px] mt-0.5">{label}</div>
+                            <div className="text-gray-400 text-[10px]">{wins}勝 / {total - wins}負 / {total}件</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── (B) 勝ち vs 負けのスコア比較 ───────────────────────── */}
+              {tabRecords.filter(r => r.scoreBreakdown).length >= 5 && (() => {
+                const resolved = tabRecords.filter(r => r.scoreBreakdown && r.status !== "active" && !r.status.startsWith("pending_"));
+                const wins   = resolved.filter(r => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit");
+                const losses = resolved.filter(r => r.status === "sl_hit");
+                if (wins.length === 0 && losses.length === 0) return null;
+                type BdKey = "dropScore" | "volumeDryScore" | "frScore" | "oiScore" | "mcFdvScore";
+                const metrics: Array<{ key: BdKey; label: string }> = [
+                  { key: "dropScore",      label: "ATH下落" },
+                  { key: "volumeDryScore", label: "出来高枯渇" },
+                  { key: "frScore",        label: "FR" },
+                  { key: "oiScore",        label: "OI" },
+                  { key: "mcFdvScore",     label: "MC/FDV" },
+                ];
+                const avg = (recs: BacktestRecord[], key: BdKey) => {
+                  const vals = recs.map(r => (r.scoreBreakdown?.[key] ?? 0) as number);
+                  return vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2) : "—";
+                };
+                return (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-1.5">⚖️ 勝ち vs 負け スコア比較</p>
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-600 border-b border-gray-200">
+                            <th className="px-2 py-1.5 text-left">指標</th>
+                            <th className="px-2 py-1.5 text-center text-green-700">勝ち ({wins.length}件)</th>
+                            <th className="px-2 py-1.5 text-center text-red-600">負け ({losses.length}件)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {metrics.map(({ key, label }) => {
+                            const wAvg = avg(wins, key);
+                            const lAvg = avg(losses, key);
+                            const wNum = parseFloat(wAvg);
+                            const lNum = parseFloat(lAvg);
+                            const winHigher = !isNaN(wNum) && !isNaN(lNum) && wNum > lNum;
+                            return (
+                              <tr key={key} className="border-b border-gray-100 last:border-0">
+                                <td className="px-2 py-1.5 text-gray-600">{label}</td>
+                                <td className={`px-2 py-1.5 text-center font-bold ${winHigher ? "text-green-700" : "text-gray-700"}`}>{wAvg}</td>
+                                <td className={`px-2 py-1.5 text-center font-bold ${!winHigher && wAvg !== "—" && lAvg !== "—" ? "text-red-600" : "text-gray-700"}`}>{lAvg}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── (C) バージョン別件数 ────────────────────────────────── */}
+              {tabRecords.length >= 10 && (() => {
+                const v2 = tabRecords.filter(r => r.version === "v2.0").length;
+                const v1 = tabRecords.filter(r => r.version === "v1.0").length;
+                const legacy = tabRecords.filter(r => !r.version).length;
+                return (
+                  <div className="flex flex-wrap gap-2 text-[10px]">
+                    <span className="text-gray-400 font-semibold">📦 バージョン:</span>
+                    {v2 > 0 && <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200">v2.0: {v2}件</span>}
+                    {v1 > 0 && <span className="px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200">v1.0: {v1}件</span>}
+                    {legacy > 0 && <span className="px-1.5 py-0.5 rounded bg-gray-50 text-gray-400 border border-gray-100">旧: {legacy}件</span>}
+                  </div>
+                );
+              })()}
+
               {/* Actions */}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => exportBtCSV(records)}
@@ -2457,10 +2985,15 @@ export default function ShortScanner() {
   const [loadStart,    setLoadStart]    = useState(0);
   const [elapsed,      setElapsed]      = useState(0);
   const [error,        setError]        = useState("");
+  const [fromCache,    setFromCache]    = useState<{ ageMin: number } | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [healthData,   setHealthData]   = useState<Map<string, SymbolHealth>>(() => typeof window !== "undefined" ? getHealthMap() : new Map());
+  const [showHealthPanel, setShowHealthPanel] = useState(false);
   const [autoRefresh,  setAutoRefresh]  = useState(false);
   const autoTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scanAbortRef  = useRef<AbortController | null>(null);
+  const filterRef     = useRef({ minDrop: 10, maxVolRatio: 500, minVol24k: 50, maxDays: 9999, minOiK: 0 });
   const playSoundRef  = useRef<((type: "alert"|"complete"|"warning") => void) | null>(null);
 
   // Sound (施策2)
@@ -2594,11 +3127,7 @@ export default function ShortScanner() {
   function applyPresetAndScan(p: FilterPreset) {
     applyPreset(p);
     if (!loading) {
-      if (p.isNew30) {
-        scan("new30");
-      } else {
-        scan(undefined, { minDrop: p.minDrop, maxVolRatio: p.maxVolRatio, minVol24k: p.minVol24k, maxDays: p.maxDays, minOiK: p.minOiK });
-      }
+      scan(p.isNew30 ? "new30" : undefined, { minDrop: p.minDrop, maxVolRatio: p.maxVolRatio, minVol24k: p.minVol24k, maxDays: p.maxDays, minOiK: p.minOiK });
     }
   }
   function saveCurrentPreset() {
@@ -2674,9 +3203,47 @@ export default function ShortScanner() {
     return "unknown";
   }
 
-  const scan = useCallback(async (mode?: "new30", filterOverrides?: { minDrop: number; maxVolRatio: number; minVol24k: number; maxDays: number; minOiK: number }) => {
+  const scan = useCallback(async (mode?: "new30", filterOverrides?: { minDrop: number; maxVolRatio: number; minVol24k: number; maxDays: number; minOiK: number }, forceRefresh?: boolean) => {
+    // filterRef.current は常に最新のスライダー値（stale closure 回避）
+    const f = filterRef.current;
+    const effective = {
+      minDrop:    filterOverrides?.minDrop    ?? f.minDrop,
+      maxVolRatio: filterOverrides?.maxVolRatio ?? f.maxVolRatio,
+      minVol24k:  filterOverrides?.minVol24k  ?? f.minVol24k,
+      maxDays:    filterOverrides?.maxDays    ?? f.maxDays,
+      minOiK:     filterOverrides?.minOiK     ?? f.minOiK,
+    };
+
+    // ── sessionStorage キャッシュチェック（自動更新・強制リスキャンはスキップ）──
+    const cacheKey = `bell:scan:${JSON.stringify({ ...effective, mode: mode ?? "" })}`;
+    if (!forceRefresh) {
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const { timestamp, data: cachedData } = JSON.parse(cached) as { timestamp: number; data: ScanResponse };
+          const ageMs = Date.now() - timestamp;
+          if (ageMs < 5 * 60 * 1000) {
+            setData(cachedData);
+            setCurrentPage(1);
+            setFromCache({ ageMin: Math.floor(ageMs / 60_000) });
+            try {
+              await checkAndUpdateRecords(cachedData.candidates);
+              setBtRecords(getRecords());
+            } catch { /* ignore */ }
+            return;
+          }
+        }
+      } catch { /* sessionStorage 利用不可の場合は無視 */ }
+    }
+
+    // 前のリクエストをキャンセル
+    scanAbortRef.current?.abort();
+    const controller = new AbortController();
+    scanAbortRef.current = controller;
+
     setLoading(true);
     setError("");
+    setFromCache(null);
     setExpandedRows(new Set());
     const start = Date.now();
     setLoadStart(start);
@@ -2689,27 +3256,40 @@ export default function ShortScanner() {
     }, 1000);
 
     try {
-      // new30: server uses passesFilterNew30 (fixed thresholds); sliders not changed to avoid contamination
-      // normal: pass current slider values as filter params to server
-      let url: string;
-      if (mode === "new30") {
-        url = "/api/short-scan?mode=new30";
-      } else {
-        const params = new URLSearchParams({
-          minDrop: String(filterOverrides?.minDrop ?? minDrop),
-          maxVolRatio: String(filterOverrides?.maxVolRatio ?? maxVolRatio),
-          minVol24k: String(filterOverrides?.minVol24k ?? minVol24k),
-          maxDays: String(filterOverrides?.maxDays ?? maxDays),
-          minOiK: String(filterOverrides?.minOiK ?? minOiK),
-        });
-        url = `/api/short-scan?${params}`;
-      }
-      const res = await fetch(url);
+      // Symbol health tiers: send active/dead lists to server for tier-based Phase A ordering
+      const healthActiveSyms = getActiveSymbols(0.7);
+      const healthDeadSyms   = getDeadSymbols(0.1);
+      const activeList = [...healthActiveSyms].map(s => s.replace(/_USDT$/, "")).slice(0, 200);
+      const deadList   = [...healthDeadSyms  ].map(s => s.replace(/_USDT$/, "")).slice(0, 200);
+
+      // filterRef.current から取得した最新値でURL組み立て
+      const params = new URLSearchParams({
+        minDrop:     String(effective.minDrop),
+        maxVolRatio: String(effective.maxVolRatio),
+        minVol24k:   String(effective.minVol24k),
+        maxDays:     String(effective.maxDays),
+        minOiK:      String(effective.minOiK),
+      });
+      if (mode === "new30") params.set("mode", "new30");
+      if (activeList.length) params.set("activeSymbols", activeList.join(","));
+      if (deadList.length)   params.set("deadSymbols",   deadList.join(","));
+      const url = `/api/short-scan?${params}`;
+      const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error((b as { error?: string }).error || `HTTP ${res.status}`); }
       const json: ScanResponse = await res.json();
       if (!json.success) throw new Error(json.error || "スキャン失敗");
       setData(json);
       setCurrentPage(1);
+      // sessionStorageにキャッシュ保存
+      try { sessionStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: json })); } catch { /* quota */ }
+
+      // Symbol health tracking: record Phase A outcomes
+      try {
+        const phaseASucceeded = json.meta.phaseASucceededSymbols ?? [];
+        const sentAsActive = activeList.map(s => `${s}_USDT`);
+        recordScanResults(phaseASucceeded, sentAsActive);
+        setHealthData(getHealthMap());
+      } catch { /* ignore health tracking errors */ }
 
       // Snapshot (施策3)
       const snap: ScanSnapshot = {
@@ -2720,18 +3300,30 @@ export default function ShortScanner() {
       setSnapshots(getSnapshots());
 
       // Backtest: check先 → record後 (順序重要)
+      // Market context (parallel with backtest recording, best-effort)
+      const marketCtxPromise = getCurrentMarketContext().catch(() => null);
+
       try {
-        checkAndUpdateRecords(json.candidates);
+        await checkAndUpdateRecords(json.candidates);
         const beforeCount = getRecords().length;
-        const effectiveDrop = filterOverrides?.minDrop ?? minDrop;
-        const effectiveVolRatio = filterOverrides?.maxVolRatio ?? maxVolRatio;
-        const effectiveVol24k = filterOverrides?.minVol24k ?? minVol24k;
-        const effectiveOiK = filterOverrides?.minOiK ?? minOiK;
-        const effectiveDays = filterOverrides?.maxDays ?? maxDays;
-        const currentPreset = detectPreset(effectiveDrop, effectiveVolRatio, effectiveVol24k, effectiveOiK, effectiveDays, mode === "new30");
-        recordNewCandidates(json.candidates, currentPreset);
+        const currentPreset = detectPreset(effective.minDrop, effective.maxVolRatio, effective.minVol24k, effective.minOiK, effective.maxDays, mode === "new30");
+
+        // Build client scores map (exclusivity + frBonus) for scoreBreakdown persistence
+        const clientScoresMap = new Map<string, { exclusivityScore?: number; frBonus?: number }>();
+        const currentSnapshots = getSnapshots();
+        for (const c of json.candidates) {
+          const base = c.symbol.replace(/_USDT$/, "");
+          const exclusivityScore = calcExclusivityScore(binanceSyms.has(base), bybitSyms.has(base));
+          const consecutivePositive = getConsecutivePositiveFR(c.symbol, currentSnapshots);
+          const frBonus = (c.fundingRate !== null && c.fundingRate > 0 && consecutivePositive >= 3) ? 1 : 0;
+          clientScoresMap.set(c.symbol, { exclusivityScore, frBonus });
+        }
+
+        const currentMarketCtx = await marketCtxPromise;
+        recordNewCandidates(json.candidates, currentPreset, clientScoresMap, currentMarketCtx);
         const newRecords = getRecords();
         const recorded = newRecords.length - beforeCount;
+        buildDangerListFromRecords(newRecords);
         setBtRecords(newRecords);
         if (recorded > 0) addToast(`📊 ${recorded}${t.toastBtRecord}`, "info");
       } catch (e) {
@@ -2749,32 +3341,59 @@ export default function ShortScanner() {
         sendNotif(`🎯 ショート候補 ${highScore.length}件`, `${highScore[0].symbol.replace("_USDT","")} スコア${highScore[0].shortScore}/${DISPLAY_MAX}`);
       }
 
-      // CoinGecko (施策7)
+      // CoinGecko (施策7) — patch backtest CG scores after fetch
       if (HAS_CG && json.candidates.length > 0) {
         const top20 = json.candidates.slice(0, 20).map(c => c.symbol);
+        const candMap = new Map(json.candidates.map(c => [c.symbol, c]));
         setCgLoading(true); setCgProgress(0);
         fetchCoinGeckoData(top20, CG_API_KEY, (done, total) => setCgProgress(Math.round(done / total * 100)))
-          .then(map => setCgMap(map)).catch(() => {}).finally(() => setCgLoading(false));
+          .then(map => {
+            setCgMap(map);
+            try {
+              const cgPatch = new Map<string, { futuresHeatScore?: number; snsHeatScore?: number; mcFdvScore?: number; categories?: string[] }>();
+              for (const [sym, cgData] of map) {
+                const cand = candMap.get(sym);
+                if (!cand) continue;
+                cgPatch.set(sym, {
+                  futuresHeatScore: calcFuturesHeatScore(cand.volume24h, cgData.spotVolume),
+                  snsHeatScore:     calcSnsHeatScore(cgData.twitterFollowers, cgData.telegramMembers, cand.priceChange7d),
+                  mcFdvScore:       calcMcFdvScore(cgData.marketCap ?? 0, cgData.fdv),
+                  categories:       cgData.categories,
+                });
+              }
+              patchBacktestCgData(cgPatch);
+              setBtRecords(getRecords());
+            } catch { /* ignore CG patch errors */ }
+          }).catch(() => {}).finally(() => setCgLoading(false));
       }
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return; // キャンセルされたリクエストは無視
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       addToast(`❌ ${t.toastScanError}`, "error");
     } finally {
-      setLoading(false);
-      if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
+      if (!controller.signal.aborted) {
+        setLoading(false);
+        if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notifState]);
 
+  // フィルター値の変化を常にrefに同期（setInterval内の stale closure 対策）
+  useEffect(() => {
+    filterRef.current = { minDrop, maxVolRatio, minVol24k, maxDays, minOiK };
+  }, [minDrop, maxVolRatio, minVol24k, maxDays, minOiK]);
+
   function handleAutoRefresh() {
     if (autoRefresh) { if (autoTimerRef.current) clearInterval(autoTimerRef.current); autoTimerRef.current = null; setAutoRefresh(false); }
-    else { setAutoRefresh(true); autoTimerRef.current = setInterval(() => scan(), 5 * 60 * 1000); }
+    else { setAutoRefresh(true); autoTimerRef.current = setInterval(() => scan(undefined, filterRef.current, true), 5 * 60 * 1000); }
   }
   useEffect(() => () => {
     if (autoTimerRef.current) clearInterval(autoTimerRef.current);
     if (elapsedRef.current)   clearInterval(elapsedRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
+    scanAbortRef.current?.abort();
   }, []);
 
   // Auto-interval logic (施策5)
@@ -2793,7 +3412,7 @@ export default function ShortScanner() {
         if (remaining <= 0) {
           remaining = ms / 1000;
           setCountdown(remaining);
-          scan();
+          scan(undefined, filterRef.current, true); // 自動更新は常に最新取得
         }
       }, 1000);
     }
@@ -2835,7 +3454,7 @@ export default function ShortScanner() {
       const cgData = cgMap.get(c.symbol) ?? null;
       const futuresHeatScore = cgData ? calcFuturesHeatScore(c.volume24h, cgData.spotVolume) : 0;
       const snsHeatScore = cgData ? calcSnsHeatScore(cgData.twitterFollowers, cgData.telegramMembers, c.priceChange7d) : 0;
-      const mcFdvScore = cgData ? calcMcFdvScore(cgData.mcFdvRatio) : 0;
+      const mcFdvScore = cgData ? calcMcFdvScore(cgData.marketCap ?? 0, cgData.fdv) : 0;
       // Phase2 Task1: OI変化率をスナップショットから計算
       let oiChangePct: number | null = null;
       for (let i = snapshots.length - 1; i >= 0; i--) {
@@ -2862,6 +3481,8 @@ export default function ShortScanner() {
         case "priceChange24h": return b.priceChange24h - a.priceChange24h;
         case "priceChange7d":  return b.priceChange7d - a.priceChange7d;
         case "openInterest":   return b.openInterest - a.openInterest;
+        case "fundingRate":    return (b.fundingRate ?? 0) - (a.fundingRate ?? 0);
+        case "volume24h":      return b.volume24h - a.volume24h;
         case "phase":          return (PHASE_ORDER[a.phase.phase] ?? 5) - (PHASE_ORDER[b.phase.phase] ?? 5);
         default:               return b.displayScore - a.displayScore;
       }
@@ -3108,6 +3729,11 @@ export default function ShortScanner() {
           className="px-4 py-1.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
           {loading ? "⏳ ..." : t.scanBtn}
         </button>
+        <button onClick={() => scan(undefined, undefined, true)} disabled={loading}
+          title="キャッシュを無視して再スキャン"
+          className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+          🔄
+        </button>
         <button onClick={exportCSV} disabled={extended.length === 0}
           className="px-3 py-1.5 text-xs bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed border border-gray-300 rounded-lg text-gray-600 transition-colors">
           {t.csvBtn}
@@ -3209,7 +3835,7 @@ export default function ShortScanner() {
             title="FRがほぼゼロの「安定期」銘柄のみ表示。ONにすると候補が大幅に減ります。OFF推奨。"
           >
             <input type="checkbox" checked={filterSettledOnly} onChange={e => setFilterSettledOnly(e.target.checked)} className="accent-green-500 w-3.5 h-3.5" />
-            <span className="text-gray-700">{t.filterSettledOnly} <span className="text-green-600">✅</span></span>
+            <span className="text-gray-700">{t.filterSettledOnly}</span>
           </label>
           <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
             <input type="checkbox" checked={filterFsRatio5x} onChange={e => setFilterFsRatio5x(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
@@ -3277,7 +3903,23 @@ export default function ShortScanner() {
           {data.mode === "new30" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
           {snapshots.length > 0 && <span>{t.snapshots}: <strong className="text-teal-600">{snapshots.length}</strong></span>}
           {HAS_CG && cgLoading && <span className="text-violet-600">{t.cgFetching} {cgProgress}%</span>}
+          {healthData.size > 0 && (() => {
+            const hArr = [...healthData.values()];
+            const active = hArr.filter(h => h.attempts >= 3 && h.successes / h.attempts >= 0.7).length;
+            const dead   = hArr.filter(h => h.attempts >= 3 && h.successes / h.attempts < 0.1).length;
+            return (
+              <button onClick={() => setShowHealthPanel(v => !v)}
+                className="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200 text-purple-700 font-semibold hover:bg-purple-100 transition-colors">
+                📊 アクティブ: {active} / 死亡: {dead} / 合計: {healthData.size}件 ↕
+              </button>
+            );
+          })()}
           <span className="ml-auto flex items-center gap-2">
+            {fromCache !== null ? (
+              <span className="text-orange-500 font-semibold">📦 キャッシュ利用（{fromCache.ageMin}分前のデータ）</span>
+            ) : (
+              <span className="text-green-600 font-semibold">🔄 最新データ</span>
+            )}
             {(() => {
               const ageMin = Math.floor((Date.now() - new Date(data.scanTime).getTime()) / 60_000);
               return ageMin >= 5 ? (
@@ -3299,6 +3941,7 @@ export default function ShortScanner() {
             onFilter={(key) => setSummaryFilter(f => f === key ? null : key)}
             summaryFilter={summaryFilter}
             strongThreshold={strongThreshold}
+            btcChange24h={marketBtcChange}
           />
           {summaryFilter && (
             <button onClick={() => setSummaryFilter(null)}
@@ -3410,9 +4053,9 @@ export default function ShortScanner() {
                   <th className="px-1 py-1 text-right hidden md:table-cell min-w-[50px]">{t.colVolR}</th>
                   <SortTh label={t.col24h}    sortKey="priceChange24h" current={sortBy} onSort={setSortBy} cls="text-right min-w-[55px]" />
                   <SortTh label={t.col7d}     sortKey="priceChange7d"  current={sortBy} onSort={setSortBy} cls="text-right hidden lg:table-cell min-w-[55px]" />
-                  <th className="px-1 py-1 text-right min-w-[60px]">{t.colFr}</th>
+                  <SortTh label={t.colFr}    sortKey="fundingRate"    current={sortBy} onSort={setSortBy} cls="text-right min-w-[60px]" />
                   <SortTh label={t.colOi}     sortKey="openInterest"   current={sortBy} onSort={setSortBy} cls="text-right hidden md:table-cell min-w-[60px]" />
-                  <th className="px-1 py-1 text-right hidden xl:table-cell min-w-[60px]">{t.colVol}</th>
+                  <SortTh label={t.colVol} sortKey="volume24h" current={sortBy} onSort={setSortBy} cls="text-right hidden xl:table-cell min-w-[60px]" />
                   <th className={`px-1 py-1 text-right hidden xl:table-cell min-w-[60px]${!HAS_CG ? " bg-gray-50 text-gray-400" : ""}`}>
                     {!HAS_CG && <span className="mr-0.5">🔒</span>}{t.colSpot}
                     <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>
@@ -3423,6 +4066,7 @@ export default function ShortScanner() {
                   </th>
                   <th className="px-1 py-1 text-right hidden md:table-cell min-w-[45px]">{t.colDays}</th>
                   <th className="px-1 py-1 text-right hidden md:table-cell min-w-[55px]" title="BTCとの価格連動度。低いほどショートに有利">{t.colBtcCorr}</th>
+                  <th className="px-1 py-1 text-right hidden lg:table-cell min-w-[60px]" title="板流動性: スプレッド / 最大安全ポジション">流動性</th>
                   <th className="px-1 py-1 text-center hidden lg:table-cell min-w-[60px]">{t.colExch}</th>
                 </tr>
               </thead>
@@ -3434,10 +4078,12 @@ export default function ShortScanner() {
                   const hasAlert = alerts.some(a => a.symbol === c.symbol);
                   const p24 = c.priceChange24h, p7 = c.priceChange7d;
                   const isSelected = idx === selectedIdx;
+                  const shortRec = getShortRecommendation(c, marketBtcChange);
                   return (
                     <React.Fragment key={c.symbol}>
                       <tr id={`row-${c.symbol}`}
                         onClick={() => { setSelectedIdx(idx); toggleRow(c.symbol); }}
+                        style={{ borderLeft: SHORT_REC_BORDER[shortRec] }}
                         className={`border-b border-gray-100 cursor-pointer transition-colors ${isSelected ? "bg-blue-50 hover:bg-blue-50" : "hover:bg-gray-50"}`}>
 
                         {/* 銘柄 — sticky on mobile */}
@@ -3485,6 +4131,44 @@ export default function ShortScanner() {
                               <span title={t.longBiasNote}
                                 className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-green-50 text-green-700 border-green-300 cursor-help">
                                 {t.longBiasBadge}
+                              </span>
+                            )}
+                            <ShortRecBadge rec={shortRec} />
+                            {/* 危険銘柄バッジ */}
+                            {isDangerSymbol(c.symbol) && (
+                              <span title="SL3回以上ヒット — 危険銘柄リストに登録済み"
+                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-red-900 text-white border-red-800 cursor-help">
+                                ☠️危険
+                              </span>
+                            )}
+                            {/* アンロックバッジ */}
+                            {c.nextUnlockDays != null && c.nextUnlockDays <= 30 && (
+                              <span title={`次回アンロック: ${c.nextUnlockDays}日後 ${c.nextUnlockPercent != null ? c.nextUnlockPercent.toFixed(1) + "%" : ""}`}
+                                className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap cursor-help ${
+                                  c.nextUnlockDays <= 7 && (c.nextUnlockPercent ?? 0) >= 5
+                                    ? "bg-red-100 text-red-700 border-red-300"
+                                    : "bg-yellow-100 text-yellow-700 border-yellow-300"
+                                }`}>
+                                ⏰{c.nextUnlockDays}日{c.nextUnlockPercent != null ? ` ${c.nextUnlockPercent.toFixed(1)}%` : ""}
+                              </span>
+                            )}
+                            {/* ニュースバッジ */}
+                            {c.newsContext?.hasMajorListing && (
+                              <span title="メジャー取引所上場ニュースを検知 — 急騰リスク"
+                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-red-100 text-red-700 border-red-300 cursor-help">
+                                📰上場
+                              </span>
+                            )}
+                            {c.newsContext?.hasSecurity && (
+                              <span title="セキュリティ/脆弱性ニュースを検知 — ショート有利の可能性"
+                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-orange-100 text-orange-700 border-orange-300 cursor-help">
+                                🔓脆弱性
+                              </span>
+                            )}
+                            {c.newsContext?.hasPartnership && !c.newsContext.hasMajorListing && (
+                              <span title="パートナーシップ/提携ニュースを検知 — 急騰注意"
+                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-blue-100 text-blue-700 border-blue-300 cursor-help">
+                                🤝提携
                               </span>
                             )}
                             <FRWatchToggle symbol={base} />
@@ -3634,6 +4318,21 @@ export default function ShortScanner() {
                           })()}
                         </td>
 
+                        {/* 流動性 */}
+                        <td className="px-1 py-1 text-right text-xs hidden lg:table-cell"
+                          title={c.liquidityInfo ? `スプレッド: ${c.liquidityInfo.spread.toFixed(3)}% | $10K売スリッページ: ${c.liquidityInfo.sellSlippage10k.toFixed(2)}% | 最大安全POS: $${(c.liquidityInfo.maxSafePosition/1000).toFixed(0)}K` : "板データなし"}>
+                          {c.liquidityInfo ? (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className={`font-mono font-bold ${c.liquidityInfo.spread > 0.5 ? "text-red-600" : c.liquidityInfo.spread > 0.2 ? "text-orange-500" : "text-green-600"}`}>
+                                {c.liquidityInfo.spread.toFixed(3)}%
+                              </span>
+                              <span className={`text-[9px] ${c.liquidityInfo.maxSafePosition < 5000 ? "text-red-600 font-bold" : c.liquidityInfo.maxSafePosition < 20000 ? "text-orange-500" : "text-gray-500"}`}>
+                                ≤${(c.liquidityInfo.maxSafePosition / 1000).toFixed(0)}K
+                              </span>
+                            </div>
+                          ) : <span className="text-gray-300">—</span>}
+                        </td>
+
                         {/* 取引所 */}
                         <td className="px-1 py-1 text-center hidden lg:table-cell">
                           <div className="flex flex-col items-center gap-0.5">
@@ -3705,6 +4404,14 @@ export default function ShortScanner() {
         t={t}
         onReset={() => { clearRecords(); setBtRecords([]); }}
       />
+
+      {/* Symbol Health Panel */}
+      {showHealthPanel && (
+        <SymbolHealthPanel
+          healthData={healthData}
+          onClear={() => { clearHealth(); setHealthData(new Map()); }}
+        />
+      )}
 
       {/* Portfolio VaR — スナップショット5件以上 + アクティブ2銘柄以上で表示 */}
       {snapshots.length >= 5 && btRecords.filter(r => r.status === "active").length >= 2 && (() => {
