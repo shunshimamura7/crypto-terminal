@@ -8,7 +8,7 @@ import type { DangerZoneResult } from "./strategies";
 import type { CandidateInput } from "./strategies/types";
 import type { MarketContext } from "./marketContext";
 
-const EXPIRE_DAYS = 7;
+const EXPIRE_DAYS = 14;
 const SCORE_THRESHOLD = 8;
 export const SCORING_VERSION = "v2.0";
 
@@ -129,8 +129,21 @@ export async function checkAndUpdateRecords(candidates: ShortCandidate[]): Promi
   const apiPrices = await fetchPricesFromAPI(trackableRecords.map(r => r.symbol));
 
   let changed = false;
+  const now = Date.now();
   for (const record of records) {
     if (record.status !== "active" && !isPending(record.status)) continue;
+
+    // 期限切れチェックを最優先（スキャン外の銘柄でも確実に expired にする）
+    const daysSince = (now - record.recordedAt) / (1000 * 60 * 60 * 24);
+    if (daysSince > EXPIRE_DAYS) {
+      const lastPrice = apiPrices.get(record.symbol) ?? scanPriceMap.get(record.symbol) ?? record.currentPrice ?? record.entryPrice;
+      record.status        = "expired";
+      record.resolvedAt    = now;
+      record.resolvedPrice = lastPrice;
+      changed = true;
+      console.log(`[backtest] ${record.symbol} expired after ${daysSince.toFixed(1)} days`);
+      continue;
+    }
 
     const apiPrice  = apiPrices.get(record.symbol);
     const scanPrice = scanPriceMap.get(record.symbol);
@@ -141,7 +154,7 @@ export async function checkAndUpdateRecords(candidates: ShortCandidate[]): Promi
 
     const pnlPct = ((record.entryPrice - currentPrice) / record.entryPrice) * 100;
     record.currentPrice  = currentPrice;
-    record.lastCheckedAt = Date.now();
+    record.lastCheckedAt = now;
     record.maxProfit   = Math.max(record.maxProfit   ?? 0, pnlPct);
     record.maxDrawdown = Math.min(record.maxDrawdown ?? 0, pnlPct);
     if (currentPrice <= record.tp1) record.reachedTP1 = true;
@@ -154,17 +167,34 @@ export async function checkAndUpdateRecords(candidates: ShortCandidate[]): Promi
     if (record.status !== "active" && !isPending(record.status)) {
       console.log(`[backtest] ${record.symbol} resolved as ${record.status} (${priceSource})`);
     }
-
-    // 7日経過で未決着 → expired
-    const daysSince = (Date.now() - record.recordedAt) / (1000 * 60 * 60 * 24);
-    if (daysSince > EXPIRE_DAYS && (record.status === "active" || isPending(record.status))) {
-      record.status        = "expired";
-      record.resolvedAt    = Date.now();
-      record.resolvedPrice = currentPrice;
-    }
   }
 
   if (changed) saveRecords(records);
+}
+
+// スキャン外銘柄も含めて期限切れを一括処理するスタンドアロン関数
+export function expireOldRecords(): number {
+  if (typeof window === "undefined") return 0;
+  const records = getRecords();
+  const now = Date.now();
+  let count = 0;
+
+  for (const record of records) {
+    if (record.status !== "active" && !isPending(record.status)) continue;
+    const daysSince = (now - record.recordedAt) / (1000 * 60 * 60 * 24);
+    if (daysSince > EXPIRE_DAYS) {
+      record.status        = "expired";
+      record.resolvedAt    = now;
+      record.resolvedPrice = record.currentPrice ?? record.entryPrice;
+      count++;
+    }
+  }
+
+  if (count > 0) {
+    saveRecords(records);
+    console.log(`[backtest] expireOldRecords: ${count} records expired (>${EXPIRE_DAYS}d)`);
+  }
+  return count;
 }
 
 interface ClientScoreEntry {

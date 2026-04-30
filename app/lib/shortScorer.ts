@@ -385,9 +385,12 @@ export interface TradeSetup {
   tp1: number;          // 利確1 (POC or サポート近傍)
   tp2: number;          // 利確2 (直近安値)
   tp3: number;          // 利確3 (保守的深め)
-  rrRatio: number;      // (エントリー - TP1) / (SL - エントリー)
-  rrWarning: boolean;   // R:R < 1.5
+  rrRatio: number;      // TP2基準 (後方互換維持)
+  rrWarning: boolean;   // TP2基準でR:R < 1.5
   resistanceLevel: number; // 高出来高レジスタンス
+  rrTp1: number;        // TP1基準R:R（参考）
+  rrTp2: number;        // TP2基準R:R（メイン評価）
+  rrTp3: number;        // TP3基準R:R（フルスイング目標）
 }
 
 export function calcTradeSetup(
@@ -496,12 +499,14 @@ export function calcTradeSetup(
   if (Math.abs(tp1 - tp2) < currentPrice * 0.01) tp2 = tp1 - currentPrice * 0.02;
   if (Math.abs(tp2 - tp3) < currentPrice * 0.01) tp3 = tp2 - currentPrice * 0.02;
 
-  // ── R:R 計算 ──
-  const risk   = sl - currentPrice;
-  const reward = currentPrice - tp1;
-  const rrRatio = risk > 0 ? reward / risk : 0;
+  // ── R:R 計算（TP2基準をメインに） ──
+  const risk  = sl - currentPrice;
+  const rrTp1 = risk > 0 ? (currentPrice - tp1) / risk : 0;
+  const rrTp2 = risk > 0 ? (currentPrice - tp2) / risk : 0;
+  const rrTp3 = risk > 0 ? (currentPrice - tp3) / risk : 0;
+  const rrRatio = rrTp2;
 
-  return { sl, tp1, tp2, tp3, rrRatio, rrWarning: rrRatio < 1.5, resistanceLevel };
+  return { sl, tp1, tp2, tp3, rrRatio, rrWarning: rrTp2 < 1.5, resistanceLevel, rrTp1, rrTp2, rrTp3 };
 }
 
 // btcCorrScore (0-1): BTC非連動ボーナス

@@ -9,7 +9,7 @@ import type { DiffAlert } from "@/app/lib/snapshotDiff";
 import { fetchCoinGeckoData, calcFuturesHeatScore, calcSnsHeatScore, calcMcFdvScore } from "@/app/lib/coinGeckoClient";
 import type { CgMarketData } from "@/app/lib/coinGeckoClient";
 import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
-import { checkAndUpdateRecords, recordNewCandidates, recordNewCandidatesWithStrategy, patchBacktestCgData } from "@/app/lib/backtestChecker";
+import { checkAndUpdateRecords, recordNewCandidates, recordNewCandidatesWithStrategy, patchBacktestCgData, expireOldRecords } from "@/app/lib/backtestChecker";
 import type { ExtendedCandidateLike } from "@/app/lib/backtestChecker";
 import { getCurrentMarketContext } from "@/app/lib/marketContext";
 import { getRecords, saveRecords, clearRecords } from "@/app/lib/backtestStorage";
@@ -104,7 +104,7 @@ const T = {
     tp1: "利確1 (TP1)",
     tp2: "利確2 (TP2)",
     tp3: "利確3 (TP3)",
-    rrWarning: "⚠️ R:R不足",
+    rrWarning: "⚠️ R:R不足 (TP2)",
     vpcr: "📊 出来高プロファイル (VPCR)",
     poc: "POC",
     current: "←現在",
@@ -328,7 +328,7 @@ const T = {
     tp1: "Take Profit 1",
     tp2: "Take Profit 2",
     tp3: "Take Profit 3",
-    rrWarning: "⚠️ R:R < 1.5",
+    rrWarning: "⚠️ R:R < 1.5 (TP2)",
     vpcr: "📊 Volume Profile (VPCR)",
     poc: "POC",
     current: "← current",
@@ -957,23 +957,44 @@ function ScoreDetail({ c, snapshots, alerts, t, watchlistSet, onWatchlistToggle 
               <div className="flex items-center gap-2 mb-2">
                 <p className="text-xs font-semibold text-gray-700">{t.tradeSetup}</p>
                 {ts.rrWarning
-                  ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 border border-yellow-300 font-bold">{t.rrWarning} ({ts.rrRatio.toFixed(2)})</span>
-                  : <span className="text-[10px] text-green-600 font-semibold">R:R {ts.rrRatio.toFixed(2)}</span>
+                  ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 border border-yellow-300 font-bold">{t.rrWarning} {ts.rrTp2.toFixed(2)}</span>
+                  : <span className="text-[10px] text-green-600 font-semibold">R:R TP2 {ts.rrTp2.toFixed(2)}</span>
                 }
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                {[
-                  { label: t.sl,  val: ts.sl,  cls: "bg-red-50 border-red-200",   txt: "text-red-700",   chg: ((ts.sl / c.currentPrice - 1) * 100), sign: "+" },
-                  { label: t.tp1, val: ts.tp1, cls: "bg-green-50 border-green-200", txt: "text-green-700", chg: ((ts.tp1 / c.currentPrice - 1) * 100) },
-                  { label: t.tp2, val: ts.tp2, cls: "bg-green-50 border-green-100", txt: "text-green-700", chg: ((ts.tp2 / c.currentPrice - 1) * 100) },
-                  { label: t.tp3, val: ts.tp3, cls: "bg-gray-50 border-gray-200",  txt: "text-gray-700",  chg: ((ts.tp3 / c.currentPrice - 1) * 100) },
-                ].map(({ label, val, cls, txt, chg }) => (
-                  <div key={label} className={`rounded-lg p-2 border ${cls}`}>
-                    <div className={`font-semibold mb-0.5 ${txt}`}>{label}</div>
-                    <div className={`font-mono font-bold ${txt}`}>{fmtPrice(val)}</div>
-                    <div className="text-gray-400 text-[10px]">{chg >= 0 ? "+" : ""}{chg.toFixed(1)}%</div>
+                {/* SL */}
+                <div className="rounded-lg p-2 border bg-red-50 border-red-200">
+                  <div className="font-semibold mb-0.5 text-red-700">{t.sl}</div>
+                  <div className="font-mono font-bold text-red-700">{fmtPrice(ts.sl)}</div>
+                  <div className="text-gray-400 text-[10px]">+{((ts.sl / c.currentPrice - 1) * 100).toFixed(1)}%</div>
+                </div>
+                {/* TP1 */}
+                <div className="rounded-lg p-2 border bg-green-50 border-green-200">
+                  <div className="font-semibold mb-0.5 text-green-700">{t.tp1}</div>
+                  <div className="font-mono font-bold text-green-700">{fmtPrice(ts.tp1)}</div>
+                  <div className="text-gray-400 text-[10px]">
+                    {((ts.tp1 / c.currentPrice - 1) * 100).toFixed(1)}% / R:R {ts.rrTp1.toFixed(2)}
                   </div>
-                ))}
+                </div>
+                {/* TP2 — メイン評価 */}
+                <div className="rounded-lg p-2 border bg-green-50 border-green-300 ring-1 ring-green-400">
+                  <div className="font-semibold mb-0.5 text-green-700 flex items-center gap-1">
+                    {t.tp2}
+                    <span className="text-[8px] bg-green-600 text-white px-1 rounded leading-tight">MAIN</span>
+                  </div>
+                  <div className="font-mono font-bold text-green-700">{fmtPrice(ts.tp2)}</div>
+                  <div className="text-gray-400 text-[10px]">
+                    {((ts.tp2 / c.currentPrice - 1) * 100).toFixed(1)}% / R:R {ts.rrTp2.toFixed(2)}
+                  </div>
+                </div>
+                {/* TP3 */}
+                <div className="rounded-lg p-2 border bg-gray-50 border-gray-200">
+                  <div className="font-semibold mb-0.5 text-gray-700">{t.tp3}</div>
+                  <div className="font-mono font-bold text-gray-700">{fmtPrice(ts.tp3)}</div>
+                  <div className="text-gray-400 text-[10px]">
+                    {((ts.tp3 / c.currentPrice - 1) * 100).toFixed(1)}% / R:R {ts.rrTp3.toFixed(2)}
+                  </div>
+                </div>
               </div>
               {c.atrData && (
                 <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 flex-wrap">
@@ -3437,6 +3458,7 @@ export default function ShortScanner() {
             setCurrentPage(1);
             setFromCache({ ageMin: Math.floor(ageMs / 60_000) });
             try {
+              expireOldRecords();
               await checkAndUpdateRecords(cachedData.candidates);
               setBtRecords(getRecords());
             } catch { /* ignore */ }
@@ -3509,11 +3531,13 @@ export default function ShortScanner() {
       saveSnapshot(snap);
       setSnapshots(getSnapshots());
 
-      // Backtest: check先 → record後 (順序重要)
+      // Backtest: expire → check先 → record後 (順序重要)
       // Market context (parallel with backtest recording, best-effort)
       const marketCtxPromise = getCurrentMarketContext().catch(() => null);
 
       try {
+        const expiredCount = expireOldRecords();
+        if (expiredCount > 0) addToast(`⏱ ${expiredCount}件のレコードを期限切れに更新`, "info");
         await checkAndUpdateRecords(json.candidates);
         const beforeCount = getRecords().length;
         const currentPreset = detectPreset(effective.minDrop, effective.maxVolRatio, effective.minVol24k, effective.minOiK, effective.maxDays, mode === "new30");
@@ -4330,102 +4354,59 @@ export default function ShortScanner() {
                               )}
                               <span className="text-gray-400 text-[10px]">{isOpen?"▲":"▼"}</span>
                             </div>
-                            <LiquidityBadge oi={c.openInterest} />
+                            {/* ── 階層1: 最重要判定（1バッジのみ） ── */}
+                            <ShortRecBadge rec={shortRec} t={t} />
+
+                            {/* ── 階層2: 補足情報（BTステータス + フェーズ、最大2件） ── */}
                             {(() => {
                               const bts = btRecordMap.get(c.symbol);
                               if (!bts) return null;
                               const { label, cls } = btStatusLabel(bts, t);
                               return <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>{label}</span>;
                             })()}
-                            {c.allPatterns && c.allPatterns.length > 0 && (
-                              <span className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-sky-50 text-sky-700 border-sky-300">
-                                📐 {c.allPatterns.length}パターン
-                              </span>
-                            )}
-                            {isLongBias(c) && (
-                              <span title={t.longBiasNote}
-                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-green-50 text-green-700 border-green-300 cursor-help">
-                                {t.longBiasBadge}
-                              </span>
-                            )}
-                            <ShortRecBadge rec={shortRec} t={t} />
-                            {/* 危険銘柄バッジ */}
-                            {isDangerSymbol(c.symbol) && (
-                              <span title="SL3回以上ヒット — 危険銘柄リストに登録済み"
-                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-red-900 text-white border-red-800 cursor-help">
-                                ☠️危険
-                              </span>
-                            )}
-                            {/* アンロックバッジ */}
-                            {c.nextUnlockDays != null && c.nextUnlockDays <= 30 && (
-                              <span title={`次回アンロック: ${c.nextUnlockDays}日後 ${c.nextUnlockPercent != null ? c.nextUnlockPercent.toFixed(1) + "%" : ""}`}
-                                className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap cursor-help ${
-                                  c.nextUnlockDays <= 7 && (c.nextUnlockPercent ?? 0) >= 5
-                                    ? "bg-red-100 text-red-700 border-red-300"
-                                    : "bg-yellow-100 text-yellow-700 border-yellow-300"
-                                }`}>
-                                ⏰{c.nextUnlockDays}日{c.nextUnlockPercent != null ? ` ${c.nextUnlockPercent.toFixed(1)}%` : ""}
-                              </span>
-                            )}
-                            {/* ニュースバッジ */}
-                            {c.newsContext?.hasMajorListing && (
-                              <span title="メジャー取引所上場ニュースを検知 — 急騰リスク"
-                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-red-100 text-red-700 border-red-300 cursor-help">
-                                📰上場
-                              </span>
-                            )}
-                            {c.newsContext?.hasSecurity && (
-                              <span title="セキュリティ/脆弱性ニュースを検知 — ショート有利の可能性"
-                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-orange-100 text-orange-700 border-orange-300 cursor-help">
-                                🔓脆弱性
-                              </span>
-                            )}
-                            {c.newsContext?.hasPartnership && !c.newsContext.hasMajorListing && (
-                              <span title="パートナーシップ/提携ニュースを検知 — 急騰注意"
-                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-blue-100 text-blue-700 border-blue-300 cursor-help">
-                                🤝提携
-                              </span>
-                            )}
-                            <FRWatchToggle symbol={base} />
-                            {/* Phase badge */}
                             <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${phaseBadgeCls(c.phase.phase)}`}>
                               {c.phase.emoji}{c.phase.label}
                             </span>
-                            {/* v6: strategy badge */}
+
+                            {/* ── 階層3: 詳細フラグ（hover で全表示） ── */}
                             {(() => {
-                              const m = strategyMatches.get(c.symbol);
-                              if (!m) return null;
-                              const strategy = ALL_STRATEGIES.find(s => s.tag === m.tag);
-                              if (!strategy) return null;
-                              return (
-                                <span title={m.reasons.join("\n")}
-                                  className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-purple-50 text-purple-700 border-purple-300 cursor-help">
-                                  {strategy.icon}{strategy.shortName} {m.confidence}%
-                                </span>
-                              );
-                            })()}
-                            {(() => {
-                              const fr = c.fundingRate;
+                              const flags: string[] = [];
+                              if (isDangerSymbol(c.symbol)) flags.push("☠️危険銘柄(SL3回+)");
+                              if (isLongBias(c)) flags.push(`🟢${t.longBiasBadge}`);
+                              if (c.liquidityInfo?.maxSafePosition != null && c.liquidityInfo.maxSafePosition < 5_000) flags.push("🔴流動性危険");
+                              if (c.allPatterns && c.allPatterns.length > 0) flags.push(`📐${c.allPatterns.length}パターン`);
+                              if (c.nextUnlockDays != null && c.nextUnlockDays <= 30) {
+                                flags.push(`⏰アンロック${c.nextUnlockDays}日${c.nextUnlockPercent != null ? ` ${c.nextUnlockPercent.toFixed(1)}%` : ""}`);
+                              }
+                              if (c.newsContext?.hasMajorListing) flags.push("📰上場ニュース");
+                              if (c.newsContext?.hasSecurity) flags.push("🔓脆弱性ニュース");
+                              if (c.newsContext?.hasPartnership && !c.newsContext.hasMajorListing) flags.push("🤝提携ニュース");
                               const squeezeCount = [
-                                fr !== null && fr < 0,
+                                c.fundingRate !== null && c.fundingRate < 0,
                                 c.oiRatio > 3.0,
-                                c.trendDirection === "UP" || (c.trendMultiTF && c.trendMultiTF.alignment === 0),
+                                c.trendDirection === "UP" || (c.trendMultiTF?.alignment === 0),
                                 c.btcCorrelation > 0.7,
                               ].filter(Boolean).length;
-                              if (squeezeCount >= 2) return (
-                                <span title="FRマイナス×高OI×上昇トレンドなどが重なっています"
-                                  className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-yellow-50 text-yellow-700 border-yellow-300 cursor-help">
-                                  {t.squeezeWarn}
+                              if (squeezeCount >= 2) flags.push(`⚡${t.squeezeWarn}`);
+                              if (data?.mode === "new30" && c.listedDaysAgo <= 3) flags.push(`🆕${t.earlyListingWarn}`);
+                              const stratMatch = strategyMatches.get(c.symbol);
+                              if (stratMatch) {
+                                const strat = ALL_STRATEGIES.find(s => s.tag === stratMatch.tag);
+                                if (strat) flags.push(`${strat.icon}${strat.shortName} ${stratMatch.confidence}%`);
+                              }
+                              if (flags.length === 0) return null;
+                              return (
+                                <span
+                                  className="text-[9px] text-gray-400 cursor-help underline decoration-dotted whitespace-nowrap"
+                                  title={flags.join("\n")}
+                                >
+                                  +{flags.length}件
                                 </span>
                               );
-                              return null;
                             })()}
-                            {data?.mode === "new30" && c.listedDaysAgo <= 3 && (
-                              <span title={t.earlyListingNote}
-                                className="text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap bg-orange-50 text-orange-700 border-orange-300 cursor-help">
-                                {t.earlyListingWarn}
-                              </span>
-                            )}
+
+                            {/* FR監視トグル（インタラクティブ要素は独立） */}
+                            <FRWatchToggle symbol={base} />
                           </div>
                         </td>
 
