@@ -29,6 +29,24 @@ export interface BacktestStats {
   // 信頼度
   apiVerifiedCount: number;
   scanOnlyCount: number;
+  // TP別到達率・平均R
+  tp1HitRate:  number;
+  tp2HitRate:  number;
+  tp3HitRate:  number;
+  slHitRate:   number;
+  tp1AvgR:     number | null;
+  tp2AvgR:     number | null;
+  tp3AvgR:     number | null;
+  slAvgR:      number | null;
+  // TP配置中央値（エントリーからの%距離）
+  slMedianPct:  number;
+  tp1MedianPct: number;
+  tp2MedianPct: number;
+  tp3MedianPct: number;
+  // 仮想戦略: 全TP1利確の場合
+  tp1OnlyStrategy: { winRate: number; avgR: number; expectancy: number };
+  // TP順序異常件数（TP1 < TP2 = ショートロジック異常、過去バグ可視化用）
+  tpOrderInverted: number;
 }
 
 const SCORE_RANGES = ["8-9", "10-11", "12-13", "14-15", "16-17", "18-19", "20-21", "22-23"] as const;
@@ -153,15 +171,57 @@ export function calculateStats(
       : sortedDays[Math.floor(mid / 2)]
     : 0;
 
+  // ── 追加統計 ──────────────────────────────────────────────────────────────
+
+  function calcMedian(arr: number[]): number {
+    if (!arr.length) return 0;
+    const s = [...arr].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+  }
+
+  const tp1Resolved = resolved.filter(r => r.status === "tp1_hit");
+  const tp2Resolved = resolved.filter(r => r.status === "tp2_hit");
+  const tp3Resolved = resolved.filter(r => r.status === "tp3_hit");
+  const n = resolved.length;
+
+  const avgR = (arr: BacktestRecord[]) =>
+    arr.length > 0 ? arr.map(realizedR).reduce((a, b) => a + b, 0) / arr.length : null;
+
+  // TP配置の中央値（%）
+  const slMedianPct   = calcMedian(resolved.map(r => (r.sl   / r.entryPrice - 1) * 100));
+  const tp1MedianPct  = calcMedian(resolved.map(r => (r.tp1  / r.entryPrice - 1) * 100));
+  const tp2MedianPct  = calcMedian(resolved.map(r => (r.tp2  / r.entryPrice - 1) * 100));
+  const tp3MedianPct  = calcMedian(resolved.map(r => (r.tp3  / r.entryPrice - 1) * 100));
+
+  // 仮想戦略: 全TP1で利確した場合の期待値
+  const tp1ReachCount = tp1Resolved.length + tp2Resolved.length + tp3Resolved.length;
+  const tp1OnlyWinRate = n > 0 ? (tp1ReachCount / n) * 100 : 0;
+  const tp1AvgRIfHit = n > 0
+    ? resolved.map(r => {
+        const risk   = r.sl - r.entryPrice;
+        const reward = r.entryPrice - r.tp1;
+        return risk > 0 ? reward / risk : 0;
+      }).reduce((a, b) => a + b, 0) / n
+    : 0;
+  const lossRate   = n > 0 ? losses.length / n : 0;
+  const avgLossAbs = losses.length > 0
+    ? losses.map(r => Math.abs(realizedR(r))).reduce((a, b) => a + b, 0) / losses.length
+    : 1.0;
+  const tp1OnlyExpectancy = (tp1OnlyWinRate / 100) * tp1AvgRIfHit - lossRate * avgLossAbs;
+
+  // TP順序異常（TP1 < TP2 = ショートロジック異常）
+  const tpOrderInverted = records.filter(r => r.tp1 < r.tp2).length;
+
   return {
     totalRecords: records.length,
     resolved:  resolved.length,
     active:    active.length,
     pending:   pending.length,
     expired:   expired.length,
-    tp1Hits:   resolved.filter(r => r.status === "tp1_hit").length,
-    tp2Hits:   resolved.filter(r => r.status === "tp2_hit").length,
-    tp3Hits:   resolved.filter(r => r.status === "tp3_hit").length,
+    tp1Hits:   tp1Resolved.length,
+    tp2Hits:   tp2Resolved.length,
+    tp3Hits:   tp3Resolved.length,
     slHits:    losses.length,
     winRate,
     avgRR,
@@ -178,5 +238,20 @@ export function calculateStats(
     medianDaysToResolve,
     apiVerifiedCount: resolved.filter(r => r.priceSource === "direct_api").length,
     scanOnlyCount:    resolved.filter(r => !r.priceSource || r.priceSource === "scan").length,
+    // TP別到達率・平均R
+    tp1HitRate:  n > 0 ? (tp1Resolved.length / n) * 100 : 0,
+    tp2HitRate:  n > 0 ? (tp2Resolved.length / n) * 100 : 0,
+    tp3HitRate:  n > 0 ? (tp3Resolved.length / n) * 100 : 0,
+    slHitRate:   n > 0 ? (losses.length      / n) * 100 : 0,
+    tp1AvgR:     avgR(tp1Resolved),
+    tp2AvgR:     avgR(tp2Resolved),
+    tp3AvgR:     avgR(tp3Resolved),
+    slAvgR:      losses.length > 0 ? losses.map(realizedR).reduce((a, b) => a + b, 0) / losses.length : null,
+    slMedianPct,
+    tp1MedianPct,
+    tp2MedianPct,
+    tp3MedianPct,
+    tp1OnlyStrategy: { winRate: tp1OnlyWinRate, avgR: tp1AvgRIfHit, expectancy: tp1OnlyExpectancy },
+    tpOrderInverted,
   };
 }

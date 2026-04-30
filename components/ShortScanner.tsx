@@ -263,6 +263,11 @@ const T = {
     recPanelOpenMexc: "MEXCで開く",
     forbidNewListingShallow: "🚫 新規×底堅い",
     forbidNewListingShallowTip: "新規上場14日以内かつATH下落30%未満。スクイーズリスク高",
+    tpAnalysisTitle: "📊 TP/SL 到達分析",
+    tpPlacement: "TP配置（中央値）",
+    tpVirtualStrategy: "💡 仮想戦略: 全TP1利確の場合",
+    tpOrderInvertedLabel: "TP順序異常",
+    tpExpectancyPerTrade: "期待値 / トレード",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -476,6 +481,11 @@ const T = {
     recPanelOpenMexc: "Open in MEXC",
     forbidNewListingShallow: "🚫 Fresh & Shallow",
     forbidNewListingShallowTip: "Listed within 14d & dropped less than 30%. High squeeze risk",
+    tpAnalysisTitle: "📊 TP/SL Hit Analysis",
+    tpPlacement: "TP Placement (median)",
+    tpVirtualStrategy: "💡 Virtual: TP1-only Strategy",
+    tpOrderInvertedLabel: "TP Order Inverted",
+    tpExpectancyPerTrade: "Expectancy / Trade",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -2619,6 +2629,49 @@ function BacktestPanel({
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              )}
+
+              {/* TP/SL 到達分析 */}
+              {displayStats.resolved >= 3 && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <h3 className="text-xs font-bold text-blue-800 dark:text-blue-300 mb-2">{t.tpAnalysisTitle}</h3>
+                  <div className="grid grid-cols-4 gap-1.5 text-xs mb-3">
+                    {([
+                      { label: "TP1", rate: displayStats.tp1HitRate, avgR: displayStats.tp1AvgR, cls: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400" },
+                      { label: "TP2", rate: displayStats.tp2HitRate, avgR: displayStats.tp2AvgR, cls: "bg-green-200 dark:bg-green-800/40 text-green-700 dark:text-green-400" },
+                      { label: "TP3", rate: displayStats.tp3HitRate, avgR: displayStats.tp3AvgR, cls: "bg-green-300 dark:bg-green-700/40 text-green-800 dark:text-green-300" },
+                      { label: "SL",  rate: displayStats.slHitRate,  avgR: displayStats.slAvgR,  cls: "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400" },
+                    ]).map(({ label, rate, avgR, cls }) => (
+                      <div key={label} className={`p-2 rounded text-center ${cls}`}>
+                        <div className="font-black text-sm">{rate.toFixed(1)}%</div>
+                        <div className="font-bold leading-tight">{label}</div>
+                        <div className="text-[10px] opacity-70 mt-0.5">
+                          {avgR != null ? `avg ${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}R` : "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[11px] text-gray-600 dark:text-gray-400 border-t border-blue-200 dark:border-blue-700 pt-2 mb-2">
+                    <span className="font-semibold">📍 {t.tpPlacement}: </span>
+                    <span className="font-mono">
+                      SL {displayStats.slMedianPct >= 0 ? "+" : ""}{displayStats.slMedianPct.toFixed(1)}% / TP1 {displayStats.tp1MedianPct.toFixed(1)}% / TP2 {displayStats.tp2MedianPct.toFixed(1)}% / TP3 {displayStats.tp3MedianPct.toFixed(1)}%
+                    </span>
+                  </div>
+                  {displayStats.tpOrderInverted > 0 && (
+                    <div className="text-[11px] text-red-600 font-bold mb-2">
+                      ⚠️ {t.tpOrderInvertedLabel}: {displayStats.tpOrderInverted}件（TP1 &lt; TP2 — 旧ロジックの逆転バグ記録）
+                    </div>
+                  )}
+                  <div className="border-t border-blue-200 dark:border-blue-700 pt-2 text-[11px] text-gray-700 dark:text-gray-300">
+                    <span className="font-bold">{t.tpVirtualStrategy}: </span>
+                    <span>
+                      勝率 {displayStats.tp1OnlyStrategy.winRate.toFixed(1)}% × avg +{displayStats.tp1OnlyStrategy.avgR.toFixed(2)}R =
+                    </span>
+                    <span className={`font-black ml-1 ${displayStats.tp1OnlyStrategy.expectancy >= 0 ? "text-blue-700 dark:text-blue-400" : "text-red-600"}`}>
+                      {t.tpExpectancyPerTrade} {displayStats.tp1OnlyStrategy.expectancy >= 0 ? "+" : ""}{displayStats.tp1OnlyStrategy.expectancy.toFixed(2)}R
+                    </span>
                   </div>
                 </div>
               )}

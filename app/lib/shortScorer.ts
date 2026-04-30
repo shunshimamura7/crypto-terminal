@@ -481,6 +481,21 @@ export function calcTradeSetup(
     tp3 = Math.max(currentPrice * 0.55, tp2 * 0.9);
   }
 
+  // ── TP順序正規化: ショート前提で価格降順（浅→中→深）──
+  // 各ブランチで逆転が起きうるため、ソートで強制統一する
+  const tpsSorted = [tp1, tp2, tp3].sort((a, b) => b - a);
+  tp1 = tpsSorted[0]; // 最も浅い（現在価格に近い）
+  tp2 = tpsSorted[1];
+  tp3 = tpsSorted[2]; // 最も深い
+
+  // TP1は現在価格から最低3%以上離す
+  const minDist = currentPrice * 0.03;
+  if (currentPrice - tp1 < minDist) tp1 = currentPrice - minDist;
+
+  // TP間の最小ギャップ確保（同値・微差を防ぐ）
+  if (Math.abs(tp1 - tp2) < currentPrice * 0.01) tp2 = tp1 - currentPrice * 0.02;
+  if (Math.abs(tp2 - tp3) < currentPrice * 0.01) tp3 = tp2 - currentPrice * 0.02;
+
   // ── R:R 計算 ──
   const risk   = sl - currentPrice;
   const reward = currentPrice - tp1;

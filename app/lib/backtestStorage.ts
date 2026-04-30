@@ -35,6 +35,7 @@ export interface BacktestRecord {
   lastCheckedAt: number | null;
   reachedTP1?: boolean;
   reachedTP2?: boolean;
+  reachedTP3?: boolean;
 
   // ★ v6: 戦略メタ
   strategyTag?: StrategyTag;

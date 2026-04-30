@@ -72,6 +72,9 @@ function applyPriceCheck(
       record.resolvedAt = Date.now();
       record.resolvedPrice = currentPrice;
       record.priceSource = priceSource;
+      record.reachedTP1 = true;
+      record.reachedTP2 = true;
+      record.reachedTP3 = true;
     } else if (prev === "active" || isPending(prev)) {
       record.status = "pending_tp3";
     }
@@ -81,6 +84,8 @@ function applyPriceCheck(
       record.resolvedAt = Date.now();
       record.resolvedPrice = currentPrice;
       record.priceSource = priceSource;
+      record.reachedTP1 = true;
+      record.reachedTP2 = true;
     } else if (prev === "active" || isPending(prev)) {
       record.status = "pending_tp2";
     }
@@ -90,6 +95,7 @@ function applyPriceCheck(
       record.resolvedAt = Date.now();
       record.resolvedPrice = currentPrice;
       record.priceSource = priceSource;
+      record.reachedTP1 = true;
     } else if (prev === "active" || isPending(prev)) {
       record.status = "pending_tp1";
     }
@@ -140,6 +146,7 @@ export async function checkAndUpdateRecords(candidates: ShortCandidate[]): Promi
     record.maxDrawdown = Math.min(record.maxDrawdown ?? 0, pnlPct);
     if (currentPrice <= record.tp1) record.reachedTP1 = true;
     if (currentPrice <= record.tp2) record.reachedTP2 = true;
+    if (currentPrice <= record.tp3) record.reachedTP3 = true;
     changed = true;
 
     applyPriceCheck(record, currentPrice, priceSource);
