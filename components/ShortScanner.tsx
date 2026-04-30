@@ -261,6 +261,8 @@ const T = {
     recPanelTP1: "TP1",
     recPanelRR: "R:R",
     recPanelOpenMexc: "MEXCで開く",
+    forbidNewListingShallow: "🚫 新規×底堅い",
+    forbidNewListingShallowTip: "新規上場14日以内かつATH下落30%未満。スクイーズリスク高",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -472,6 +474,8 @@ const T = {
     recPanelTP1: "TP1",
     recPanelRR: "R:R",
     recPanelOpenMexc: "Open in MEXC",
+    forbidNewListingShallow: "🚫 Fresh & Shallow",
+    forbidNewListingShallowTip: "Listed within 14d & dropped less than 30%. High squeeze risk",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -1764,7 +1768,7 @@ function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strong
   const recCounts = useMemo(() => ({
     recommended: candidates.filter(c => getShortRecommendation(c, btcChange24h) === "recommended").length,
     caution:     candidates.filter(c => getShortRecommendation(c, btcChange24h) === "caution").length,
-    banned:      candidates.filter(c => getShortRecommendation(c, btcChange24h) === "banned").length,
+    banned:      candidates.filter(c => { const r = getShortRecommendation(c, btcChange24h); return r === "banned" || r === "banned_fresh"; }).length,
   }), [candidates, btcChange24h]);
 
   const items: Array<{ key: "strong"|"long"|"pattern"|"allTf"|"spike"; label: string; count: number; cls: string }> = [
@@ -1824,7 +1828,7 @@ function isLongBias(c: ExtendedCandidate): boolean {
   return calcLongBias(c).total >= 3;
 }
 
-type ShortRec = "banned" | "caution" | "recommended" | "neutral";
+type ShortRec = "banned" | "banned_fresh" | "caution" | "recommended" | "neutral";
 
 function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRec {
   const fr = c.fundingRate;
@@ -1836,6 +1840,11 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
   if (isDangerSymbol(c.symbol)) return "banned";
   // 上場24h以内 → 異常値が出やすい
   if (c.listedDaysAgo < 1) return "banned";
+  // 新規上場14日以内 × ATH下落30%未満 → スクイーズ誘発リスク
+  if (
+    (c.scoreBreakdown?.freshnessScore ?? 0) >= 1 &&
+    (c.scoreBreakdown?.dropScore ?? 0) <= 1
+  ) return "banned_fresh";
   // BTC急騰 +5%以上 → くそコインのβで吹き上げリスク
   if (btcChange24h >= 5) return "banned";
   // アンロック3日以内 ≥3% → スクイーズ誘発リスク
@@ -1867,22 +1876,24 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
 }
 
 const SHORT_REC_BORDER: Record<ShortRec, string> = {
-  banned:      "4px solid #ef4444",
-  caution:     "4px solid #f97316",
-  recommended: "4px solid #22c55e",
-  neutral:     "4px solid transparent",
+  banned:       "4px solid #ef4444",
+  banned_fresh: "4px solid #ef4444",
+  caution:      "4px solid #f97316",
+  recommended:  "4px solid #22c55e",
+  neutral:      "4px solid transparent",
 };
 
-function ShortRecBadge({ rec }: { rec: ShortRec }) {
+function ShortRecBadge({ rec, t }: { rec: ShortRec; t: Translations }) {
   if (rec === "neutral") return null;
-  const cfg: Record<Exclude<ShortRec, "neutral">, { cls: string; label: string }> = {
-    banned:      { cls: "bg-red-600 text-white border-red-700",         label: "🚫ショート禁止" },
-    caution:     { cls: "bg-orange-500 text-white border-orange-600",   label: "⚠️要注意" },
-    recommended: { cls: "bg-emerald-500 text-white border-emerald-600", label: "✅ショート推奨" },
+  const cfg: Record<Exclude<ShortRec, "neutral">, { cls: string; label: string; tip?: string }> = {
+    banned:       { cls: "bg-red-600 text-white border-red-700",         label: "🚫ショート禁止" },
+    banned_fresh: { cls: "bg-red-100 text-red-700 border-red-300",       label: t.forbidNewListingShallow, tip: t.forbidNewListingShallowTip },
+    caution:      { cls: "bg-orange-500 text-white border-orange-600",   label: "⚠️要注意" },
+    recommended:  { cls: "bg-emerald-500 text-white border-emerald-600", label: "✅ショート推奨" },
   };
-  const { cls, label } = cfg[rec as Exclude<ShortRec, "neutral">];
+  const { cls, label, tip } = cfg[rec as Exclude<ShortRec, "neutral">];
   return (
-    <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>
+    <span title={tip} className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls} ${tip ? "cursor-help" : ""}`}>
       {label}
     </span>
   );
@@ -2114,10 +2125,10 @@ function SymbolHealthPanel({ healthData, onClear }: { healthData: Map<string, Sy
 function RecommendedPanel({
   candidates, t, btcChange24h,
 }: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number }) {
-  const [open, setOpen] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("bell:recommendedPanel:open") !== "false";
-  });
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    if (localStorage.getItem("bell:recommendedPanel:open") === "false") setOpen(false);
+  }, []);
 
   const toggleOpen = () => {
     setOpen(v => {
@@ -4284,7 +4295,7 @@ export default function ShortScanner() {
                                 {t.longBiasBadge}
                               </span>
                             )}
-                            <ShortRecBadge rec={shortRec} />
+                            <ShortRecBadge rec={shortRec} t={t} />
                             {/* 危険銘柄バッジ */}
                             {isDangerSymbol(c.symbol) && (
                               <span title="SL3回以上ヒット — 危険銘柄リストに登録済み"
