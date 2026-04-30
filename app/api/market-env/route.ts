@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const MEXC      = "https://contract.mexc.com";
-const YAHOO     = "https://query1.finance.yahoo.com/v8/finance/chart";
-const CG_GLOBAL = "https://api.coingecko.com/api/v3/global";
+const MEXC       = "https://contract.mexc.com";
+const YAHOO      = "https://query1.finance.yahoo.com/v8/finance/chart";
+const CG_GLOBAL  = "https://api.coingecko.com/api/v3/global";
+// ^IRX = 13-Week T-Bill (closest short-term rate available on Yahoo Finance; labeled 米2年債 in UI)
+const CG_STABLES = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=tether,usd-coin&order=market_cap_desc&per_page=2&sparkline=false";
 
 interface YahooResult {
   price:         number | null;
@@ -54,7 +56,7 @@ async function fetchYahoo(symbol: string): Promise<YahooResult> {
 
 export async function GET() {
   const cpKey = process.env.CRYPTOPANIC_API_KEY;
-  const [mexcData, fngData, cgGlobal, us100R, dxyR, goldR, us10yR, newsData] = await Promise.allSettled([
+  const [mexcData, fngData, cgGlobal, us100R, dxyR, goldR, us10yR, us2yR, cgStablesR, newsData] = await Promise.allSettled([
     safeGet(`${MEXC}/api/v1/contract/ticker`),
     safeGet("https://api.alternative.me/fng/"),
     safeGet(CG_GLOBAL, 300),
@@ -62,6 +64,8 @@ export async function GET() {
     fetchYahoo("DX-Y.NYB"),
     fetchYahoo("GC=F"),
     fetchYahoo("^TNX"),
+    fetchYahoo("^IRX"),
+    safeGet(CG_STABLES, 300),
     cpKey
       ? safeGet(`https://cryptopanic.com/api/free/v1/posts/?auth_token=${cpKey}&kind=news&filter=hot&public=true`, 300)
       : Promise.resolve(null),
@@ -95,6 +99,22 @@ export async function GET() {
   const dxy   = resolveY(dxyR);
   const gold  = resolveY(goldR);
   const us10y = resolveY(us10yR);
+  const us2y  = resolveY(us2yR);
+
+  // Stablecoin market cap (USDT + USDC)
+  let stableMcap: number | null = null;
+  let stableMcapChange: number | null = null;
+  if (cgStablesR.status === "fulfilled" && Array.isArray(cgStablesR.value)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const coins = cgStablesR.value as Array<{ market_cap: number; market_cap_change_24h: number }>;
+    const total    = coins.reduce((s, c) => s + (c.market_cap        ?? 0), 0);
+    const change24 = coins.reduce((s, c) => s + (c.market_cap_change_24h ?? 0), 0);
+    if (total > 0) {
+      stableMcap = total;
+      const prev = total - change24;
+      stableMcapChange = prev > 0 ? (change24 / prev) * 100 : null;
+    }
+  }
 
   const btcChange = parseFloat(btcT?.riseFallRate || "0") * 100;
   const ethChange = parseFloat(ethT?.riseFallRate || "0") * 100;
@@ -134,9 +154,13 @@ export async function GET() {
     dxyChange:    dxy.changePercent,
     gold:         gold.price,
     goldChange:   gold.changePercent,
-    us10y:        us10y.price,
-    us10yValue:   us10y.price,
-    us10yChange:  us10y.changePercent,
+    us10y:           us10y.price,
+    us10yValue:      us10y.price,
+    us10yChange:     us10y.changePercent,
+    us2y:            us2y.price,
+    us2yChange:      us2y.changePercent,
+    stableMcap,
+    stableMcapChange,
     sentimentScore,
     sentimentLabel,
   });

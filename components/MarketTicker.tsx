@@ -77,20 +77,24 @@ function macroScoreInfo(score: number): { label: string; color: string } {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface MarketEnvData {
-  btcPrice:     number;
-  btcChange:    number | null;
-  ethPrice:     number;
-  ethChange:    number | null;
-  fng:          { value: number; valueText: string } | null;
-  btcDominance: number | null;
-  us100:        number | null;
-  us100Change:  number | null;
-  dxy:          number | null;
-  dxyChange:    number | null;
-  gold:         number | null;
-  goldChange:   number | null;
-  us10y:        number | null;
-  us10yChange:  number | null;
+  btcPrice:        number;
+  btcChange:       number | null;
+  ethPrice:        number;
+  ethChange:       number | null;
+  fng:             { value: number; valueText: string } | null;
+  btcDominance:    number | null;
+  us100:           number | null;
+  us100Change:     number | null;
+  dxy:             number | null;
+  dxyChange:       number | null;
+  gold:            number | null;
+  goldChange:      number | null;
+  us10y:           number | null;
+  us10yChange:     number | null;
+  us2y:            number | null;
+  us2yChange:      number | null;
+  stableMcap:      number | null;
+  stableMcapChange: number | null;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -107,6 +111,16 @@ export default function MarketTicker() {
 
   const fgVal   = d?.fng?.value ?? null;
   const fgLabel = d?.fng?.valueText ?? null;
+
+  // ETH/BTC ratio (derived from existing price data)
+  const ethBtcRatio = d && d.btcPrice > 0 ? d.ethPrice / d.btcPrice : null;
+  const ethBtcChange =
+    ethBtcRatio != null && d?.ethChange != null && d?.btcChange != null
+      ? ((1 + d.ethChange / 100) / (1 + d.btcChange / 100) - 1) * 100
+      : null;
+
+  // Stablecoin MC in billions
+  const stableBillions = d?.stableMcap != null ? d.stableMcap / 1e9 : null;
 
   const grid = [
     {
@@ -126,6 +140,12 @@ export default function MarketTicker() {
       value:  d?.btcDominance != null ? `${d.btcDominance.toFixed(1)}%`        : "—",
       color:  "text-yellow-600",
       change: null,
+    },
+    {
+      label:  "ETH/BTC",
+      value:  ethBtcRatio != null ? ethBtcRatio.toFixed(5)                     : "—",
+      color:  "text-teal-500",
+      change: ethBtcChange,
     },
     {
       label:  "US100",
@@ -152,6 +172,18 @@ export default function MarketTicker() {
       change: d?.us10yChange ?? null,
     },
     {
+      label:  "米2年債",
+      value:  d?.us2y   != null ? `${d.us2y.toFixed(2)}%`                      : "—",
+      color:  "text-rose-400",
+      change: d?.us2yChange  ?? null,
+    },
+    {
+      label:  "ステーブルMC",
+      value:  stableBillions != null ? `$${stableBillions.toFixed(1)}B`        : "—",
+      color:  "text-emerald-600",
+      change: d?.stableMcapChange ?? null,
+    },
+    {
       label:  "F&G",
       value:  fgVal != null ? `${getFgEmoji(fgVal)} ${fgVal}`                  : "—",
       sub:    fgLabel ?? undefined,
@@ -167,7 +199,7 @@ export default function MarketTicker() {
     /* overflow-x-auto を外枠に直接置く。overflow-hidden は使わない（スクロールをブロックするため） */
     <div className="w-full rounded-xl border border-gray-200 shadow-sm bg-white"
          style={{ overflowX: "auto" }}>
-      <div className="flex" style={{ minWidth: "920px" }}>
+      <div className="flex" style={{ minWidth: "1100px" }}>
 
         {/* 8-column data grid: grid→flex に変更して inline-block 的な min-width を使う */}
         <div className="flex-1 flex divide-x divide-gray-100">
