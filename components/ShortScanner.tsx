@@ -3217,7 +3217,8 @@ export default function ShortScanner() {
   const [elapsed,      setElapsed]      = useState(0);
   const [error,        setError]        = useState("");
   const [fromCache,    setFromCache]    = useState<{ ageMin: number } | null>(null);
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [expandedRows,   setExpandedRows]   = useState<Set<string>>(new Set());
+  const [expandedBadges, setExpandedBadges] = useState<Set<string>>(new Set());
   const [healthData,   setHealthData]   = useState<Map<string, SymbolHealth>>(() => typeof window !== "undefined" ? getHealthMap() : new Map());
   const [showHealthPanel, setShowHealthPanel] = useState(false);
   const [autoRefresh,  setAutoRefresh]  = useState(false);
@@ -3820,6 +3821,9 @@ export default function ShortScanner() {
   function toggleRow(sym: string) {
     setExpandedRows(prev => { const n = new Set(prev); n.has(sym) ? n.delete(sym) : n.add(sym); return n; });
   }
+  function toggleBadge(sym: string) {
+    setExpandedBadges(prev => { const n = new Set(prev); n.has(sym) ? n.delete(sym) : n.add(sym); return n; });
+  }
 
   // Keyboard shortcuts (施策3) — declared after extended so it can reference it
   useEffect(() => {
@@ -4244,6 +4248,21 @@ export default function ShortScanner() {
             <span style={{ color:"#c2410c", fontWeight:700 }} className="hidden sm:inline">■ {t.scoreMid}</span>
             <span style={{ color:"#6b7280" }} className="hidden sm:inline">■ {t.scoreLow}</span>
             <span className="ml-auto text-gray-400 sm:hidden">{t.scrollHint}</span>
+            {/* バッジ一括展開/折りたたみ */}
+            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+              <button
+                onClick={() => setExpandedBadges(new Set(extended.map(c => c.symbol)))}
+                className="px-2 py-1 text-[10px] font-semibold bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                title="全銘柄のバッジを展開">
+                バッジ▾全開
+              </button>
+              <button
+                onClick={() => setExpandedBadges(new Set())}
+                className="px-2 py-1 text-[10px] font-semibold bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-l border-gray-300 dark:border-gray-600 transition-colors"
+                title="全銘柄のバッジを折りたたむ">
+                ▴折畳
+              </button>
+            </div>
             <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden ml-auto">
               <button onClick={() => setViewMode("table")}
                 className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${viewMode==="table"?"bg-indigo-600 text-white":"bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}>
@@ -4354,59 +4373,89 @@ export default function ShortScanner() {
                               )}
                               <span className="text-gray-400 text-[10px]">{isOpen?"▲":"▼"}</span>
                             </div>
-                            {/* ── 階層1: 最重要判定（1バッジのみ） ── */}
-                            <ShortRecBadge rec={shortRec} t={t} />
-
-                            {/* ── 階層2: 補足情報（BTステータス + フェーズ、最大2件） ── */}
+                            {/* ── バッジ: 折りたたみ/展開 ── */}
                             {(() => {
-                              const bts = btRecordMap.get(c.symbol);
-                              if (!bts) return null;
-                              const { label, cls } = btStatusLabel(bts, t);
-                              return <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>{label}</span>;
-                            })()}
-                            <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${phaseBadgeCls(c.phase.phase)}`}>
-                              {c.phase.emoji}{c.phase.label}
-                            </span>
+                              const isBadgeOpen = expandedBadges.has(c.symbol);
+                              const recIcon =
+                                shortRec === "banned" || shortRec === "banned_fresh" ? "🚫" :
+                                shortRec === "caution"     ? "⚠️" :
+                                shortRec === "recommended" ? "✅" : null;
 
-                            {/* ── 階層3: 詳細フラグ（hover で全表示） ── */}
-                            {(() => {
-                              const flags: string[] = [];
-                              if (isDangerSymbol(c.symbol)) flags.push("☠️危険銘柄(SL3回+)");
-                              if (isLongBias(c)) flags.push(`🟢${t.longBiasBadge}`);
-                              if (c.liquidityInfo?.maxSafePosition != null && c.liquidityInfo.maxSafePosition < 5_000) flags.push("🔴流動性危険");
-                              if (c.allPatterns && c.allPatterns.length > 0) flags.push(`📐${c.allPatterns.length}パターン`);
-                              if (c.nextUnlockDays != null && c.nextUnlockDays <= 30) {
-                                flags.push(`⏰アンロック${c.nextUnlockDays}日${c.nextUnlockPercent != null ? ` ${c.nextUnlockPercent.toFixed(1)}%` : ""}`);
+                              if (!isBadgeOpen) {
+                                // 折りたたみ状態: メインアイコン + 展開ボタン
+                                return (
+                                  <div className="flex items-center gap-0.5">
+                                    {recIcon && <span className="text-[13px] leading-none" title={shortRec === "banned" || shortRec === "banned_fresh" ? "ショート禁止" : shortRec === "caution" ? "要注意" : "ショート推奨"}>{recIcon}</span>}
+                                    <button
+                                      onClick={e => { e.stopPropagation(); toggleBadge(c.symbol); }}
+                                      className="text-[11px] text-gray-300 hover:text-gray-500 leading-none px-0.5 transition-colors"
+                                      title="バッジを展開"
+                                    >▾</button>
+                                  </div>
+                                );
                               }
-                              if (c.newsContext?.hasMajorListing) flags.push("📰上場ニュース");
-                              if (c.newsContext?.hasSecurity) flags.push("🔓脆弱性ニュース");
-                              if (c.newsContext?.hasPartnership && !c.newsContext.hasMajorListing) flags.push("🤝提携ニュース");
-                              const squeezeCount = [
-                                c.fundingRate !== null && c.fundingRate < 0,
-                                c.oiRatio > 3.0,
-                                c.trendDirection === "UP" || (c.trendMultiTF?.alignment === 0),
-                                c.btcCorrelation > 0.7,
-                              ].filter(Boolean).length;
-                              if (squeezeCount >= 2) flags.push(`⚡${t.squeezeWarn}`);
-                              if (data?.mode === "new30" && c.listedDaysAgo <= 3) flags.push(`🆕${t.earlyListingWarn}`);
+
+                              // 展開状態: 全3階層 + FR監視トグル
+                              const tier3flags: string[] = [];
+                              if (isDangerSymbol(c.symbol)) tier3flags.push("☠️危険銘柄(SL3回+)");
+                              if (isLongBias(c)) tier3flags.push(`🟢${t.longBiasBadge}`);
+                              if (c.liquidityInfo?.maxSafePosition != null && c.liquidityInfo.maxSafePosition < 5_000) tier3flags.push("🔴流動性危険");
+                              if (c.allPatterns && c.allPatterns.length > 0) tier3flags.push(`📐${c.allPatterns.length}パターン`);
+                              if (c.nextUnlockDays != null && c.nextUnlockDays <= 30) tier3flags.push(`⏰アンロック${c.nextUnlockDays}日${c.nextUnlockPercent != null ? ` ${c.nextUnlockPercent.toFixed(1)}%` : ""}`);
+                              if (c.newsContext?.hasMajorListing) tier3flags.push("📰上場ニュース");
+                              if (c.newsContext?.hasSecurity) tier3flags.push("🔓脆弱性ニュース");
+                              if (c.newsContext?.hasPartnership && !c.newsContext.hasMajorListing) tier3flags.push("🤝提携ニュース");
+                              {
+                                const sq = [
+                                  c.fundingRate !== null && c.fundingRate < 0,
+                                  c.oiRatio > 3.0,
+                                  c.trendDirection === "UP" || (c.trendMultiTF?.alignment === 0),
+                                  c.btcCorrelation > 0.7,
+                                ].filter(Boolean).length;
+                                if (sq >= 2) tier3flags.push(`⚡${t.squeezeWarn}`);
+                              }
+                              if (data?.mode === "new30" && c.listedDaysAgo <= 3) tier3flags.push(`🆕${t.earlyListingWarn}`);
                               const stratMatch = strategyMatches.get(c.symbol);
                               if (stratMatch) {
                                 const strat = ALL_STRATEGIES.find(s => s.tag === stratMatch.tag);
-                                if (strat) flags.push(`${strat.icon}${strat.shortName} ${stratMatch.confidence}%`);
+                                if (strat) tier3flags.push(`${strat.icon}${strat.shortName} ${stratMatch.confidence}%`);
                               }
-                              if (flags.length === 0) return null;
+
                               return (
-                                <span
-                                  className="text-[9px] text-gray-400 cursor-help underline decoration-dotted whitespace-nowrap"
-                                  title={flags.join("\n")}
-                                >
-                                  +{flags.length}件
-                                </span>
+                                <div className="flex flex-col gap-0.5">
+                                  {/* Tier1 + 折りたたみボタン */}
+                                  <div className="flex items-center gap-0.5 flex-wrap">
+                                    <ShortRecBadge rec={shortRec} t={t} />
+                                    <button
+                                      onClick={e => { e.stopPropagation(); toggleBadge(c.symbol); }}
+                                      className="text-[11px] text-gray-400 hover:text-gray-600 leading-none px-0.5 transition-colors"
+                                      title="バッジを折りたたむ"
+                                    >▴</button>
+                                  </div>
+                                  {/* Tier2: BTステータス + フェーズ */}
+                                  {(() => {
+                                    const bts = btRecordMap.get(c.symbol);
+                                    if (!bts) return null;
+                                    const { label, cls } = btStatusLabel(bts, t);
+                                    return <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>{label}</span>;
+                                  })()}
+                                  <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${phaseBadgeCls(c.phase.phase)}`}>
+                                    {c.phase.emoji}{c.phase.label}
+                                  </span>
+                                  {/* Tier3: 詳細フラグ */}
+                                  {tier3flags.length > 0 && (
+                                    <span
+                                      className="text-[9px] text-gray-400 cursor-help underline decoration-dotted whitespace-nowrap"
+                                      title={tier3flags.join("\n")}
+                                    >
+                                      +{tier3flags.length}件
+                                    </span>
+                                  )}
+                                  {/* FR監視トグル */}
+                                  <FRWatchToggle symbol={base} />
+                                </div>
                               );
                             })()}
-
-                            {/* FR監視トグル（インタラクティブ要素は独立） */}
-                            <FRWatchToggle symbol={base} />
                           </div>
                         </td>
 
