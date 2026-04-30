@@ -5,7 +5,6 @@ export const runtime = "nodejs";
 const MEXC       = "https://contract.mexc.com";
 const YAHOO      = "https://query1.finance.yahoo.com/v8/finance/chart";
 const CG_GLOBAL  = "https://api.coingecko.com/api/v3/global";
-// ^IRX = 13-Week T-Bill (closest short-term rate available on Yahoo Finance; labeled 米2年債 in UI)
 const CG_STABLES = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=tether,usd-coin&order=market_cap_desc&per_page=2&sparkline=false";
 
 interface YahooResult {
@@ -54,9 +53,33 @@ async function fetchYahoo(symbol: string): Promise<YahooResult> {
   }
 }
 
+// 米2年債(DGS2)はFRED API経由で取得。FRED_API_KEY未設定時は13週T-Bill(^IRX)で代用（厳密には別物）。
+async function fetchFred(seriesId: string): Promise<{ value: number; change: number } | null> {
+  const apiKey = process.env.FRED_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=10`;
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(4000),
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const obs: Array<{ value: string }> = json?.observations ?? [];
+    const valid = obs.filter(o => o.value !== "." && !isNaN(parseFloat(o.value)));
+    if (valid.length < 2) return null;
+    const latest = parseFloat(valid[0].value);
+    const prev   = parseFloat(valid[1].value);
+    const change = prev !== 0 ? ((latest - prev) / prev) * 100 : 0;
+    return { value: latest, change };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
   const cpKey = process.env.CRYPTOPANIC_API_KEY;
-  const [mexcData, fngData, cgGlobal, us100R, dxyR, goldR, us10yR, us2yR, cgStablesR, newsData] = await Promise.allSettled([
+  const [mexcData, fngData, cgGlobal, us100R, dxyR, goldR, us10yR, fredUs2yR, us2yFallbackR, cgStablesR, newsData] = await Promise.allSettled([
     safeGet(`${MEXC}/api/v1/contract/ticker`),
     safeGet("https://api.alternative.me/fng/"),
     safeGet(CG_GLOBAL, 300),
@@ -64,7 +87,8 @@ export async function GET() {
     fetchYahoo("DX-Y.NYB"),
     fetchYahoo("GC=F"),
     fetchYahoo("^TNX"),
-    fetchYahoo("^IRX"),
+    fetchFred("DGS2"),                // primary: FRED 2-Year Treasury
+    fetchYahoo("^IRX"),               // fallback: 13-Week T-Bill (fires in parallel, used only if FRED fails)
     safeGet(CG_STABLES, 300),
     cpKey
       ? safeGet(`https://cryptopanic.com/api/free/v1/posts/?auth_token=${cpKey}&kind=news&filter=hot&public=true`, 300)
@@ -99,7 +123,18 @@ export async function GET() {
   const dxy   = resolveY(dxyR);
   const gold  = resolveY(goldR);
   const us10y = resolveY(us10yR);
-  const us2y  = resolveY(us2yR);
+
+  // 米2年債: FRED DGS2 優先、API未設定 or 失敗時は ^IRX(13wkT-Bill) で代用
+  let us2y: number | null = null;
+  let us2yChange: number | null = null;
+  if (fredUs2yR.status === "fulfilled" && fredUs2yR.value !== null) {
+    us2y       = fredUs2yR.value.value;
+    us2yChange = fredUs2yR.value.change;
+  } else {
+    const fb = resolveY(us2yFallbackR);
+    us2y       = fb.price;
+    us2yChange = fb.changePercent;
+  }
 
   // Stablecoin market cap (USDT + USDC)
   let stableMcap: number | null = null;
@@ -157,8 +192,8 @@ export async function GET() {
     us10y:           us10y.price,
     us10yValue:      us10y.price,
     us10yChange:     us10y.changePercent,
-    us2y:            us2y.price,
-    us2yChange:      us2y.changePercent,
+    us2y,
+    us2yChange,
     stableMcap,
     stableMcapChange,
     sentimentScore,
