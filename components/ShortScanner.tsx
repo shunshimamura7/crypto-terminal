@@ -2044,13 +2044,18 @@ function RecommendedPanel({
     });
   };
 
-  const picks = useMemo(
-    () => candidates
-      .filter(c => getShortRecommendation(c, btcChange24h) === "recommended")
-      .sort((a, b) => b.displayScore - a.displayScore)
-      .slice(0, 10),
-    [candidates, btcChange24h],
-  );
+  const { picks, hiddenCount } = useMemo(() => {
+    const allRec = candidates.filter(
+      c => getShortRecommendation(c, btcChange24h) === "recommended",
+    );
+    const qualified = allRec
+      .filter(c => (c.tradeSetup?.rrTp2 ?? c.tradeSetup?.rrRatio ?? 0) >= 1.5)
+      .sort((a, b) => (b.displayScore ?? b.shortScore ?? 0) - (a.displayScore ?? a.shortScore ?? 0));
+    return {
+      picks: qualified.slice(0, 3),
+      hiddenCount: Math.max(0, qualified.length - 3),
+    };
+  }, [candidates, btcChange24h]);
 
   const rrColor = (rr: number) =>
     rr >= 1.0 ? "text-green-600" : rr >= 0.5 ? "text-yellow-600" : "text-red-500";
@@ -2144,6 +2149,13 @@ function RecommendedPanel({
               </div>
             );
           })}
+          {hiddenCount > 0 && (
+            <div className="text-xs text-gray-400 dark:text-gray-500 text-center pt-1">
+              {t.recPanelCount === "件"
+                ? `他${hiddenCount}件の推奨あり（テーブルで確認）`
+                : `+${hiddenCount} more recommended (see table)`}
+            </div>
+          )}
         </div>
       )}
       {open && picks.length === 0 && (
