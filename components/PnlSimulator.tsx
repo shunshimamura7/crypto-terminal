@@ -5,12 +5,12 @@ import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import { simulateBacktest } from "@/app/lib/backtestSimulator";
 import type { SimulationConfig } from "@/app/lib/backtestSimulator";
 
-// ── 最小限の scan 候補型（ExtendedCandidate の必要フィールドのみ）─────────────
 interface ScanCandidate {
   symbol: string;
-  displayScore: number;
-  currentPrice: number;
-  tradeSetup: { rrRatio: number } | null;
+  score?: number;
+  displayScore?: number;
+  scoreMax?: number;
+  recommendation?: string;
 }
 
 interface PnlSimulatorProps {
@@ -56,17 +56,14 @@ const EN_PRESETS = [
 const POS_SIZE_OPTIONS = [3, 5, 10, 15, 20];
 
 export default function PnlSimulator({ records, lang, currentScanResults }: PnlSimulatorProps) {
-  // ── 既存 state ─────────────────────────────────────────────────────────────
-  const [capital,  setCapital]  = useState(() => loadSavedCapital(lang));
-  const [riskPct,  setRiskPct]  = useState(() => loadSetting("riskPct",  2));
-  const [leverage, setLeverage] = useState(() => loadSetting("leverage", 3));
-
-  // ── 新規 state ─────────────────────────────────────────────────────────────
-  const [calcMode,    setCalcMode]    = useState<"risk" | "position">(() => loadSetting("calcMode", "risk"));
-  const [posSizePct,  setPosSizePct]  = useState<number>(() => loadSetting("posSizePct", 5));
-  const [dataSource,  setDataSource]  = useState<"all" | "custom">("all");
+  const [capital,         setCapital]         = useState(() => loadSavedCapital(lang));
+  const [riskPct,         setRiskPct]         = useState(() => loadSetting("riskPct",  2));
+  const [leverage,        setLeverage]        = useState(() => loadSetting("leverage", 3));
+  const [calcMode,        setCalcMode]        = useState<"risk" | "position">(() => loadSetting("calcMode", "risk"));
+  const [posSizePct,      setPosSizePct]      = useState<number>(() => loadSetting("posSizePct", 5));
+  const [dataSource,      setDataSource]      = useState<"all" | "custom">("all");
   const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
-  const [manualSymbol, setManualSymbol] = useState("");
+  const [manualSymbol,    setManualSymbol]    = useState("");
 
   useEffect(() => {
     try {
@@ -77,7 +74,6 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
   const ja = lang === "ja";
   const presets = ja ? JA_PRESETS : EN_PRESETS;
 
-  // ── 通貨フォーマット ────────────────────────────────────────────────────────
   function fmtCurrency(value: number): string {
     const rounded = Math.round(Math.abs(value));
     const formatted = rounded.toLocaleString(ja ? "ja-JP" : "en-US");
@@ -93,28 +89,26 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     return `$${value}`;
   }
 
-  // ── フィルタリングされたレコード ────────────────────────────────────────────
   const filteredRecords = useMemo(() => {
     if (dataSource === "all") return records;
     return records.filter(r => selectedSymbols.has(r.symbol));
   }, [records, dataSource, selectedSymbols]);
 
-  // ── シミュレーション ────────────────────────────────────────────────────────
-  const simConfig: SimulationConfig = {
-    initialCapital: capital,
-    riskPerTrade:   riskPct,
+  const simConfig = useMemo((): SimulationConfig => ({
+    initialCapital:  capital,
+    riskPerTrade:    riskPct,
     positionSizePct: posSizePct,
     leverage,
-    usdJpy: 145,
-    mode:   calcMode,
-  };
+    usdJpy:          145,
+    mode:            calcMode,
+  }), [capital, riskPct, posSizePct, leverage, calcMode]);
 
   const result = useMemo(
     () => simulateBacktest(filteredRecords, simConfig),
-    [filteredRecords, capital, riskPct, posSizePct, leverage, calcMode],
+    [filteredRecords, simConfig],
   );
 
-  // ── シャープレシオ（コンポーネント内計算）───────────────────────────────────
+  // シャープレシオ
   const sharpe = useMemo(() => {
     const resolved = [...filteredRecords]
       .filter(r => r.resolvedAt != null && r.resolvedPrice != null && r.status !== "active")
@@ -126,7 +120,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
       const profit = r.entryPrice - (r.resolvedPrice ?? r.entryPrice);
       const risk   = r.sl - r.entryPrice;
       if (risk <= 0) continue;
-      const realR   = profit / risk;
+      const realR = profit / risk;
       let pnl: number;
       if (calcMode === "position") {
         pnl = (eq * posSizePct / 100) * (profit / r.entryPrice) * leverage;
@@ -144,77 +138,43 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     return variance > 0 ? (mean / Math.sqrt(variance)) * Math.sqrt(rets.length) : 0;
   }, [filteredRecords, capital, riskPct, posSizePct, leverage, calcMode]);
 
-  // ── 派生値 ─────────────────────────────────────────────────────────────────
-  const riskAmountApprox = capital * (calcMode === "risk" ? riskPct : posSizePct) / 100;
+  // 実際のトレードPnLを資金曲線の差分から計算（モード非依存）
+  const { avgWinJpy, avgLossJpy } = useMemo(() => {
+    const diffs = result.equityCurve.slice(1).map(
+      (pt, i) => pt.equity - result.equityCurve[i].equity,
+    );
+    const wins   = diffs.filter(d => d > 0);
+    const losses = diffs.filter(d => d < 0);
+    return {
+      avgWinJpy:  wins.length   > 0 ? wins.reduce((a, b) => a + b, 0)  / wins.length  : 0,
+      avgLossJpy: losses.length > 0 ? Math.abs(losses.reduce((a, b) => a + b, 0)) / losses.length : 0,
+    };
+  }, [result.equityCurve]);
+
   const pnlJpy   = result.finalEquity - capital;
   const maxDDJpy = result.maxDrawdown / 100 * capital;
-  const avgWinJpy  = result.avgWinR  * (capital * riskPct / 100);
-  const avgLossJpy = result.avgLossR * (capital * riskPct / 100);
-  const highLevRisk = (posSizePct * 0.08 * leverage);
+  const highLevRisk = posSizePct * 0.08 * leverage;
 
-  // ── 翻訳 ───────────────────────────────────────────────────────────────────
-  const T = {
-    title:         ja ? "💹 損益シミュレーション"            : "💹 PnL Simulation",
-    subtitle:      ja ? "過去のスキャン結果で運用していたら？" : "What if you traded past scan results?",
-    calcMode:      ja ? "計算方式"           : "Calc Mode",
-    riskMode:      ja ? "リスク%固定"        : "Fixed Risk%",
-    posMode:       ja ? "ポジション固定"      : "Fixed Position",
-    riskModeDesc:  ja ? "損失額を口座の%で固定" : "Fix loss as % of account",
-    posModeDesc:   ja ? "投入額を口座の%で固定" : "Fix position as % of account",
-    allHistory:    ja ? "全履歴"            : "All History",
-    customSelect:  ja ? "銘柄を選んで"       : "Custom",
-    capital:       ja ? "軍資金"            : "Capital",
-    risk:          ja ? "1トレードリスク"    : "Risk per Trade",
-    posSize:       ja ? "ポジション比率"     : "Position Size",
-    leverage:      ja ? "レバレッジ"         : "Leverage",
-    maxLossLabel:  ja ? "1トレード最大損失"  : "Max loss/trade",
-    investLabel:   ja ? "投入額"            : "Position value",
-    initial:       ja ? "初期資金"           : "Initial",
-    final:         ja ? "最終資金"           : "Final",
-    pnl:           ja ? "損益"              : "PnL",
-    maxDD:         ja ? "最大DD"            : "Max DD",
-    totalTrades:   ja ? "総トレード"         : "Trades",
-    winRate:       ja ? "勝率"              : "Win Rate",
-    avgWin:        ja ? "平均利益"           : "Avg Win",
-    avgLoss:       ja ? "平均損失"           : "Avg Loss",
-    profitFactor:  ja ? "PF"               : "PF",
-    sharpe:        ja ? "シャープ"           : "Sharpe",
-    conservative:  ja ? "保守的"            : "Conservative",
-    standard:      ja ? "標準"             : "Standard",
-    aggressive:    ja ? "積極的"            : "Aggressive",
-    highRisk:      ja ? "ハイリスク"         : "High Risk",
-    lev1:          ja ? "1x（現物相当）"     : "1x (Spot equivalent)",
-    lev3:          ja ? "3x（推奨）"         : "3x (Recommended)",
-    lev10:         ja ? "10x（BTC/ETHのみ）" : "10x (BTC/ETH only)",
-    selectSymbols: ja ? "シミュレーション銘柄を選択" : "Select Symbols",
-    addSymbol:     ja ? "追加"              : "Add",
-    noSymbolSelected: ja ? "銘柄を選択してください" : "Select symbols above",
-    selectedCount: ja ? "選択中"            : "Selected",
-    perSymbolPnl:  ja ? "銘柄別サマリ"      : "Per Symbol Summary",
-    noData:        ja
-      ? "まだバックテストデータがありません。スキャンを実行するとデータが蓄積されます。"
-      : "No backtest data yet. Run a scan to start accumulating data.",
-    noDataCustom:  ja ? "選択した銘柄のバックテストデータがありません。" : "No backtest data for selected symbols.",
-    bankrupt:      ja ? "🚨 破産（資金ゼロ）" : "🚨 Bankrupt",
-    disclaimer:    ja
-      ? "※ シミュレーション結果です。実際の取引ではスリッページ・FR・手数料が発生します。過去の成績は将来の結果を保証しません。"
-      : "※ Simulation only. Actual trading involves slippage, funding rates, and fees. Past performance does not guarantee future results.",
-    dashed:        ja ? "点線: 初期資金" : "Dashed: Initial capital",
-    equity:        ja ? "資産" : "Equity",
-    trades:        ja ? "件"   : "",
-    wins:          ja ? "勝"   : "W",
-    active:        ja ? "件進行中" : " active",
-    noRecord:      ja ? "データなし" : "No data",
-    highLevWarn:   ja ? `⚠️ レバ${leverage}x × ポジション${posSizePct}%: SL hit時に資金の約${highLevRisk.toFixed(1)}%を失う可能性`
-                      : `⚠️ Lev ${leverage}x × pos ${posSizePct}%: ~${highLevRisk.toFixed(1)}% of capital at risk per SL hit`,
-    highLevDanger: ja ? "🚨 1トレードで資金の10%以上のリスク！" : "🚨 Over 10% of capital at risk per trade!",
-  };
+  // 銘柄プール（スキャン結果 + バックテスト記録）
+  const symbolPool = useMemo(() => {
+    const pool = new Map<string, { displayScore?: number; scoreMax?: number; hasRecord: boolean }>();
+    for (const c of (currentScanResults ?? [])) {
+      pool.set(c.symbol, {
+        displayScore: c.displayScore ?? c.score,
+        scoreMax:     c.scoreMax,
+        hasRecord:    records.some(r => r.symbol === c.symbol),
+      });
+    }
+    for (const r of records) {
+      if (!pool.has(r.symbol)) pool.set(r.symbol, { hasRecord: true });
+    }
+    return [...pool.entries()].sort((a, b) => (b[1].displayScore ?? 0) - (a[1].displayScore ?? 0));
+  }, [records, currentScanResults]);
 
-  // ── 銘柄追加ハンドラ ────────────────────────────────────────────────────────
   function addManualSymbol() {
     const raw = manualSymbol.trim().toUpperCase();
     if (!raw) return;
-    const sym = raw.endsWith("_USDT") ? raw : (raw.replace(/\/USDT$/i, "") + "_USDT");
+    const sym = raw.endsWith("_USDT") ? raw : raw.replace(/\/USDT$/i, "") + "_USDT";
     setSelectedSymbols(prev => new Set([...prev, sym]));
     setManualSymbol("");
   }
@@ -236,79 +196,141 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     });
   }
 
-  // カスタムモードで表示する銘柄プール（scan結果 + バックテスト既存銘柄）
-  const symbolPool = useMemo(() => {
-    const pool = new Map<string, { displayScore?: number; currentPrice?: number; rrRatio?: number; hasRecord: boolean }>();
-    // scan 結果
-    for (const c of (currentScanResults ?? [])) {
-      pool.set(c.symbol, {
-        displayScore: c.displayScore,
-        currentPrice: c.currentPrice,
-        rrRatio: c.tradeSetup?.rrRatio,
-        hasRecord: records.some(r => r.symbol === c.symbol),
-      });
-    }
-    // バックテスト記録にある銘柄（scan結果になければ追加）
-    for (const r of records) {
-      if (!pool.has(r.symbol)) {
-        pool.set(r.symbol, { hasRecord: true });
-      }
-    }
-    return [...pool.entries()].sort((a, b) => (b[1].displayScore ?? 0) - (a[1].displayScore ?? 0));
-  }, [records, currentScanResults]);
+  const T = {
+    title:         ja ? "💹 損益シミュレーション"            : "💹 PnL Simulation",
+    subtitle:      ja ? "過去のスキャン結果で運用していたら？" : "What if you traded past scan results?",
+    calcMode:      ja ? "計算方式"           : "Calc Mode",
+    riskMode:      ja ? "リスク%固定"        : "Fixed Risk%",
+    posMode:       ja ? "ポジション固定"      : "Fixed Position",
+    riskModeDesc:  ja ? "SL損失を口座の一定%に固定（プロ向け）" : "Fix loss as % of account (Pro)",
+    posModeDesc:   ja ? "投入額を口座の一定%に固定（レバ有効）" : "Fix position size; leverage amplifies P&L",
+    allHistory:    ja ? "全履歴シミュレーション" : "All History",
+    customSelect:  ja ? "銘柄を選んでシミュレーション" : "Custom Selection",
+    capital:       ja ? "軍資金"            : "Capital",
+    risk:          ja ? "1トレードリスク"    : "Risk per Trade",
+    posSize:       ja ? "ポジション比率"     : "Position Size %",
+    leverage:      ja ? "レバレッジ"         : "Leverage",
+    maxLossLabel:  ja ? "1トレード最大損失"  : "Max loss/trade",
+    investLabel:   ja ? "投入額"            : "Position value",
+    initial:       ja ? "初期資金"           : "Initial",
+    final:         ja ? "最終資金"           : "Final",
+    pnl:           ja ? "損益"              : "PnL",
+    maxDD:         ja ? "最大DD"            : "Max DD",
+    totalTrades:   ja ? "総トレード"         : "Trades",
+    winRate:       ja ? "勝率"              : "Win Rate",
+    avgWin:        ja ? "平均利益"           : "Avg Win",
+    avgLoss:       ja ? "平均損失"           : "Avg Loss",
+    profitFactor:  ja ? "PF"               : "PF",
+    sharpe:        ja ? "シャープ"           : "Sharpe",
+    conservative:  ja ? "保守的"            : "Conservative",
+    standard:      ja ? "標準"             : "Standard",
+    aggressive:    ja ? "積極的"            : "Aggressive",
+    highRisk:      ja ? "ハイリスク"         : "High Risk",
+    lev1:          ja ? "1x（現物相当）"     : "1x (Spot equivalent)",
+    lev3:          ja ? "3x（推奨）"         : "3x (Recommended)",
+    lev10:         ja ? "10x（BTC/ETHのみ）" : "10x (BTC/ETH only)",
+    selectSymbols: ja ? "シミュレーション銘柄を選択" : "Select Symbols to Simulate",
+    addSymbol:     ja ? "追加"              : "Add",
+    noSymbolSelected: ja ? "銘柄を選択してください" : "Select symbols above",
+    selectedCount: ja ? "選択中"            : "Selected",
+    perSymbolPnl:  ja ? "銘柄別サマリ"      : "Per Symbol Summary",
+    noData:        ja
+      ? "まだバックテストデータがありません。スキャンを実行するとデータが蓄積されます。"
+      : "No backtest data yet. Run a scan to start accumulating data.",
+    noDataCustom:  ja ? "選択した銘柄のバックテストデータがありません。" : "No backtest data for selected symbols.",
+    bankrupt:      ja ? "🚨 破産（資金ゼロ）" : "🚨 Bankrupt (equity zero)",
+    disclaimer:    ja
+      ? "※ シミュレーション結果です。実際の取引ではスリッページ・FR・手数料が発生します。過去の成績は将来の結果を保証しません。"
+      : "※ Simulation only. Actual trading involves slippage, funding rates, and fees. Past performance does not guarantee future results.",
+    dashed:        ja ? "点線: 初期資金" : "Dashed: Initial capital",
+    equity:        ja ? "資産" : "Equity",
+    trades:        ja ? "件"   : "",
+    wins:          ja ? "勝"   : "W",
+    active:        ja ? "件進行中" : " active",
+    noRecord:      ja ? "データなし" : "No data",
+    scanFirst:     ja ? "スキャンを実行すると銘柄が表示されます" : "Run a scan to see symbols",
+    highLevWarn:   ja
+      ? `⚠️ レバ${leverage}x × ポジション${posSizePct}%: SL hit時に資金の約${highLevRisk.toFixed(1)}%を失う可能性`
+      : `⚠️ Lev ${leverage}x × pos ${posSizePct}%: ~${highLevRisk.toFixed(1)}% of capital at risk per SL hit`,
+    highLevDanger: ja
+      ? "🚨 1トレードで資金の10%以上のリスク！サイズを下げてください"
+      : "🚨 Over 10% of capital at risk per trade! Reduce position size.",
+  };
 
-  // ── render ─────────────────────────────────────────────────────────────────
   return (
     <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
       {/* ヘッダー */}
-      <div className="px-5 pt-4 pb-2 border-b border-gray-100 dark:border-gray-800">
+      <div className="px-5 pt-4 pb-3 border-b border-gray-100 dark:border-gray-800">
         <h3 className="text-sm font-bold text-emerald-800 dark:text-emerald-300">{T.title}</h3>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{T.subtitle}</p>
       </div>
 
-      <div className="px-5 py-4 space-y-4">
+      <div className="px-5 py-4 space-y-5">
 
-        {/* ─── 計算方式トグル ─────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{T.calcMode}:</span>
-          <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
-            {(["risk", "position"] as const).map(mode => (
+        {/* ━━━ 計算方式トグル ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        <div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            {T.calcMode}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
               <button
-                key={mode}
-                onClick={() => setCalcMode(mode)}
-                className={`px-3 py-1.5 text-xs font-medium transition ${
-                  calcMode === mode
+                onClick={() => setCalcMode("risk")}
+                className={`px-4 py-2 text-sm font-medium transition ${
+                  calcMode === "risk"
                     ? "bg-emerald-500 text-white"
-                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 }`}
               >
-                {mode === "risk" ? `🛡️ ${T.riskMode}` : `📊 ${T.posMode}`}
+                🛡️ {T.riskMode}
               </button>
-            ))}
+              <button
+                onClick={() => setCalcMode("position")}
+                className={`px-4 py-2 text-sm font-medium transition border-l border-gray-300 dark:border-gray-600 ${
+                  calcMode === "position"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                }`}
+              >
+                📊 {T.posMode}
+              </button>
+            </div>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {calcMode === "risk" ? T.riskModeDesc : T.posModeDesc}
+            </span>
           </div>
-          <span className="text-[10px] text-gray-400 dark:text-gray-500">
-            {calcMode === "risk" ? T.riskModeDesc : T.posModeDesc}
-          </span>
         </div>
 
-        {/* ─── データソースタブ ────────────────────────────────────────── */}
-        <div className="flex gap-2">
-          {(["all", "custom"] as const).map(src => (
+        {/* ━━━ データソースタブ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        <div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            {ja ? "シミュレーション対象" : "Data Source"}
+          </div>
+          <div className="flex gap-2 flex-wrap">
             <button
-              key={src}
-              onClick={() => setDataSource(src)}
+              onClick={() => setDataSource("all")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                dataSource === src
+                dataSource === "all"
                   ? "bg-emerald-500 text-white shadow-sm"
                   : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
-              {src === "all" ? `📊 ${T.allHistory}` : `🎯 ${T.customSelect}`}
+              📊 {T.allHistory}
             </button>
-          ))}
+            <button
+              onClick={() => setDataSource("custom")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                dataSource === "custom"
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              🎯 {T.customSelect}
+            </button>
+          </div>
         </div>
 
-        {/* ─── 入力フォーム 3カラム ────────────────────────────────────── */}
+        {/* ━━━ 入力フォーム 3カラム ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* 軍資金 */}
           <div>
@@ -363,7 +385,9 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
                 </select>
                 <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   {T.maxLossLabel}:{" "}
-                  <span className="font-bold text-red-600">{fmtCurrency(capital * riskPct / 100)}</span>
+                  <span className="font-bold text-red-600 dark:text-red-400">
+                    {fmtCurrency(capital * riskPct / 100)}
+                  </span>
                 </div>
               </>
             ) : (
@@ -377,14 +401,17 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
                   className="w-full border-2 border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
                 >
                   {POS_SIZE_OPTIONS.map(v => (
-                    <option key={v} value={v}>{v}%</option>
+                    <option key={v} value={v}>
+                      {v}%{v === 5 ? `（${T.standard}）` : v >= 15 ? `（${T.highRisk}）` : ""}
+                    </option>
                   ))}
                 </select>
                 <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   {T.investLabel}:{" "}
-                  <span className="font-bold text-blue-600">
-                    {fmtCurrency(capital * posSizePct / 100)} × {leverage}x
+                  <span className="font-bold text-blue-600 dark:text-blue-400">
+                    {fmtCurrency(capital * posSizePct / 100)}
                   </span>
+                  <span className="ml-1">× {ja ? "レバ" : "Lev"}{leverage}x</span>
                 </div>
               </>
             )}
@@ -406,10 +433,15 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
               <option value={5}>5x</option>
               <option value={10}>{T.lev10}</option>
             </select>
+            {calcMode === "risk" && (
+              <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                {ja ? "リスク%固定モードではレバレッジは損益に影響しません" : "Leverage does not affect P&L in Fixed Risk% mode"}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* ─── 高レバ警告（ポジション固定モード時） ──────────────────── */}
+        {/* ━━━ 高レバ警告（ポジション固定モード時） ━━━━━━━━━━━━━━━━━━━━━━━━ */}
         {calcMode === "position" && leverage >= 5 && (
           <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-400">
             {T.highLevWarn}
@@ -419,10 +451,10 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
           </div>
         )}
 
-        {/* ─── カスタム銘柄選択UI ─────────────────────────────────────── */}
+        {/* ━━━ カスタム銘柄選択UI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         {dataSource === "custom" && (
-          <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
+          <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300">
                 🎯 {T.selectSymbols}
               </h4>
@@ -431,13 +463,11 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
               </span>
             </div>
 
-            {/* 銘柄チェックボックスリスト */}
             {symbolPool.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto mb-3">
                 {symbolPool.map(([sym, info]) => {
                   const base = sym.replace("_USDT", "");
                   const isSelected = selectedSymbols.has(sym);
-                  const isRec = (info.displayScore ?? 0) >= 10;
                   return (
                     <label
                       key={sym}
@@ -459,11 +489,12 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
                         </div>
                         {info.displayScore != null ? (
                           <div className="text-[9px] text-gray-500 dark:text-gray-400">
-                            {isRec ? "✅" : "⚠️"} {info.displayScore}pt
-                            {info.rrRatio != null ? ` R:R${info.rrRatio.toFixed(1)}` : ""}
+                            {ja ? "スコア" : "Score"} {info.displayScore}{info.scoreMax ? `/${info.scoreMax}` : ""}
                           </div>
                         ) : (
-                          <div className="text-[9px] text-gray-400">BT記録のみ</div>
+                          <div className="text-[9px] text-gray-400 dark:text-gray-500">
+                            {ja ? "BT記録のみ" : "BT record only"}
+                          </div>
                         )}
                       </div>
                     </label>
@@ -471,12 +502,9 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
                 })}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
-                {ja ? "スキャンを実行すると銘柄が表示されます" : "Run a scan to see symbols"}
-              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">{T.scanFirst}</p>
             )}
 
-            {/* 手動入力 */}
             <div className="flex gap-2">
               <input
                 type="text"
@@ -494,8 +522,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
               </button>
             </div>
 
-            {/* 選択中タグ */}
-            {selectedSymbols.size > 0 && (
+            {selectedSymbols.size > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1">
                 {[...selectedSymbols].map(sym => (
                   <span
@@ -512,9 +539,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
                   </span>
                 ))}
               </div>
-            )}
-
-            {selectedSymbols.size === 0 && (
+            ) : (
               <div className="mt-3 text-center text-sm text-gray-400 dark:text-gray-500 py-2">
                 {T.noSymbolSelected}
               </div>
@@ -522,7 +547,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
           </div>
         )}
 
-        {/* ─── 銘柄別サマリ ─────────────────────────────────────────── */}
+        {/* ━━━ 銘柄別サマリ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         {dataSource === "custom" && selectedSymbols.size > 0 && (
           <div>
             <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -530,8 +555,8 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
             </h4>
             <div className="space-y-1">
               {[...selectedSymbols].map(sym => {
-                const symRecords  = records.filter(r => r.symbol === sym);
-                const base        = sym.replace("_USDT", "");
+                const symRecords = records.filter(r => r.symbol === sym);
+                const base = sym.replace("_USDT", "");
                 if (symRecords.length === 0) return (
                   <div key={sym} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-xs">
                     <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{base}</span>
@@ -565,7 +590,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
           </div>
         )}
 
-        {/* ─── データなし / 結果 ────────────────────────────────────── */}
+        {/* ━━━ データなし / 結果 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         {result.totalTrades === 0 ? (
           <div className="text-center py-10 text-sm text-gray-400 dark:text-gray-500 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/30">
             {dataSource === "custom" && selectedSymbols.size > 0 ? T.noDataCustom : T.noData}
@@ -579,7 +604,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
               </div>
             )}
 
-            {/* ─── 結果 4カード ────────────────────────────────────── */}
+            {/* ━━━ 結果 4カード ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-center">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{T.initial}</div>
@@ -627,7 +652,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
               </div>
             </div>
 
-            {/* ─── 詳細統計 6カード ────────────────────────────────── */}
+            {/* ━━━ 詳細統計 6カード ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-sm">
               {[
                 {
@@ -680,7 +705,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
               ))}
             </div>
 
-            {/* ─── 資金推移チャート ─────────────────────────────────── */}
+            {/* ━━━ 資金推移チャート ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {result.equityCurve.length >= 3 && (() => {
               const {
                 AreaChart, Area, XAxis, YAxis, Tooltip,
