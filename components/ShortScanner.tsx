@@ -3084,165 +3084,174 @@ export default function ShortScanner() {
         </button>
       </div>
 
-      {/* Toolbar: Presets (左) + Actions (右) — 1行統合 */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* 左: プリセット */}
+      {/* ──── スキャン設定ボックス ─────────────────────────────────────────── */}
+      <div className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm space-y-3">
+
+        {/* 行1: プリセット */}
         <FilterPresets t={t} lang={lang} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
 
-        {/* 右: CSV・自動更新・スキャン・設定 */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button onClick={exportCSV} disabled={extended.length === 0}
-            className="px-3 py-1.5 text-xs bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300 transition-colors">
-            {t.csvBtn}
-          </button>
-          {/* Auto-refresh interval dropdown */}
-          <div className="relative">
-            <button onClick={() => setShowAutoMenu(v => !v)}
-              className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoIntervalMin > 0 ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50"}`}>
-              {t.autoRefresh} {autoIntervalMin > 0 ? `${autoIntervalMin}m` : t.autoOff} ▾
-              {autoIntervalMin > 0 && countdown != null && (
-                <span className="ml-1 text-indigo-400">🔄 {t.autoCountdown}: {Math.floor(countdown / 60)}:{String(Math.floor(countdown % 60)).padStart(2,"0")}</span>
-              )}
-            </button>
-            {showAutoMenu && (
-              <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px]">
-                {([0,5,10,30,60] as const).map(m => (
-                  <button key={m} onClick={() => setAutoInterval(m)}
-                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-colors ${autoIntervalMin === m ? "text-indigo-600 font-bold" : "text-gray-600 dark:text-gray-300"}`}>
-                    {m === 0 ? t.autoOff : `${m}分ごと`}
-                  </button>
-                ))}
-              </div>
-            )}
+        {/* 行2: フィルター値の常時表示 + 調整ボタン */}
+        <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+            <span className="font-semibold text-gray-700 dark:text-gray-200">🎛️ {lang === "ja" ? "フィルター" : "Filter"}:</span>
+            <span>ATH≥<span className="text-red-600 font-semibold">{minDrop}%</span></span>
+            <span className="text-gray-300 dark:text-gray-600">|</span>
+            <span>{lang === "ja" ? "出来高比" : "Vol Ratio"}≤<span className="text-orange-600 font-semibold">{(maxVolRatio/100).toFixed(1)}x</span></span>
+            <span className="text-gray-300 dark:text-gray-600">|</span>
+            <span>Vol≥<span className="text-green-600 font-semibold">${minVol24k}K</span></span>
+            <span className="text-gray-300 dark:text-gray-600">|</span>
+            <span>{lang === "ja" ? "上場" : "Listed"}≤<span className="text-blue-600 font-semibold">{maxDays >= 9999 ? "∞" : `${maxDays}日`}</span></span>
           </div>
-          <button onClick={() => scan(undefined, undefined, true)} disabled={loading}
-            title="キャッシュを無視して再スキャン"
-            className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors">
-            🔄
-          </button>
-          <button onClick={() => scan()} disabled={loading}
-            className="px-4 py-1.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
-            {loading ? "⏳ ..." : t.scanBtn}
-          </button>
-          {/* Settings menu */}
-          <div className="relative">
-            <button onClick={() => setShowSettingsMenu(v => !v)}
-              className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              title="設定">
-              ⚙️
-            </button>
-            {showSettingsMenu && (
-              <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[170px]">
-                <button onClick={toggleSound}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
-                  {soundEnabled ? t.soundOn : t.soundOff}
-                </button>
-                {notifState !== "granted" ? (
-                  <button onClick={requestNotif}
-                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-amber-700">
-                    {t.notifEnable}
-                  </button>
-                ) : (
-                  <div className="px-3 py-1.5 text-xs text-green-700">{t.notifOn}</div>
-                )}
-                <button onClick={shareResults} disabled={extended.length === 0}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors text-gray-600 dark:text-gray-300">
-                  {t.shareBtn}
-                </button>
-                <button onClick={shareFilterURL}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
-                  {t.shareUrl}
-                </button>
-                <a href={MEXC_REG_URL} target="_blank" rel="noopener noreferrer"
-                  className="block px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-orange-700">
-                  {t.mexcReg}
-                </a>
-                <button onClick={() => { setShowShortcutHelp(true); setShowSettingsMenu(false); }}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-500 dark:text-gray-400">
-                  ⌨️ ショートカット
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Filters — collapsible */}
-      <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <button
-          onClick={() => setFiltersOpen(v => !v)}
-          className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          <span>🎛️ フィルター設定{!filtersOpen && <span className="ml-2 font-normal text-gray-400 dark:text-gray-500">ATH≥{minDrop}% / 出来高比≤{(maxVolRatio/100).toFixed(1)}x / Vol≥${minVol24k}K</span>}</span>
-          <span className="text-gray-400 text-[10px]">{filtersOpen ? t.filterClose : t.filterAdjust}</span>
-        </button>
-        {filtersOpen && <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 dark:bg-gray-800 p-3 md:p-4 border-t border-gray-200 dark:border-gray-700">
-        {[
-          { label: `${t.athDrop} ≥`, val: `${minDrop}%`, color: "text-red-600", accent: "accent-red-500", min:0, max:100, step:5, v:minDrop, set:setMinDrop },
-          { label: `${t.volRatio} ≤`, val: (maxVolRatio/100).toFixed(1), color: "text-orange-600", accent: "accent-orange-500", min:10, max:1000, step:10, v:maxVolRatio, set:setMaxVolRatio },
-          { label: `${t.listDays} ≤`, val: maxDays >= 9999 ? "∞" : `${maxDays}日`, color: "text-blue-600", accent: "accent-blue-500", min:30, max:9999, step:30, v:maxDays, set:setMaxDays },
-          { label: `${t.minVol} ≥`, val: `$${minVol24k}K`, color: "text-green-600", accent: "accent-green-500", min:0, max:1000, step:1, v:minVol24k, set:setMinVol24k },
-          { label: `${t.minOi} ≥`, val: `$${minOiK}K`, color: "text-cyan-600", accent: "accent-cyan-500", min:0, max:1000, step:10, v:minOiK, set:setMinOiK },
-        ].map(({ label, val, color, accent, min, max, step, v, set }) => (
-          <div key={label}>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">
-              {label} <span className={color}>{val}</span>
-            </label>
-            <input type="range" min={min} max={max} step={step} value={v}
-              onChange={e => set(+e.target.value)} className={`w-full ${accent}`} />
-          </div>
-        ))}
-        {/* Phase / F/S フィルター */}
-        <div className="col-span-2 md:col-span-5 flex flex-wrap items-center gap-4 pt-1 border-t border-gray-200">
-          <label
-            className="flex items-center gap-1.5 text-xs cursor-pointer select-none"
-            title="FRがほぼゼロの「安定期」銘柄のみ表示。ONにすると候補が大幅に減ります。OFF推奨。"
-          >
-            <input type="checkbox" checked={filterSettledOnly} onChange={e => setFilterSettledOnly(e.target.checked)} className="accent-green-500 w-3.5 h-3.5" />
-            <span className="text-gray-700">{t.filterSettledOnly}</span>
-          </label>
-          <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
-            <input type="checkbox" checked={filterFsRatio5x} onChange={e => setFilterFsRatio5x(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
-            <span className="text-gray-700">{t.filterFsRatio5x}</span>
-          </label>
           <button
-            onClick={() => setSortBy(s => s === "phase" ? "displayScore" : "phase")}
-            className={`text-xs px-2 py-0.5 rounded border transition-colors ${sortBy === "phase" ? "bg-green-100 text-green-700 border-green-300 font-bold" : "bg-gray-100 text-gray-600 border-gray-200 hover:border-green-300"}`}
+            onClick={() => setFiltersOpen(v => !v)}
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 font-medium shrink-0 ml-3 transition-colors"
           >
-            {t.sortPhase}
+            {filtersOpen ? t.filterClose : t.filterAdjust}
           </button>
-          {/* Phase3 Task1: 市場環境連動トグル */}
-          {marketRegime && (
-            <div className="flex items-center gap-2 flex-wrap">
+        </div>
+
+        {/* フィルター調整パネル（開閉） */}
+        {filtersOpen && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+            {[
+              { label: `${t.athDrop} ≥`, val: `${minDrop}%`, color: "text-red-600", accent: "accent-red-500", min:0, max:100, step:5, v:minDrop, set:setMinDrop },
+              { label: `${t.volRatio} ≤`, val: (maxVolRatio/100).toFixed(1), color: "text-orange-600", accent: "accent-orange-500", min:10, max:1000, step:10, v:maxVolRatio, set:setMaxVolRatio },
+              { label: `${t.listDays} ≤`, val: maxDays >= 9999 ? "∞" : `${maxDays}日`, color: "text-blue-600", accent: "accent-blue-500", min:30, max:9999, step:30, v:maxDays, set:setMaxDays },
+              { label: `${t.minVol} ≥`, val: `$${minVol24k}K`, color: "text-green-600", accent: "accent-green-500", min:0, max:1000, step:1, v:minVol24k, set:setMinVol24k },
+              { label: `${t.minOi} ≥`, val: `$${minOiK}K`, color: "text-cyan-600", accent: "accent-cyan-500", min:0, max:1000, step:10, v:minOiK, set:setMinOiK },
+            ].map(({ label, val, color, accent, min, max, step, v, set }) => (
+              <div key={label}>
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 block mb-1">
+                  {label} <span className={color}>{val}</span>
+                </label>
+                <input type="range" min={min} max={max} step={step} value={v}
+                  onChange={e => set(+e.target.value)} className={`w-full ${accent}`} />
+              </div>
+            ))}
+            {/* Phase / F/S フィルター + リセット */}
+            <div className="col-span-2 md:col-span-5 flex flex-wrap items-center gap-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none"
+                title="FRがほぼゼロの「安定期」銘柄のみ表示。ONにすると候補が大幅に減ります。OFF推奨。">
+                <input type="checkbox" checked={filterSettledOnly} onChange={e => setFilterSettledOnly(e.target.checked)} className="accent-green-500 w-3.5 h-3.5" />
+                <span className="text-gray-700 dark:text-gray-300">{t.filterSettledOnly}</span>
+              </label>
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                <input type="checkbox" checked={filterFsRatio5x} onChange={e => setFilterFsRatio5x(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
+                <span className="text-gray-700 dark:text-gray-300">{t.filterFsRatio5x}</span>
+              </label>
               <button
-                onClick={() => setRegimeFilterOn(v => !v)}
-                className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold transition-colors ${
-                  regimeFilterOn
-                    ? "bg-indigo-500 text-white border-indigo-500"
-                    : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-indigo-50"
-                }`}
-              >
-                🌡️ 環境連動 {regimeFilterOn ? "ON" : "OFF"}
+                onClick={() => setSortBy(s => s === "phase" ? "displayScore" : "phase")}
+                className={`text-xs px-2 py-0.5 rounded border transition-colors ${sortBy === "phase" ? "bg-green-100 text-green-700 border-green-300 font-bold" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-green-300"}`}>
+                {t.sortPhase}
               </button>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                marketRegime.regime === "RISK_ON"  ? "bg-green-100 text-green-700" :
-                marketRegime.regime === "RISK_OFF" ? "bg-red-100 text-red-700"     :
-                                                     "bg-gray-100 text-gray-600"
-              }`}>
-                {marketRegime.regime === "RISK_ON"  ? "🟢 Risk-On" :
-                 marketRegime.regime === "RISK_OFF" ? "🔴 Risk-Off" : "🟡 Neutral"}
-                {marketRegime.fng !== null && ` F&G:${marketRegime.fng}`}
-                {` BTC:${marketRegime.btcChange24h >= 0 ? "+" : ""}${marketRegime.btcChange24h.toFixed(1)}%`}
-              </span>
-              {regimeFilterOn && marketRegime.scoreAdjust !== 0 && (
-                <span className="text-[10px] text-gray-400">
-                  閾値{marketRegime.scoreAdjust > 0 ? "+" : ""}{marketRegime.scoreAdjust}pt
-                </span>
+              {marketRegime && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setRegimeFilterOn(v => !v)}
+                    className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold transition-colors ${regimeFilterOn ? "bg-indigo-500 text-white border-indigo-500" : "bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:bg-indigo-50"}`}>
+                    🌡️ 環境連動 {regimeFilterOn ? "ON" : "OFF"}
+                  </button>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${marketRegime.regime === "RISK_ON" ? "bg-green-100 text-green-700" : marketRegime.regime === "RISK_OFF" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
+                    {marketRegime.regime === "RISK_ON" ? "🟢 Risk-On" : marketRegime.regime === "RISK_OFF" ? "🔴 Risk-Off" : "🟡 Neutral"}
+                    {marketRegime.fng !== null && ` F&G:${marketRegime.fng}`}
+                    {` BTC:${marketRegime.btcChange24h >= 0 ? "+" : ""}${marketRegime.btcChange24h.toFixed(1)}%`}
+                  </span>
+                  {regimeFilterOn && marketRegime.scoreAdjust !== 0 && (
+                    <span className="text-[10px] text-gray-400">閾値{marketRegime.scoreAdjust > 0 ? "+" : ""}{marketRegime.scoreAdjust}pt</span>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={() => { setMinDrop(30); setMaxVolRatio(70); setMaxDays(9999); setMinVol24k(100); setMinOiK(0); setFilterSettledOnly(false); setFilterFsRatio5x(false); }}
+                className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-auto">
+                {t.filterReset}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 行3: スキャン実行（左） + サブ操作（右） */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-gray-100 dark:border-gray-800">
+          {/* 左: スキャンボタン */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => scan()} disabled={loading}
+              className="px-6 py-2 rounded-xl text-sm font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading ? (lang === "ja" ? "⏳ スキャン中..." : "⏳ Scanning...") : (lang === "ja" ? "▶ スキャン実行" : "▶ Run Scan")}
+            </button>
+            <button onClick={() => scan(undefined, undefined, true)} disabled={loading}
+              title="キャッシュを無視して再スキャン"
+              className="px-2 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors">
+              🔄
+            </button>
+          </div>
+          {/* 右: CSV・自動更新・設定 */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={exportCSV} disabled={extended.length === 0}
+              className="px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-gray-600 dark:text-gray-300 transition-colors">
+              {t.csvBtn}
+            </button>
+            {/* Auto-refresh dropdown */}
+            <div className="relative">
+              <button onClick={() => setShowAutoMenu(v => !v)}
+                className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoIntervalMin > 0 ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50"}`}>
+                {t.autoRefresh} {autoIntervalMin > 0 ? `${autoIntervalMin}m` : t.autoOff} ▾
+                {autoIntervalMin > 0 && countdown != null && (
+                  <span className="ml-1 text-indigo-400">🔄 {t.autoCountdown}: {Math.floor(countdown / 60)}:{String(Math.floor(countdown % 60)).padStart(2,"0")}</span>
+                )}
+              </button>
+              {showAutoMenu && (
+                <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px]">
+                  {([0,5,10,30,60] as const).map(m => (
+                    <button key={m} onClick={() => setAutoInterval(m)}
+                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-colors ${autoIntervalMin === m ? "text-indigo-600 font-bold" : "text-gray-600 dark:text-gray-300"}`}>
+                      {m === 0 ? t.autoOff : `${m}分ごと`}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-          )}
+            {/* Settings menu */}
+            <div className="relative">
+              <button onClick={() => setShowSettingsMenu(v => !v)}
+                className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                title="設定">
+                ⚙️
+              </button>
+              {showSettingsMenu && (
+                <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[170px]">
+                  <button onClick={toggleSound}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
+                    {soundEnabled ? t.soundOn : t.soundOff}
+                  </button>
+                  {notifState !== "granted" ? (
+                    <button onClick={requestNotif}
+                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-amber-700">
+                      {t.notifEnable}
+                    </button>
+                  ) : (
+                    <div className="px-3 py-1.5 text-xs text-green-700">{t.notifOn}</div>
+                  )}
+                  <button onClick={shareResults} disabled={extended.length === 0}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors text-gray-600 dark:text-gray-300">
+                    {t.shareBtn}
+                  </button>
+                  <button onClick={shareFilterURL}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
+                    {t.shareUrl}
+                  </button>
+                  <a href={MEXC_REG_URL} target="_blank" rel="noopener noreferrer"
+                    className="block px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-orange-700">
+                    {t.mexcReg}
+                  </a>
+                  <button onClick={() => { setShowShortcutHelp(true); setShowSettingsMenu(false); }}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-500 dark:text-gray-400">
+                    ⌨️ ショートカット
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        </div>}
       </div>
 
       {/* Alerts */}
