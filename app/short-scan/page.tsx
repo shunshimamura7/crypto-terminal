@@ -108,20 +108,6 @@ export default function ShortScanPage() {
               <ScoringBar />
             </div>
 
-            {/* Stats panel */}
-            <div className="flex-shrink-0 grid grid-cols-2 gap-3 w-full md:w-48">
-              {[
-                { value: "全銘柄", sub: "MEXC先物を網羅", color: "text-indigo-600 dark:text-indigo-400" },
-                { value: "TOP 20", sub: "スコア順で表示", color: "text-red-600 dark:text-red-400" },
-                { value: "34pt", sub: "独自スコア", color: "text-orange-500 dark:text-orange-400" },
-                { value: "SL/TP", sub: "Klineから自動算出", color: "text-green-600 dark:text-green-400" },
-              ].map(s => (
-                <div key={s.value} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2.5 border border-gray-200 dark:border-gray-700 text-center">
-                  <div className={`text-lg font-black ${s.color}`}>{s.value}</div>
-                  <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{s.sub}</div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </section>
