@@ -291,7 +291,7 @@ export async function POST(req: NextRequest) {
 
     // Build supplemental context strings
     const glassStr   = formatCoinglass(glass);
-    const unlockStr  = formatUnlock(unlock);
+    const unlockStr  = formatUnlock(unlock) || "Tokenomist: APIキーなし — https://tokenomist.ai で手動確認";
     const arkhamStr  = formatArkham(arkham);
     const etfStr     = formatEtfFlows(etfFlows);
 

@@ -300,11 +300,20 @@ export default function BatchAnalyzer({ prefillText = "" }: { prefillText?: stri
                               ETF{r.etfBtcDirection === "in" ? "↑" : "↓"}
                             </span>
                           )}
-                          {r.unlockDays != null && r.unlockDays <= 30 && (
+                          {r.unlockDays != null && r.unlockDays <= 30 ? (
                             <span className="text-[10px] px-1 rounded border bg-yellow-50 text-yellow-700 border-yellow-300">
                               ⚠️{r.unlockDays}d
                             </span>
-                          )}
+                          ) : r.unlockDays === null ? (
+                            <a
+                              href={`https://tokenomist.ai/token/${r.input.toLowerCase()}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-500 hover:underline text-[10px]"
+                            >
+                              🔓 確認
+                            </a>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-600">{r.decision}</td>
@@ -426,7 +435,7 @@ export default function BatchAnalyzer({ prefillText = "" }: { prefillText?: stri
             )}
 
             {/* Unlock warning */}
-            {selected.unlockDays != null && (
+            {selected.unlockDays != null ? (
               <div className={`rounded-lg p-3 mb-3 ${selected.unlockDays <= 7 ? "bg-red-50 border border-red-200" : selected.unlockDays <= 30 ? "bg-yellow-50 border border-yellow-200" : "bg-gray-50 border border-gray-200"}`}>
                 <div className="text-xs font-semibold text-gray-700 mb-1">アンロックスケジュール</div>
                 <div className="text-sm font-medium">
@@ -434,6 +443,18 @@ export default function BatchAnalyzer({ prefillText = "" }: { prefillText?: stri
                   次回アンロック: {selected.unlockDays}日後
                   {selected.unlockPercent != null && ` (${selected.unlockPercent.toFixed(1)}% 放出)`}
                 </div>
+              </div>
+            ) : (
+              <div className="rounded-lg p-3 mb-3 bg-gray-50 border border-gray-200">
+                <div className="text-xs font-semibold text-gray-700 mb-1">アンロックスケジュール</div>
+                <a
+                  href={`https://tokenomist.ai/token/${selected.input.toLowerCase()}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:underline text-sm"
+                >
+                  🔓 Tokenomistで確認
+                </a>
               </div>
             )}
 
