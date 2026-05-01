@@ -1,10 +1,12 @@
 import type { BacktestRecord } from "./backtestStorage";
 
 export interface SimulationConfig {
-  initialCapital: number;  // JPY
-  riskPerTrade: number;    // %, e.g. 2 = 2%
+  initialCapital: number;
   leverage: number;
   usdJpy: number;
+  mode: "risk" | "position";
+  riskPerTrade: number;     // mode="risk" 用（%）
+  positionSizePct: number;  // mode="position" 用（%）
 }
 
 export interface SimulationResult {
@@ -19,13 +21,14 @@ export interface SimulationResult {
   avgLossR: number;
   profitFactor: number;
   equityCurve: { label: string; equity: number }[];
+  bankrupt: boolean;
 }
 
 export function simulateBacktest(
   records: BacktestRecord[],
   config: SimulationConfig,
 ): SimulationResult {
-  const { initialCapital, riskPerTrade } = config;
+  const { initialCapital } = config;
 
   const resolved = [...records]
     .filter(r => r.resolvedAt != null && r.resolvedPrice != null && r.status !== "active")
@@ -38,6 +41,7 @@ export function simulateBacktest(
   let lossCount = 0;
   let totalWinR = 0;
   let totalLossR = 0;
+  let bankrupt = false;
 
   const equityCurve: { label: string; equity: number }[] = [
     { label: "開始", equity: initialCapital },
@@ -45,15 +49,32 @@ export function simulateBacktest(
 
   for (const r of resolved) {
     const profit = r.entryPrice - (r.resolvedPrice ?? r.entryPrice);
-    const risk = r.sl - r.entryPrice;
+    const risk   = r.sl - r.entryPrice;
     if (risk <= 0) continue;
 
+    // R倍率（統計用・モード共通）
     const realR = profit / risk;
-    const riskAmount = equity * riskPerTrade / 100;
-    const tradePnl = realR * riskAmount;
+
+    let tradePnl: number;
+    if (config.mode === "position") {
+      const pricePnlPct = profit / r.entryPrice;
+      const positionJpy = equity * config.positionSizePct / 100;
+      tradePnl = positionJpy * pricePnlPct * config.leverage;
+    } else {
+      // risk mode（デフォルト）
+      const riskAmount = equity * config.riskPerTrade / 100;
+      tradePnl = realR * riskAmount;
+    }
 
     equity += tradePnl;
-    equity = Math.max(equity, 0);
+
+    // 破産処理
+    if (equity <= 0) {
+      equity = 0;
+      bankrupt = true;
+      equityCurve.push({ label: r.symbol.replace("_USDT", ""), equity: 0 });
+      break;
+    }
 
     if (realR > 0) {
       winCount++;
@@ -73,12 +94,12 @@ export function simulateBacktest(
     });
   }
 
-  const totalTrades = winCount + lossCount;
-  const winRate = totalTrades > 0 ? (winCount / totalTrades) * 100 : 0;
-  const avgWinR = winCount > 0 ? totalWinR / winCount : 0;
-  const avgLossR = lossCount > 0 ? totalLossR / lossCount : 0;
-  const profitFactor = totalLossR > 0 ? totalWinR / totalLossR : totalWinR > 0 ? Infinity : 0;
-  const totalReturn = ((equity - initialCapital) / initialCapital) * 100;
+  const totalTrades   = winCount + lossCount;
+  const winRate       = totalTrades > 0 ? (winCount / totalTrades) * 100 : 0;
+  const avgWinR       = winCount  > 0 ? totalWinR  / winCount  : 0;
+  const avgLossR      = lossCount > 0 ? totalLossR / lossCount : 0;
+  const profitFactor  = totalLossR > 0 ? totalWinR / totalLossR : totalWinR > 0 ? Infinity : 0;
+  const totalReturn   = ((equity - initialCapital) / initialCapital) * 100;
 
   return {
     finalEquity: equity,
@@ -92,5 +113,6 @@ export function simulateBacktest(
     avgLossR,
     profitFactor,
     equityCurve,
+    bankrupt,
   };
 }

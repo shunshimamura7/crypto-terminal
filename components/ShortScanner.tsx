@@ -3744,7 +3744,7 @@ export default function ShortScanner() {
       )}
 
       {/* PnL Simulator (独立コンポーネント、常時表示) */}
-      <PnlSimulator records={btRecords} lang={lang} />
+      <PnlSimulator records={btRecords} lang={lang} currentScanResults={extended} />
 
       {/* Backtest Panel */}
       <BacktestPanel
