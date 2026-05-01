@@ -19,11 +19,6 @@ const BT_JA = {
   btAvgRR: "平均R:R",
   btByScore: "スコア帯別勝率", btScoreRange: "スコア帯", btWins: "勝", btLosses: "負",
   btEquityCurve: "📈 エクイティカーブ", btEquityR: "累積R",
-  btSimTitle: "💰 ポートフォリオシミュレーション",
-  btSimCapital: "初期資金", btSimPos: "1ポジション",
-  btSimCurAsset: "現在資産", btSimReturn: "トータルリターン",
-  btSimMaxDD: "最大DD", btSimSharpe: "シャープレシオ",
-  btSimInsuf: "決着済み5件以上でシミュレーション開始",
   btAllRecords: "全記録",
   btEntryCol: "エントリー", btSlCol: "SL", btTp1Col: "TP1", btCurCol: "現在",
   btStatusCol: "状態", btPnlCol: "損益", btDaysCol: "日数",
@@ -46,11 +41,6 @@ const BT_EN: typeof BT_JA = {
   btAvgRR: "Avg R:R",
   btByScore: "Win Rate by Score", btScoreRange: "Score Range", btWins: "Wins", btLosses: "Losses",
   btEquityCurve: "📈 Equity Curve", btEquityR: "Cumulative R",
-  btSimTitle: "💰 Portfolio Simulation",
-  btSimCapital: "Initial Capital", btSimPos: "Position Size",
-  btSimCurAsset: "Current Value", btSimReturn: "Total Return",
-  btSimMaxDD: "Max DD", btSimSharpe: "Sharpe",
-  btSimInsuf: "Need 5+ resolved trades to simulate",
   btAllRecords: "All Records",
   btEntryCol: "Entry", btSlCol: "SL", btTp1Col: "TP1", btCurCol: "Current",
   btStatusCol: "Status", btPnlCol: "PnL", btDaysCol: "Days",
@@ -364,9 +354,6 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
   const [open,          setOpen]          = useState(true);
   const [showRecords,   setShowRecords]   = useState(false);
   const [showActivePos, setShowActivePos] = useState(false);
-  const [simOpen,       setSimOpen]       = useState(false);
-  const [simCapital,    setSimCapital]    = useState(1000);
-  const [simPos,        setSimPos]        = useState(100);
   const [btPresetTab,   setBtPresetTab]   = useState<"all" | "low_lev" | "new_listing">("all");
   const [btMainTab,     setBtMainTab]     = useState<"stats" | "loss">("stats");
 
@@ -658,77 +645,6 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                   </div>
                 );
               })()}
-
-              {/* Portfolio Simulation */}
-              <div className="mt-2 rounded-lg border border-emerald-200 overflow-hidden">
-                <button onClick={() => setSimOpen(v => !v)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 transition-colors">
-                  <span>{t.btSimTitle}</span>
-                  <span className="text-gray-400">{simOpen ? "▲" : "▼"}</span>
-                </button>
-                {simOpen && (() => {
-                  if (displayStats.resolved < 5) {
-                    return <div className="px-3 py-3 text-xs text-gray-400 text-center">{t.btSimInsuf}</div>;
-                  }
-                  const resolved = [...tabRecords]
-                    .filter(r => r.status !== "active" && r.resolvedAt !== null && r.resolvedPrice !== null)
-                    .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
-                  let equity = simCapital, peak = simCapital, maxDD = 0;
-                  const equityPoints: number[] = [simCapital];
-                  const returns: number[] = [];
-                  for (const r of resolved) {
-                    const profit = r.entryPrice - (r.resolvedPrice ?? r.entryPrice);
-                    const risk   = r.sl - r.entryPrice;
-                    const realR  = risk > 0 ? profit / risk : 0;
-                    const pnl    = realR * simPos;
-                    equity += pnl;
-                    returns.push(pnl / (equity - pnl || simCapital));
-                    equityPoints.push(parseFloat(equity.toFixed(2)));
-                    if (equity > peak) peak = equity;
-                    const dd = (peak - equity) / peak * 100;
-                    if (dd > maxDD) maxDD = dd;
-                  }
-                  const totalReturn = ((equity - simCapital) / simCapital) * 100;
-                  const meanR = returns.reduce((a, b) => a + b, 0) / returns.length;
-                  const variance = returns.reduce((a, b) => a + (b - meanR) ** 2, 0) / returns.length;
-                  const sharpe = variance > 0 ? meanR / Math.sqrt(variance) * Math.sqrt(returns.length) : 0;
-                  return (
-                    <div className="px-3 py-3 space-y-3 bg-white">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[10px] text-gray-500 font-semibold block mb-1">
-                            {t.btSimCapital}: <span className="text-emerald-700">${simCapital.toLocaleString()}</span>
-                          </label>
-                          <input type="range" min={100} max={10000} step={100} value={simCapital}
-                            onChange={e => setSimCapital(Number(e.target.value))}
-                            className="w-full accent-emerald-500 h-1.5" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-gray-500 font-semibold block mb-1">
-                            {t.btSimPos}: <span className="text-emerald-700">${simPos.toLocaleString()}</span>
-                          </label>
-                          <input type="range" min={10} max={Math.min(simCapital, 1000)} step={10} value={simPos}
-                            onChange={e => setSimPos(Number(e.target.value))}
-                            className="w-full accent-emerald-500 h-1.5" />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {[
-                          { label: t.btSimCurAsset, val: `$${equity.toLocaleString("en-US",{maximumFractionDigits:0})}`, cls: equity >= simCapital ? "text-green-700" : "text-red-600" },
-                          { label: t.btSimReturn,   val: `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(1)}%`,      cls: totalReturn >= 0 ? "text-green-700" : "text-red-600" },
-                          { label: t.btSimMaxDD,    val: `-${maxDD.toFixed(1)}%`, cls: maxDD > 20 ? "text-red-600 font-bold" : "text-orange-500" },
-                          { label: t.btSimSharpe,   val: sharpe.toFixed(2),       cls: sharpe >= 1 ? "text-green-700" : sharpe >= 0 ? "text-orange-500" : "text-red-600" },
-                        ].map(({ label, val, cls }) => (
-                          <div key={label} className="rounded-lg border border-gray-200 p-2 text-center bg-gray-50">
-                            <div className={`text-sm font-black ${cls}`}>{val}</div>
-                            <div className="text-[10px] text-gray-500 mt-0.5">{label}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
 
               {/* 進行中ポジション */}
               {(() => {
