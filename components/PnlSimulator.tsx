@@ -882,7 +882,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                            <XAxis dataKey="label" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} interval="preserveStartEnd" tickLine={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} interval={Math.max(0, Math.floor(result.equityCurve.length / 15) - 1)} tickLine={false} />
                             <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtAxisTick(v as number)} width={70} />
                             <ReferenceLine y={execCapital} stroke="#9ca3af" strokeDasharray="3 3" label={{ value: T.initial, fontSize: 10, fill: "#9ca3af", position: "insideTopRight" }} />
                             <Tooltip

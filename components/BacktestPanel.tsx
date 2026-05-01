@@ -70,7 +70,7 @@ function fmtPrice(n: number): string {
   return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
-function statusLabel(status: BacktestRecord["status"], t: typeof BT_JA): { label: string; cls: string } {
+function statusLabel(status: BacktestRecord["status"], t: typeof BT_JA): { label: string; cls: string; tip?: string } {
   switch (status) {
     case "tp3_hit":    return { label: t.btTp3,          cls: "text-green-700 bg-green-50 border-green-300" };
     case "tp2_hit":    return { label: t.btTp2,          cls: "text-green-700 bg-green-50 border-green-300" };
@@ -80,7 +80,7 @@ function statusLabel(status: BacktestRecord["status"], t: typeof BT_JA): { label
     case "pending_tp1":
     case "pending_tp2":
     case "pending_tp3":
-    case "pending_sl": return { label: "⏳確認中",          cls: "text-blue-600 bg-blue-50 border-blue-300" };
+    case "pending_sl": return { label: "⏳確認中（判定待ち）", tip: "価格がTP/SL付近に到達。次回スキャン後に確定予定", cls: "text-blue-600 bg-blue-50 border-blue-300" };
     default:           return { label: t.btActiveStatus,  cls: "text-yellow-700 bg-yellow-50 border-yellow-300" };
   }
 }
@@ -755,7 +755,7 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                       </thead>
                       <tbody>
                         {sorted.map(r => {
-                          const { label, cls } = statusLabel(r.status, t);
+                          const { label, cls, tip } = statusLabel(r.status, t);
                           const resolvedPnl = r.resolvedPrice != null
                             ? ((r.entryPrice - r.resolvedPrice) / r.entryPrice * 100) : null;
                           const currentPnl = r.currentPrice != null
@@ -774,7 +774,7 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                                 {r.currentPrice != null ? fmtPrice(r.currentPrice) : "—"}
                               </td>
                               <td className="px-2 py-1.5 text-center">
-                                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold whitespace-nowrap ${cls}`}>{label}</span>
+                                <span title={tip} className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold whitespace-nowrap ${cls}${tip ? " cursor-help" : ""}`}>{label}</span>
                               </td>
                               <td className={`px-2 py-1.5 text-right font-mono font-bold ${pnl == null ? "text-gray-400" : pnl >= 0 ? "text-green-600" : "text-red-500"}`}>
                                 {pnl != null ? `${pnl >= 0 ? "+" : ""}${pnl.toFixed(1)}%` : "—"}

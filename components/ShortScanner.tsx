@@ -116,6 +116,16 @@ const T = {
     avgVol: "7日平均出来高",
     exchOnly: "MEXCのみ",
     colBtcCorr: "BTC相関",
+    colAthTip: "ATH（全時間最高値）からの下落率。高いほどショートに有利",
+    colVolRTip: "直近出来高 ÷ 通常時の比率。1x未満 = 枯渇でショート有利",
+    colFrTip: "ファンディングレート。プラス = ロング過多でショートが受け取り側",
+    colOiTip: "未決済建玉（Open Interest）。高いほどレバレッジが集中",
+    colFsRatioTip: "先物/現物取引量比。高いほど投機的なポジション集中",
+    colBtcCorrTip: "BTCとの価格連動度。低いほど独立した動きでショートに有利",
+    pendingTip: "価格がTP/SL付近に到達。次回スキャン後に確定予定",
+    filterAdjust: "⚙️ フィルター調整",
+    filterClose: "▲ 閉じる",
+    recPanelReason: "推奨理由",
     btcCorrHigh: "BTC連動",
     btcCorrLow: "BTC非連動",
     volSpikePump: "🔥 PUMP",
@@ -259,7 +269,7 @@ const T = {
     recPanelEntry: "Entry",
     recPanelSL: "SL",
     recPanelTP1: "TP1",
-    recPanelRR: "R:R",
+    recPanelRR: "R:R(TP2)",
     recPanelOpenMexc: "MEXCで開く",
     forbidNewListingShallow: "🚫 新規×底堅い",
     forbidNewListingShallowTip: "新規上場14日以内かつATH下落30%未満。スクイーズリスク高",
@@ -340,6 +350,16 @@ const T = {
     avgVol: "Avg Vol 7d",
     exchOnly: "MEXC Only",
     colBtcCorr: "BTC Corr",
+    colAthTip: "Drop from All-Time High. Higher = more favorable for shorting",
+    colVolRTip: "24h vol vs. average. Below 1x = volume dry-up, favors short",
+    colFrTip: "Funding Rate. Positive = long-heavy; shorts earn the fee",
+    colOiTip: "Open Interest. Higher = more leveraged positions concentrated",
+    colFsRatioTip: "Futures/Spot volume ratio. Higher = more speculative",
+    colBtcCorrTip: "Price correlation with BTC. Lower = more independent, better for shorting",
+    pendingTip: "Price reached near TP/SL level. Will be confirmed on next scan",
+    filterAdjust: "⚙️ Adjust",
+    filterClose: "▲ Close",
+    recPanelReason: "Reason",
     btcCorrHigh: "BTC Correlated",
     btcCorrLow: "BTC Independent",
     volSpikePump: "🔥 PUMP",
@@ -477,7 +497,7 @@ const T = {
     recPanelEntry: "Entry",
     recPanelSL: "SL",
     recPanelTP1: "TP1",
-    recPanelRR: "R:R",
+    recPanelRR: "R:R(TP2)",
     recPanelOpenMexc: "Open in MEXC",
     forbidNewListingShallow: "🚫 Fresh & Shallow",
     forbidNewListingShallowTip: "Listed within 14d & dropped less than 30%. High squeeze risk",
@@ -1907,9 +1927,10 @@ function LongBiasPanel({ candidates, t }: { candidates: ExtendedCandidate[]; t: 
 }
 
 // ─── Sortable TH ────────────────────────────────────────────────────────────
-function SortTh({ label, sortKey, current, onSort, cls = "text-right" }: { label: string; sortKey: SortKey; current: SortKey; onSort: (k: SortKey) => void; cls?: string }) {
+function SortTh({ label, sortKey, current, onSort, cls = "text-right", title }: { label: string; sortKey: SortKey; current: SortKey; onSort: (k: SortKey) => void; cls?: string; title?: string }) {
   return (
-    <th className={`px-1 py-1 ${cls} cursor-pointer select-none hover:text-indigo-600 transition-colors text-xs`}
+    <th className={`px-1 py-1 ${cls} cursor-pointer select-none hover:text-indigo-600 transition-colors text-xs${title ? " cursor-help" : ""}`}
+      title={title}
       onClick={() => onSort(sortKey)}>
       {label}{current === sortKey ? " ▼" : ""}
     </th>
@@ -1917,7 +1938,7 @@ function SortTh({ label, sortKey, current, onSort, cls = "text-right" }: { label
 }
 
 // ─── Backtest helpers ────────────────────────────────────────────────────────
-function btStatusLabel(status: BacktestRecord["status"], t: Translations): { label: string; cls: string } {
+function btStatusLabel(status: BacktestRecord["status"], t: Translations): { label: string; cls: string; tip?: string } {
   switch (status) {
     case "tp3_hit":     return { label: t.btTp3,          cls: "text-green-700 bg-green-50 border-green-300" };
     case "tp2_hit":     return { label: t.btTp2,          cls: "text-green-700 bg-green-50 border-green-300" };
@@ -1927,8 +1948,8 @@ function btStatusLabel(status: BacktestRecord["status"], t: Translations): { lab
     case "pending_tp1":
     case "pending_tp2":
     case "pending_tp3":
-    case "pending_sl":  return { label: "⏳確認中",         cls: "text-blue-600 bg-blue-50 border-blue-300" };
-    default:            return { label: t.btActiveStatus,  cls: "text-yellow-700 bg-yellow-50 border-yellow-300" };
+    case "pending_sl":  return { label: "⏳確認中（判定待ち）", tip: t.pendingTip, cls: "text-blue-600 bg-blue-50 border-blue-300" };
+    default:            return { label: t.btActiveStatus, cls: "text-yellow-700 bg-yellow-50 border-yellow-300" };
   }
 }
 
@@ -2029,8 +2050,8 @@ function SymbolHealthPanel({ healthData, onClear }: { healthData: Map<string, Sy
 
 // ─── Recommended Short Picks Panel ───────────────────────────────────────────
 function RecommendedPanel({
-  candidates, t, btcChange24h,
-}: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number }) {
+  candidates, t, btcChange24h, lang,
+}: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number; lang: Lang }) {
   const [open, setOpen] = useState(true);
   useEffect(() => {
     if (localStorage.getItem("bell:recommendedPanel:open") === "false") setOpen(false);
@@ -2089,7 +2110,7 @@ function RecommendedPanel({
             const entry   = c.currentPrice;
             const sl      = c.tradeSetup?.sl   ?? entry * 1.08;
             const tp1     = c.tradeSetup?.tp1  ?? entry * 0.92;
-            const rr      = c.tradeSetup?.rrRatio ?? (entry - tp1) / (sl - entry);
+            const rr      = c.tradeSetup?.rrTp2 ?? c.tradeSetup?.rrRatio ?? (entry - tp1) / (sl - entry);
             const slPct   = ((sl  - entry) / entry) * 100;
             const tp1Pct  = ((entry - tp1) / entry) * 100;
             const frPct   = c.fundingRate != null ? c.fundingRate * 100 : null;
@@ -2141,10 +2162,17 @@ function RecommendedPanel({
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={e => e.stopPropagation()}
-                    className="shrink-0 bg-gray-900 text-white text-xs px-3 py-1.5 rounded hover:bg-gray-700 transition-colors whitespace-nowrap"
+                    className="shrink-0 bg-emerald-600 text-white text-xs px-3 py-1.5 rounded hover:bg-emerald-700 transition-colors whitespace-nowrap"
                   >
                     {t.recPanelOpenMexc}
                   </a>
+                </div>
+                {/* 推奨理由 */}
+                <div className="mt-1.5 text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                  {t.recPanelReason}: {lang === "ja"
+                    ? `スコア ${c.displayScore}pt · FR ${frPct != null ? (frPct >= 0 ? "+" : "") + frPct.toFixed(4) + "%" : "—"} · R:R(TP2) ${rr.toFixed(2)}≥1.5`
+                    : `Score ${c.displayScore}pt · FR ${frPct != null ? (frPct >= 0 ? "+" : "") + frPct.toFixed(4) + "%" : "—"} · R:R(TP2) ${rr.toFixed(2)}≥1.5`
+                  }
                 </div>
               </div>
             );
@@ -3143,7 +3171,7 @@ export default function ShortScanner() {
           className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <span>🎛️ フィルター設定{!filtersOpen && <span className="ml-2 font-normal text-gray-400 dark:text-gray-500">ATH≥{minDrop}% / 出来高比≤{(maxVolRatio/100).toFixed(1)}x / Vol≥${minVol24k}K</span>}</span>
-          <span className="text-gray-400 text-[10px]">{filtersOpen ? "▲ 閉じる" : "▼ 開く"}</span>
+          <span className="text-gray-400 text-[10px]">{filtersOpen ? t.filterClose : t.filterAdjust}</span>
         </button>
         {filtersOpen && <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 bg-gray-50 dark:bg-gray-800 p-3 md:p-4 border-t border-gray-200 dark:border-gray-700">
         {[
@@ -3266,7 +3294,7 @@ export default function ShortScanner() {
 
       {/* Recommended Panel */}
       {data && !loading && extended.length > 0 && (
-        <RecommendedPanel candidates={extended} t={t} btcChange24h={marketBtcChange} />
+        <RecommendedPanel candidates={extended} t={t} btcChange24h={marketBtcChange} lang={lang} />
       )}
 
       {/* Summary bar (修正5) */}
@@ -3407,23 +3435,23 @@ export default function ShortScanner() {
                   <th className="px-1 py-1 text-left sticky left-0 bg-white dark:bg-gray-900 z-10 min-w-[80px]">{t.colSymbol}</th>
                   <SortTh label={t.colScore}  sortKey="displayScore"   current={sortBy} onSort={setSortBy} cls="text-center min-w-[55px]" />
                   <th className="px-1 py-1 text-right hidden md:table-cell min-w-[65px]">{t.colPrice}</th>
-                  <SortTh label={t.colAth}    sortKey="athDropPct"     current={sortBy} onSort={setSortBy} cls="text-right min-w-[55px]" />
-                  <th className="px-1 py-1 text-right hidden md:table-cell min-w-[50px]">{t.colVolR}</th>
+                  <SortTh label={t.colAth}    sortKey="athDropPct"     current={sortBy} onSort={setSortBy} cls="text-right min-w-[55px]" title={t.colAthTip} />
+                  <th className="px-1 py-1 text-right hidden md:table-cell min-w-[50px] cursor-help" title={t.colVolRTip}>{t.colVolR}</th>
                   <SortTh label={t.col24h}    sortKey="priceChange24h" current={sortBy} onSort={setSortBy} cls="text-right min-w-[55px]" />
                   <SortTh label={t.col7d}     sortKey="priceChange7d"  current={sortBy} onSort={setSortBy} cls="text-right hidden lg:table-cell min-w-[55px]" />
-                  <SortTh label={t.colFr}    sortKey="fundingRate"    current={sortBy} onSort={setSortBy} cls="text-right min-w-[60px]" />
-                  <SortTh label={t.colOi}     sortKey="openInterest"   current={sortBy} onSort={setSortBy} cls="text-right hidden md:table-cell min-w-[60px]" />
+                  <SortTh label={t.colFr}    sortKey="fundingRate"    current={sortBy} onSort={setSortBy} cls="text-right min-w-[60px]" title={t.colFrTip} />
+                  <SortTh label={t.colOi}     sortKey="openInterest"   current={sortBy} onSort={setSortBy} cls="text-right hidden md:table-cell min-w-[60px]" title={t.colOiTip} />
                   <SortTh label={t.colVol} sortKey="volume24h" current={sortBy} onSort={setSortBy} cls="text-right hidden xl:table-cell min-w-[60px]" />
                   <th className={`px-1 py-1 text-right hidden xl:table-cell min-w-[60px]${!HAS_CG ? " bg-gray-50 text-gray-400" : ""}`}>
                     {!HAS_CG && <span className="mr-0.5">🔒</span>}{t.colSpot}
                     <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>
                   </th>
-                  <th className={`px-1 py-1 text-right hidden xl:table-cell min-w-[55px]${!HAS_CG ? " bg-gray-50 text-gray-400" : ""}`}>
+                  <th className={`px-1 py-1 text-right hidden xl:table-cell min-w-[55px] cursor-help${!HAS_CG ? " bg-gray-50 text-gray-400" : ""}`} title={t.colFsRatioTip}>
                     {!HAS_CG && <span className="mr-0.5">🔒</span>}{t.colFsRatio}
                     <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-300 rounded">💎PRO</span>
                   </th>
                   <th className="px-1 py-1 text-right hidden md:table-cell min-w-[45px]">{t.colDays}</th>
-                  <th className="px-1 py-1 text-right hidden md:table-cell min-w-[55px]" title="BTCとの価格連動度。低いほどショートに有利">{t.colBtcCorr}</th>
+                  <th className="px-1 py-1 text-right hidden md:table-cell min-w-[55px] cursor-help" title={t.colBtcCorrTip}>{t.colBtcCorr}</th>
                   <th className="px-1 py-1 text-right hidden lg:table-cell min-w-[60px]" title="板流動性: スプレッド / 最大安全ポジション">流動性</th>
                   <th className="px-1 py-1 text-center hidden lg:table-cell min-w-[60px]">{t.colExch}</th>
                 </tr>
@@ -3551,8 +3579,8 @@ export default function ShortScanner() {
                                   {(() => {
                                     const bts = btRecordMap.get(c.symbol);
                                     if (!bts) return null;
-                                    const { label, cls } = btStatusLabel(bts, t);
-                                    return <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>{label}</span>;
+                                    const { label, cls, tip } = btStatusLabel(bts, t);
+                                    return <span title={tip} className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${cls}${tip ? " cursor-help" : ""}`}>{label}</span>;
                                   })()}
                                   <span className={`text-[9px] px-1 py-0.5 rounded border font-bold whitespace-nowrap ${phaseBadgeCls(c.phase.phase)}`}>
                                     {c.phase.emoji}{c.phase.label}
