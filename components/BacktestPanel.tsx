@@ -374,16 +374,27 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
   const [open,          setOpen]          = useState(true);
   const [showRecords,   setShowRecords]   = useState(false);
   const [showActivePos, setShowActivePos] = useState(false);
-  const [btPresetTab,   setBtPresetTab]   = useState<"all" | "low_lev" | "new_listing">("all");
+  const [btPresetTab,   setBtPresetTab]   = useState<"all" | "low_lev" | "new_listing" | "v2_only">("all");
   const [btMainTab,     setBtMainTab]     = useState<"stats" | "loss">("stats");
 
   const analysis = useMemo(() => analyzeBacktestRecords(records), [records]);
 
+  const v1Count    = records.filter(r => r.version !== "v2.0").length;
+  const v2Count    = records.filter(r => r.version === "v2.0").length;
+  const v2Resolved = records.filter(r =>
+    r.version === "v2.0" && ["tp1_hit", "tp2_hit", "tp3_hit", "sl_hit"].includes(r.status)
+  ).length;
+
+  const tabRecords = btPresetTab === "all"      ? records
+    : btPresetTab === "v2_only" ? records.filter(r => r.version === "v2.0")
+    : records.filter(r => r.preset === btPresetTab);
+
   const tabStats = useMemo(
-    () => calculateStats(records, btPresetTab === "all" ? "all" : btPresetTab),
+    () => btPresetTab === "v2_only"
+      ? calculateStats(records.filter(r => r.version === "v2.0"), "all")
+      : calculateStats(records, btPresetTab === "all" ? "all" : btPresetTab),
     [records, btPresetTab],
   );
-  const tabRecords  = btPresetTab === "all" ? records : records.filter(r => r.preset === btPresetTab);
   const displayStats = btPresetTab === "all" ? stats : tabStats;
 
   const periodStr = (() => {
@@ -430,9 +441,9 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
               </div>
               <div className="flex flex-wrap gap-1">
                 {([
-                  { key: "all",         label: "全体" },
-                  { key: "low_lev",     label: "🐢低レバ" },
-                  { key: "new_listing", label: "🆕新規上場" },
+                  { key: "all",         label: "全体",        count: records.length },
+                  { key: "low_lev",     label: "🐢低レバ",    count: records.filter(r => r.preset === "low_lev").length },
+                  { key: "new_listing", label: "🆕新規上場",  count: records.filter(r => r.preset === "new_listing").length },
                 ] as const).map(tab => (
                   <button key={tab.key} onClick={() => setBtPresetTab(tab.key)}
                     className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
@@ -441,11 +452,18 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                         : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600 hover:bg-indigo-50"
                     }`}>
                     {tab.label}
-                    <span className="ml-1 opacity-60">
-                      ({tab.key === "all" ? records.length : records.filter(r => r.preset === tab.key).length})
-                    </span>
+                    <span className="ml-1 opacity-60">({tab.count})</span>
                   </button>
                 ))}
+                <button onClick={() => setBtPresetTab("v2_only")}
+                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
+                    btPresetTab === "v2_only"
+                      ? "bg-emerald-500 text-white border-emerald-500"
+                      : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600 hover:bg-emerald-50"
+                  }`}>
+                  🆕 v2.0のみ
+                  <span className="ml-1 opacity-60">({v2Count})</span>
+                </button>
               </div>
             </div>
           )}
@@ -458,6 +476,32 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
             <LossAnalysisPanel analysis={analysis} records={tabRecords} />
           ) : (
             <>
+              {/* 精度警告バナー */}
+              {v1Count > 0 && v2Count < 200 && (
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+                  <div className="text-xs font-bold text-yellow-800 dark:text-yellow-300 mb-1">
+                    ⚠️ {lang === "ja" ? "精度に関する注意" : "About accuracy"}
+                  </div>
+                  <div className="text-xs text-yellow-700 dark:text-yellow-400 space-y-1">
+                    <div>
+                      {lang === "ja"
+                        ? `統計データにはv1.0（${v1Count}件）とv2.0（${v2Count}件）が混在しています。`
+                        : `Stats include v1.0 (${v1Count} records) and v2.0 (${v2Count} records).`}
+                    </div>
+                    <div>
+                      {lang === "ja"
+                        ? `v2.0の決着済みサンプルは ${v2Resolved}件と少なく、勝率の信頼性は低めです。`
+                        : `v2.0 has only ${v2Resolved} resolved samples — accuracy is uncertain.`}
+                    </div>
+                    <div className="font-semibold mt-1">
+                      {lang === "ja"
+                        ? "✅ v2.0データが200件蓄積されるまで、統計は参考値として扱ってください。"
+                        : "✅ Treat stats as reference until 200+ v2.0 records are collected."}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <p className="text-xs text-gray-500">{t.btPeriod}: <span className="font-semibold text-gray-700">{periodStr}</span></p>
 
               {/* Summary */}

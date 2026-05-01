@@ -2049,8 +2049,8 @@ function SymbolHealthPanel({ healthData, onClear }: { healthData: Map<string, Sy
 
 // ─── Recommended Short Picks Panel ───────────────────────────────────────────
 function RecommendedPanel({
-  candidates, t, btcChange24h, lang,
-}: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number; lang: Lang }) {
+  candidates, t, btcChange24h, lang, isShortStopped = false,
+}: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number; lang: Lang; isShortStopped?: boolean }) {
   const [open, setOpen] = useState(true);
   useEffect(() => {
     if (localStorage.getItem("bell:recommendedPanel:open") === "false") setOpen(false);
@@ -2102,7 +2102,25 @@ function RecommendedPanel({
       </button>
 
       {/* Cards */}
-      {open && picks.length > 0 && (
+      {open && isShortStopped && (
+        <div className="px-4 py-6 text-center">
+          <div className="text-3xl mb-2">⏸️</div>
+          <div className="text-sm font-bold text-red-700 dark:text-red-400 mb-1">
+            {lang === "ja" ? "推奨を一時停止中" : "Recommendations paused"}
+          </div>
+          <div className="text-xs text-gray-600 dark:text-gray-400">
+            {lang === "ja"
+              ? "市場環境がショートに不利なため、推奨を一時停止しています。"
+              : "Market conditions unfavorable for shorts."}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+            {lang === "ja"
+              ? "FRがプラスに戻るまでお待ちください。"
+              : "Wait for FR to turn positive."}
+          </div>
+        </div>
+      )}
+      {open && !isShortStopped && picks.length > 0 && (
         <div className="px-3 pb-3 pt-1 space-y-2">
           {picks.map(c => {
             const base    = c.symbol.replace(/_USDT$/, "");
@@ -2183,9 +2201,14 @@ function RecommendedPanel({
                 : `+${hiddenCount} more recommended (see table)`}
             </div>
           )}
+          <div className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-1">
+            {lang === "ja"
+              ? "※ 過去のバックテスト結果に基づく推奨です。実際の取引はご自身の判断で行ってください。"
+              : "※ Based on past backtest. Make your own trading decisions."}
+          </div>
         </div>
       )}
-      {open && picks.length === 0 && (
+      {open && !isShortStopped && picks.length === 0 && (
         <div className="px-4 py-4 text-xs text-gray-400 text-center">{t.recPanelEmpty}</div>
       )}
     </div>
@@ -3305,7 +3328,7 @@ export default function ShortScanner() {
 
       {/* Recommended Panel */}
       {data && !loading && extended.length > 0 && (
-        <RecommendedPanel candidates={extended} t={t} btcChange24h={marketBtcChange} lang={lang} />
+        <RecommendedPanel candidates={extended} t={t} btcChange24h={marketBtcChange} lang={lang} isShortStopped={dangerZone.shouldBlockEntry} />
       )}
 
       {/* Summary bar (修正5) */}
