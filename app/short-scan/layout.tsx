@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "BELL Short Scanner | MEXC先物ショート候補自動検出",
-  description: "MEXC先物の全銘柄を自動スキャン。25指標スコアリングでショート候補をTOP20表示。完全無料。",
+  title: "BELL Short Scanner | MEXC Futures ショートスキャナー",
+  description: "ATH急落 × 出来高枯渇 × FR × OI × 取引所独占度を総合スコアリング。MEXCショート候補を自動検出。",
   openGraph: {
     title: "BELL Short Scanner",
-    description: "MEXC先物の全銘柄を25指標でスコアリング。ショート候補を自動検出。完全無料。",
+    description: "MEXC Futuresのショート候補を自動検出するスキャナー",
     url: "https://bell-sig.vercel.app/short-scan",
-    siteName: "BELL Short Scanner",
+    siteName: "BELL Crypto Terminal",
     images: [
       {
         url: "https://bell-sig.vercel.app/og-short-scan.png",
@@ -20,9 +20,9 @@ export const metadata: Metadata = {
     type: "website",
   },
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "BELL Short Scanner",
-    description: "MEXC先物の全銘柄を25指標でスコアリング。ショート候補を自動検出。完全無料。",
+    description: "MEXC Futuresのショート候補を自動検出",
     images: ["https://bell-sig.vercel.app/og-short-scan.png"],
   },
 };

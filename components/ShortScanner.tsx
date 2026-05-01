@@ -3077,7 +3077,7 @@ export default function ShortScanner() {
             className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoIntervalMin > 0 ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
             {t.autoRefresh} {autoIntervalMin > 0 ? `${autoIntervalMin}m` : t.autoOff} ▾
             {autoIntervalMin > 0 && countdown != null && (
-              <span className="ml-1 text-indigo-400">{Math.floor(countdown / 60)}:{String(Math.floor(countdown % 60)).padStart(2,"0")}</span>
+              <span className="ml-1 text-indigo-400">🔄 {t.autoCountdown}: {Math.floor(countdown / 60)}:{String(Math.floor(countdown % 60)).padStart(2,"0")}</span>
             )}
           </button>
           {showAutoMenu && (
@@ -3281,6 +3281,11 @@ export default function ShortScanner() {
             strongThreshold={strongThreshold}
             btcChange24h={marketBtcChange}
           />
+          {data?.mode === "new30" && (
+            <span className="text-xs px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 font-semibold">
+              📋 {t.newMode}
+            </span>
+          )}
           {summaryFilter && (
             <button onClick={() => setSummaryFilter(null)}
               className="ml-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-300 text-xs font-bold hover:bg-orange-200 transition-colors flex items-center gap-1">

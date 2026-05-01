@@ -270,8 +270,9 @@ function LossAnalysisPanel({ analysis, records }: { analysis: BacktestAnalysis; 
 
 // ── DataIntegritySection ──────────────────────────────────────────────────────
 
-function DataIntegritySection({ records }: { records: BacktestRecord[] }) {
+function DataIntegritySection({ records, lang }: { records: BacktestRecord[]; lang: "ja" | "en" }) {
   const report = useMemo(() => checkDataIntegrity(records), [records]);
+  const tpOrderV1Count = report.issues.filter(i => i.category === "TP順序異常" && i.level === "warning").length;
 
   return (
     <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-lg">
@@ -294,6 +295,13 @@ function DataIntegritySection({ records }: { records: BacktestRecord[] }) {
         </span>
       </div>
 
+      {tpOrderV1Count > 0 && (
+        <div className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+          {lang === "ja"
+            ? `※ v1.0の既知TP順序バグ ${tpOrderV1Count}件を warning 扱いにしています`
+            : `※ ${tpOrderV1Count} known TP order bugs from v1.0 treated as warnings`}
+        </div>
+      )}
       {report.issues.length === 0 ? (
         <div className="text-xs text-green-600 font-semibold">✅ 異常なし（{report.totalChecked}件チェック済）</div>
       ) : (
@@ -350,6 +358,18 @@ interface BacktestPanelProps {
 
 export default function BacktestPanel({ records, stats, lang, onReset }: BacktestPanelProps) {
   const t = lang === "en" ? BT_EN : BT_JA;
+
+  function handleReset() {
+    const msg1 = lang === "ja"
+      ? `⚠️ バックテストデータ${records.length}件を全て削除します。\n\nこの操作は取り消せません。\n\n本当に削除しますか？`
+      : `⚠️ Delete all ${records.length} backtest records.\n\nThis cannot be undone.\n\nAre you sure?`;
+    if (!window.confirm(msg1)) return;
+    const msg2 = lang === "ja"
+      ? "最終確認: 本当に全データを削除しますか？"
+      : "Final confirmation: Delete all data?";
+    if (!window.confirm(msg2)) return;
+    onReset();
+  }
 
   const [open,          setOpen]          = useState(true);
   const [showRecords,   setShowRecords]   = useState(false);
@@ -872,14 +892,14 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                   className="px-3 py-1.5 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors">
                   {t.btCsvExport}
                 </button>
-                <button onClick={() => { if (window.confirm(t.btResetConfirm)) onReset(); }}
+                <button onClick={handleReset}
                   className="px-3 py-1.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
                   {t.btReset}
                 </button>
               </div>
 
               {/* データ健全性 */}
-              <DataIntegritySection records={records} />
+              <DataIntegritySection records={records} lang={lang} />
             </>
           )}
         </div>

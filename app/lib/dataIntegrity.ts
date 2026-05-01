@@ -28,21 +28,24 @@ export function checkDataIntegrity(records: BacktestRecord[]): IntegrityReport {
 
   for (const r of records) {
     // チェック1: TP順序（ショートでは TP1 > TP2 > TP3）
+    // v1.0では既知のバグでTP順序が逆転していたため warning に軽減
     if (r.tp1 < r.tp2) {
+      const isV2 = r.version === "v2.0";
       issues.push({
-        level: "critical",
+        level: isV2 ? "critical" : "warning",
         category: "TP順序異常",
         symbol: r.symbol,
-        description: `TP1(${r.tp1.toPrecision(5)}) < TP2(${r.tp2.toPrecision(5)}) — ショート時の順序逆転`,
+        description: `TP1(${r.tp1.toPrecision(5)}) < TP2(${r.tp2.toPrecision(5)}) — ショート時の順序逆転${!isV2 ? "（v1.0既知バグ）" : ""}`,
         recordId: r.id,
       });
     }
     if (r.tp2 < r.tp3) {
+      const isV2 = r.version === "v2.0";
       issues.push({
-        level: "critical",
+        level: isV2 ? "critical" : "warning",
         category: "TP順序異常",
         symbol: r.symbol,
-        description: `TP2(${r.tp2.toPrecision(5)}) < TP3(${r.tp3.toPrecision(5)}) — ショート時の順序逆転`,
+        description: `TP2(${r.tp2.toPrecision(5)}) < TP3(${r.tp3.toPrecision(5)}) — ショート時の順序逆転${!isV2 ? "（v1.0既知バグ）" : ""}`,
         recordId: r.id,
       });
     }
