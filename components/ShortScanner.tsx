@@ -1827,8 +1827,6 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
   if (c.liquidityInfo?.maxSafePosition != null && c.liquidityInfo.maxSafePosition < 5_000) return "banned";
 
   // ── 注意条件 ───────────────────────────────────────────────────────────────
-  // スコア14pt以上: サンプル少なく信頼性不明確のため保留扱い
-  if (c.displayScore >= 14) return "caution";
   // アンロック7日以内 ≥3%
   if (unlockDays != null && unlockDays <= 7 && unlockPct >= 3) return "caution";
   // アンロック30日以内 (任意%)
@@ -1837,8 +1835,9 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
   if (c.newsContext?.hasPartnership) return "caution";
   // スプレッド高い (>0.5%)
   if (c.liquidityInfo?.spread != null && c.liquidityInfo.spread > 0.5) return "caution";
-  // FR < 0 or 出来高急増 or 上場3日以内 or OI過剰
-  if ((fr !== null && fr < 0) || c.volumeChangeRatio > 5.0 || c.listedDaysAgo <= 3 || c.oiRatio > 500) return "caution";
+  // FR < 0（スクイーズリスク）or 上場3日以内（ボラリスク）
+  // ※ oiRatio・volumeChangeRatio はスコアで評価済みのためここでは判定しない
+  if ((fr !== null && fr < 0) || c.listedDaysAgo <= 3) return "caution";
   // [BT-R1] trendAlignment===0 → 全TFがDOWNでない、ショート勝率低下
   if (c.trendMultiTF != null && c.trendMultiTF.alignment === 0) return "caution";
 
