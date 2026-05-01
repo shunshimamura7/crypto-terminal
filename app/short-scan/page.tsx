@@ -83,7 +83,7 @@ export default function ShortScanPage() {
                 </button>
               </div>
               <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-50 tracking-tight mb-2">
-                880銘柄を14指標で自動スコアリング
+                MEXC先物 全銘柄を14指標で自動スコアリング
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-4 max-w-xl">
                 ATH急落・出来高枯渇・FR・OI・パターン検知を組み合わせ、ショート候補をリアルタイムで検出します。
