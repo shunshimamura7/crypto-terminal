@@ -56,6 +56,7 @@ const EN_PRESETS = [
 const POS_SIZE_OPTIONS = [3, 5, 10, 15, 20];
 
 export default function PnlSimulator({ records, lang, currentScanResults }: PnlSimulatorProps) {
+  // ── ライブ入力 state ───────────────────────────────────────────────────────
   const [capital,         setCapital]         = useState(() => loadSavedCapital(lang));
   const [riskPct,         setRiskPct]         = useState(() => loadSetting("riskPct",  2));
   const [leverage,        setLeverage]        = useState(() => loadSetting("leverage", 3));
@@ -64,6 +65,11 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
   const [dataSource,      setDataSource]      = useState<"all" | "custom">("all");
   const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
   const [manualSymbol,    setManualSymbol]    = useState("");
+
+  // ── 実行済みスナップショット state（ボタン押下時に確定） ──────────────────
+  const [executedConfig,     setExecutedConfig]     = useState<SimulationConfig | null>(null);
+  const [executedDataSource, setExecutedDataSource] = useState<"all" | "custom">("all");
+  const [executedSymbols,    setExecutedSymbols]    = useState<Set<string>>(new Set());
 
   useEffect(() => {
     try {
@@ -76,8 +82,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
 
   function fmtCurrency(value: number): string {
     const rounded = Math.round(Math.abs(value));
-    const formatted = rounded.toLocaleString(ja ? "ja-JP" : "en-US");
-    return ja ? `¥${formatted}` : `$${formatted}`;
+    return ja ? `¥${rounded.toLocaleString("ja-JP")}` : `$${rounded.toLocaleString("en-US")}`;
   }
 
   function fmtAxisTick(value: number): string {
@@ -89,32 +94,28 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     return `$${value}`;
   }
 
-  const filteredRecords = useMemo(() => {
-    if (dataSource === "all") return records;
-    return records.filter(r => selectedSymbols.has(r.symbol));
-  }, [records, dataSource, selectedSymbols]);
+  // ── 実行対象レコード ─────────────────────────────────────────────────────
+  const executedRecords = useMemo(() => {
+    if (!executedConfig) return [];
+    if (executedDataSource === "all") return records;
+    return records.filter(r => executedSymbols.has(r.symbol));
+  }, [executedConfig, executedDataSource, executedSymbols, records]);
 
-  const simConfig = useMemo((): SimulationConfig => ({
-    initialCapital:  capital,
-    riskPerTrade:    riskPct,
-    positionSizePct: posSizePct,
-    leverage,
-    usdJpy:          145,
-    mode:            calcMode,
-  }), [capital, riskPct, posSizePct, leverage, calcMode]);
+  // ── シミュレーション結果（実行後のみ） ────────────────────────────────────
+  const result = useMemo(() => {
+    if (!executedConfig) return null;
+    return simulateBacktest(executedRecords, executedConfig);
+  }, [executedRecords, executedConfig]);
 
-  const result = useMemo(
-    () => simulateBacktest(filteredRecords, simConfig),
-    [filteredRecords, simConfig],
-  );
-
-  // シャープレシオ
+  // ── シャープレシオ（実行済み設定で計算） ─────────────────────────────────
   const sharpe = useMemo(() => {
-    const resolved = [...filteredRecords]
+    if (!executedConfig) return null;
+    const cfg = executedConfig;
+    const resolved = [...executedRecords]
       .filter(r => r.resolvedAt != null && r.resolvedPrice != null && r.status !== "active")
       .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
     if (resolved.length < 3) return null;
-    let eq = capital;
+    let eq = cfg.initialCapital;
     const rets: number[] = [];
     for (const r of resolved) {
       const profit = r.entryPrice - (r.resolvedPrice ?? r.entryPrice);
@@ -122,10 +123,10 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
       if (risk <= 0) continue;
       const realR = profit / risk;
       let pnl: number;
-      if (calcMode === "position") {
-        pnl = (eq * posSizePct / 100) * (profit / r.entryPrice) * leverage;
+      if (cfg.mode === "position") {
+        pnl = (eq * cfg.positionSizePct / 100) * (profit / r.entryPrice) * cfg.leverage;
       } else {
-        pnl = realR * (eq * riskPct / 100);
+        pnl = realR * (eq * cfg.riskPerTrade / 100);
       }
       const ret = eq > 0 ? pnl / eq : 0;
       eq = Math.max(0, eq + pnl);
@@ -136,10 +137,11 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     const mean     = rets.reduce((a, b) => a + b, 0) / rets.length;
     const variance = rets.reduce((a, b) => a + (b - mean) ** 2, 0) / rets.length;
     return variance > 0 ? (mean / Math.sqrt(variance)) * Math.sqrt(rets.length) : 0;
-  }, [filteredRecords, capital, riskPct, posSizePct, leverage, calcMode]);
+  }, [executedConfig, executedRecords]);
 
-  // 実際のトレードPnLを資金曲線の差分から計算（モード非依存）
+  // ── 平均利益/損失（equity curve の差分から） ──────────────────────────────
   const { avgWinJpy, avgLossJpy } = useMemo(() => {
+    if (!result) return { avgWinJpy: 0, avgLossJpy: 0 };
     const diffs = result.equityCurve.slice(1).map(
       (pt, i) => pt.equity - result.equityCurve[i].equity,
     );
@@ -149,13 +151,25 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
       avgWinJpy:  wins.length   > 0 ? wins.reduce((a, b) => a + b, 0)  / wins.length  : 0,
       avgLossJpy: losses.length > 0 ? Math.abs(losses.reduce((a, b) => a + b, 0)) / losses.length : 0,
     };
-  }, [result.equityCurve]);
+  }, [result]);
 
-  const pnlJpy   = result.finalEquity - capital;
-  const maxDDJpy = result.maxDrawdown / 100 * capital;
-  const highLevRisk = posSizePct * 0.08 * leverage;
+  // ── 派生値 ───────────────────────────────────────────────────────────────
+  const execCapital  = executedConfig?.initialCapital ?? capital;
+  const pnlJpy       = result ? result.finalEquity - execCapital : 0;
+  const maxDDJpy     = result ? result.maxDrawdown / 100 * execCapital : 0;
+  const highLevRisk  = posSizePct * 0.08 * leverage;
 
-  // 銘柄プール（スキャン結果 + バックテスト記録）
+  // ── 設定変更検知 ─────────────────────────────────────────────────────────
+  const hasSettingsChanged = executedConfig !== null && (
+    executedConfig.initialCapital !== capital ||
+    executedConfig.mode           !== calcMode ||
+    executedConfig.riskPerTrade   !== riskPct ||
+    executedConfig.positionSizePct !== posSizePct ||
+    executedConfig.leverage       !== leverage ||
+    executedDataSource            !== dataSource
+  );
+
+  // ── 銘柄プール ───────────────────────────────────────────────────────────
   const symbolPool = useMemo(() => {
     const pool = new Map<string, { displayScore?: number; scoreMax?: number; hasRecord: boolean }>();
     for (const c of (currentScanResults ?? [])) {
@@ -170,6 +184,20 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     }
     return [...pool.entries()].sort((a, b) => (b[1].displayScore ?? 0) - (a[1].displayScore ?? 0));
   }, [records, currentScanResults]);
+
+  // ── ハンドラー ───────────────────────────────────────────────────────────
+  function runSimulation() {
+    setExecutedConfig({
+      initialCapital:  capital,
+      riskPerTrade:    riskPct,
+      positionSizePct: posSizePct,
+      leverage,
+      usdJpy:          145,
+      mode:            calcMode,
+    });
+    setExecutedDataSource(dataSource);
+    setExecutedSymbols(new Set(selectedSymbols));
+  }
 
   function addManualSymbol() {
     const raw = manualSymbol.trim().toUpperCase();
@@ -196,63 +224,60 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     });
   }
 
+  // ── 翻訳 ─────────────────────────────────────────────────────────────────
   const T = {
-    title:         ja ? "💹 損益シミュレーション"            : "💹 PnL Simulation",
-    subtitle:      ja ? "過去のスキャン結果で運用していたら？" : "What if you traded past scan results?",
-    calcMode:      ja ? "計算方式"           : "Calc Mode",
-    riskMode:      ja ? "リスク%固定"        : "Fixed Risk%",
-    posMode:       ja ? "ポジション固定"      : "Fixed Position",
-    riskModeDesc:  ja ? "SL損失を口座の一定%に固定（プロ向け）" : "Fix loss as % of account (Pro)",
-    posModeDesc:   ja ? "投入額を口座の一定%に固定（レバ有効）" : "Fix position size; leverage amplifies P&L",
-    allHistory:    ja ? "全履歴シミュレーション" : "All History",
-    customSelect:  ja ? "銘柄を選んでシミュレーション" : "Custom Selection",
-    capital:       ja ? "軍資金"            : "Capital",
-    risk:          ja ? "1トレードリスク"    : "Risk per Trade",
-    posSize:       ja ? "ポジション比率"     : "Position Size %",
-    leverage:      ja ? "レバレッジ"         : "Leverage",
-    maxLossLabel:  ja ? "1トレード最大損失"  : "Max loss/trade",
-    investLabel:   ja ? "投入額"            : "Position value",
-    initial:       ja ? "初期資金"           : "Initial",
-    final:         ja ? "最終資金"           : "Final",
-    pnl:           ja ? "損益"              : "PnL",
-    maxDD:         ja ? "最大DD"            : "Max DD",
-    totalTrades:   ja ? "総トレード"         : "Trades",
-    winRate:       ja ? "勝率"              : "Win Rate",
-    avgWin:        ja ? "平均利益"           : "Avg Win",
-    avgLoss:       ja ? "平均損失"           : "Avg Loss",
-    profitFactor:  ja ? "PF"               : "PF",
-    sharpe:        ja ? "シャープ"           : "Sharpe",
-    conservative:  ja ? "保守的"            : "Conservative",
-    standard:      ja ? "標準"             : "Standard",
-    aggressive:    ja ? "積極的"            : "Aggressive",
-    highRisk:      ja ? "ハイリスク"         : "High Risk",
-    lev1:          ja ? "1x（現物相当）"     : "1x (Spot equivalent)",
-    lev3:          ja ? "3x（推奨）"         : "3x (Recommended)",
-    lev10:         ja ? "10x（BTC/ETHのみ）" : "10x (BTC/ETH only)",
-    selectSymbols: ja ? "シミュレーション銘柄を選択" : "Select Symbols to Simulate",
-    addSymbol:     ja ? "追加"              : "Add",
-    noSymbolSelected: ja ? "銘柄を選択してください" : "Select symbols above",
-    selectedCount: ja ? "選択中"            : "Selected",
-    perSymbolPnl:  ja ? "銘柄別サマリ"      : "Per Symbol Summary",
-    noData:        ja
-      ? "まだバックテストデータがありません。スキャンを実行するとデータが蓄積されます。"
-      : "No backtest data yet. Run a scan to start accumulating data.",
-    noDataCustom:  ja ? "選択した銘柄のバックテストデータがありません。" : "No backtest data for selected symbols.",
-    bankrupt:      ja ? "🚨 破産（資金ゼロ）" : "🚨 Bankrupt (equity zero)",
-    disclaimer:    ja
+    title:            ja ? "💹 損益シミュレーション"            : "💹 PnL Simulation",
+    subtitle:         ja ? "過去のスキャン結果で運用していたら？" : "What if you traded past scan results?",
+    calcMode:         ja ? "計算方式"              : "Calc Mode",
+    riskMode:         ja ? "リスク%固定"           : "Fixed Risk%",
+    posMode:          ja ? "ポジション固定"         : "Fixed Position",
+    riskModeDesc:     ja ? "SL損失を口座の一定%に固定（プロ向け）" : "Fix loss as % of account (Pro)",
+    posModeDesc:      ja ? "投入額を口座の一定%に固定（レバ有効）" : "Fix position size; leverage amplifies P&L",
+    allHistory:       ja ? "全履歴シミュレーション"  : "All History",
+    customSelect:     ja ? "銘柄を選んでシミュレーション" : "Custom Selection",
+    capital:          ja ? "軍資金"               : "Capital",
+    risk:             ja ? "1トレードリスク"       : "Risk per Trade",
+    posSize:          ja ? "ポジション比率"        : "Position Size %",
+    leverage:         ja ? "レバレッジ"            : "Leverage",
+    levDisabled:      ja ? "リスク%固定では不要（損益に影響しません）" : "Not needed in Fixed Risk% mode",
+    initial:          ja ? "初期資金"              : "Initial",
+    final:            ja ? "最終資金"              : "Final",
+    pnl:              ja ? "損益"                 : "PnL",
+    maxDD:            ja ? "最大DD"               : "Max DD",
+    totalTrades:      ja ? "総トレード"            : "Trades",
+    winRate:          ja ? "勝率"                 : "Win Rate",
+    avgWin:           ja ? "平均利益"              : "Avg Win",
+    avgLoss:          ja ? "平均損失"              : "Avg Loss",
+    profitFactor:     ja ? "PF"                  : "PF",
+    sharpe:           ja ? "シャープ"              : "Sharpe",
+    lev1:             ja ? "1x（現物相当）"        : "1x (Spot)",
+    lev3:             ja ? "3x（推奨）"            : "3x (Recommended)",
+    lev10:            ja ? "10x（BTC/ETHのみ）"    : "10x (BTC/ETH only)",
+    selectSymbols:    ja ? "シミュレーション銘柄を選択" : "Select Symbols to Simulate",
+    addSymbol:        ja ? "追加"                 : "Add",
+    noSymbolSelected: ja ? "銘柄を選択してください"  : "Select symbols above",
+    selectedCount:    ja ? "選択中"               : "Selected",
+    perSymbolPnl:     ja ? "銘柄別サマリ"          : "Per Symbol Summary",
+    runBtn:           ja ? "▶ シミュレーション実行"  : "▶ Run Simulation",
+    settingsChanged:  ja ? "⚠️ 設定が変更されました。再実行してください。" : "⚠️ Settings changed. Click Run again.",
+    noResultTitle:    ja ? "設定を入力して「シミュレーション実行」を押してください" : "Enter settings and click \"Run Simulation\"",
+    noResultSub:      ja ? "過去のバックテストデータに基づいて損益をシミュレーションします" : "Simulates P&L based on historical backtest data",
+    noDataCustom:     ja ? "選択した銘柄のバックテストデータがありません。" : "No backtest data for selected symbols.",
+    bankrupt:         ja ? "🚨 破産（資金ゼロ）"    : "🚨 Bankrupt (equity zero)",
+    disclaimer:       ja
       ? "※ シミュレーション結果です。実際の取引ではスリッページ・FR・手数料が発生します。過去の成績は将来の結果を保証しません。"
       : "※ Simulation only. Actual trading involves slippage, funding rates, and fees. Past performance does not guarantee future results.",
-    dashed:        ja ? "点線: 初期資金" : "Dashed: Initial capital",
-    equity:        ja ? "資産" : "Equity",
-    trades:        ja ? "件"   : "",
-    wins:          ja ? "勝"   : "W",
-    active:        ja ? "件進行中" : " active",
-    noRecord:      ja ? "データなし" : "No data",
-    scanFirst:     ja ? "スキャンを実行すると銘柄が表示されます" : "Run a scan to see symbols",
-    highLevWarn:   ja
+    dashed:           ja ? "点線: 初期資金" : "Dashed: Initial capital",
+    equity:           ja ? "資産"   : "Equity",
+    trades:           ja ? "件"     : "",
+    wins:             ja ? "勝"     : "W",
+    active:           ja ? "件進行中" : " active",
+    noRecord:         ja ? "データなし" : "No data",
+    scanFirst:        ja ? "スキャンを実行すると銘柄が表示されます" : "Run a scan to see symbols",
+    highLevWarn:      ja
       ? `⚠️ レバ${leverage}x × ポジション${posSizePct}%: SL hit時に資金の約${highLevRisk.toFixed(1)}%を失う可能性`
       : `⚠️ Lev ${leverage}x × pos ${posSizePct}%: ~${highLevRisk.toFixed(1)}% of capital at risk per SL hit`,
-    highLevDanger: ja
+    highLevDanger:    ja
       ? "🚨 1トレードで資金の10%以上のリスク！サイズを下げてください"
       : "🚨 Over 10% of capital at risk per trade! Reduce position size.",
   };
@@ -405,15 +430,24 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
             )}
           </div>
 
-          {/* レバレッジ */}
+          {/* ━━━ レバレッジ（リスク%固定時はグレーアウト） ━━━━━━━━━━━━━━━━━ */}
           <div>
-            <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block mb-2">
+            <label className={`text-sm font-semibold block mb-2 ${
+              calcMode === "risk"
+                ? "text-gray-400 dark:text-gray-500"
+                : "text-gray-700 dark:text-gray-300"
+            }`}>
               ⚡ {T.leverage}
             </label>
             <select
               value={leverage}
               onChange={e => setLeverage(Number(e.target.value))}
-              className="w-full border-2 border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+              disabled={calcMode === "risk"}
+              className={`w-full border-2 rounded-lg px-3 py-2 text-base transition ${
+                calcMode === "risk"
+                  ? "border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                  : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+              }`}
             >
               <option value={1}>{T.lev1}</option>
               <option value={2}>2x</option>
@@ -421,11 +455,9 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
               <option value={5}>5x</option>
               <option value={10}>{T.lev10}</option>
             </select>
-            {calcMode === "risk" && (
-              <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-                {ja ? "リスク%固定モードではレバレッジは損益に影響しません" : "Leverage does not affect P&L in Fixed Risk% mode"}
-              </div>
-            )}
+            <div className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">
+              {calcMode === "risk" ? T.levDisabled : ""}
+            </div>
           </div>
         </div>
 
@@ -535,7 +567,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
           </div>
         )}
 
-        {/* ━━━ 銘柄別サマリ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        {/* ━━━ 銘柄別サマリ（カスタム選択時） ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         {dataSource === "custom" && selectedSymbols.size > 0 && (
           <div>
             <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -578,162 +610,199 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
           </div>
         )}
 
-        {/* ━━━ データなし / 結果 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-        {result.totalTrades === 0 ? (
-          <div className="text-center py-10 text-sm text-gray-400 dark:text-gray-500 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/30">
-            {dataSource === "custom" && selectedSymbols.size > 0 ? T.noDataCustom : T.noData}
+        {/* ━━━ 実行ボタン ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        <div className="flex justify-center">
+          <button
+            onClick={runSimulation}
+            className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white rounded-xl text-base font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 active:scale-95"
+          >
+            {T.runBtn}
+          </button>
+        </div>
+
+        {/* ━━━ 結果エリア ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        {result === null ? (
+          /* 未実行プレースホルダー */
+          <div className="text-center py-14 text-gray-400 dark:text-gray-500 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/30">
+            <div className="text-5xl mb-4">📊</div>
+            <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+              {T.noResultTitle}
+            </div>
+            <div className="text-xs text-gray-400 dark:text-gray-500">
+              {T.noResultSub}
+            </div>
           </div>
         ) : (
           <>
-            {/* 破産警告 */}
-            {result.bankrupt && (
-              <div className="p-3 bg-red-100 dark:bg-red-950/50 border border-red-400 rounded-lg text-sm font-bold text-red-700 dark:text-red-400 text-center">
-                {T.bankrupt}
+            {/* 設定変更バナー */}
+            {hasSettingsChanged && (
+              <div className="text-center text-xs text-orange-600 dark:text-orange-400 py-2 px-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">
+                {T.settingsChanged}
               </div>
             )}
 
-            {/* ━━━ 結果 4カード ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-center">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{T.initial}</div>
-                <div className="font-bold text-lg text-gray-700 dark:text-gray-200">{fmtCurrency(capital)}</div>
+            {/* データなし */}
+            {result.totalTrades === 0 ? (
+              <div className="text-center py-8 text-sm text-gray-400 dark:text-gray-500 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/30">
+                {executedDataSource === "custom" ? T.noDataCustom : (
+                  ja
+                    ? "まだバックテストデータがありません。スキャンを実行するとデータが蓄積されます。"
+                    : "No backtest data yet. Run a scan to start accumulating data."
+                )}
               </div>
-              <div className={`p-4 rounded-xl border text-center ${
-                result.finalEquity >= capital
-                  ? "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800"
-                  : "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
-              }`}>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{T.final}</div>
-                <div className={`font-bold text-lg ${
-                  result.finalEquity >= capital
-                    ? "text-green-700 dark:text-green-400"
-                    : "text-red-700 dark:text-red-400"
-                }`}>
-                  {fmtCurrency(result.finalEquity)}
-                </div>
-              </div>
-              <div className={`p-4 rounded-xl border text-center ${
-                result.totalReturn >= 0
-                  ? "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800"
-                  : "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
-              }`}>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{T.pnl}</div>
-                <div className={`font-bold text-lg ${result.totalReturn >= 0 ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
-                  {result.totalReturn >= 0 ? "+" : ""}{result.totalReturn.toFixed(1)}%
-                </div>
-                <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                  ({pnlJpy >= 0 ? "+" : ""}{fmtCurrency(pnlJpy)})
-                </div>
-              </div>
-              <div className="bg-orange-50 dark:bg-orange-950/30 p-4 rounded-xl border border-orange-200 dark:border-orange-800 text-center">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{T.maxDD}</div>
-                <div className={`font-bold text-lg ${
-                  result.maxDrawdown > 30 ? "text-red-600 dark:text-red-400"
-                  : result.maxDrawdown > 15 ? "text-orange-600 dark:text-orange-400"
-                  : "text-orange-500"
-                }`}>
-                  -{result.maxDrawdown.toFixed(1)}%
-                </div>
-                <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                  (-{fmtCurrency(maxDDJpy)})
-                </div>
-              </div>
-            </div>
-
-            {/* ━━━ 詳細統計 6カード ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-sm">
-              {[
-                {
-                  label: T.totalTrades,
-                  val: `${result.totalTrades}${T.trades}`,
-                  cls: "text-gray-700 dark:text-gray-200",
-                },
-                {
-                  label: T.winRate,
-                  val: `${result.winRate.toFixed(1)}%`,
-                  cls: result.winRate >= 50
-                    ? "text-green-700 dark:text-green-400"
-                    : "text-red-600 dark:text-red-400",
-                },
-                {
-                  label: T.avgWin,
-                  val: `+${fmtCurrency(avgWinJpy)}`,
-                  cls: "text-green-600 dark:text-green-400",
-                },
-                {
-                  label: T.avgLoss,
-                  val: `-${fmtCurrency(avgLossJpy)}`,
-                  cls: "text-red-600 dark:text-red-400",
-                },
-                {
-                  label: T.profitFactor,
-                  val: result.profitFactor === Infinity ? "∞" : result.profitFactor.toFixed(2),
-                  cls: result.profitFactor >= 1.5
-                    ? "text-green-700 dark:text-green-400"
-                    : result.profitFactor >= 1
-                    ? "text-yellow-600 dark:text-yellow-400"
-                    : "text-red-600 dark:text-red-400",
-                },
-                {
-                  label: T.sharpe,
-                  val: sharpe == null ? "—" : sharpe.toFixed(2),
-                  cls: sharpe == null ? "text-gray-400"
-                    : sharpe >= 1 ? "text-green-700 dark:text-green-400"
-                    : sharpe >= 0 ? "text-yellow-600 dark:text-yellow-400"
-                    : "text-red-600 dark:text-red-400",
-                },
-              ].map(s => (
-                <div
-                  key={s.label}
-                  className="text-center p-2.5 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700"
-                >
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{s.label}</div>
-                  <div className={`font-bold ${s.cls}`}>{s.val}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* ━━━ 資金推移チャート ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            {result.equityCurve.length >= 3 && (() => {
-              const {
-                AreaChart, Area, XAxis, YAxis, Tooltip,
-                ResponsiveContainer, ReferenceLine, CartesianGrid,
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-              } = require("recharts") as typeof import("recharts");
-              const isProfit    = result.finalEquity >= capital;
-              const strokeColor = isProfit ? "#10b981" : "#ef4444";
-              return (
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-                  <div style={{ height: 224 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={result.equityCurve} margin={{ top: 8, right: 8, bottom: 40, left: 0 }}>
-                        <defs>
-                          <linearGradient id="pnlSimGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor={strokeColor} stopOpacity={0.25} />
-                            <stop offset="95%" stopColor={strokeColor} stopOpacity={0.02} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis dataKey="label" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} interval="preserveStartEnd" tickLine={false} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtAxisTick(v as number)} width={70} />
-                        <ReferenceLine y={capital} stroke="#9ca3af" strokeDasharray="3 3" label={{ value: T.initial, fontSize: 10, fill: "#9ca3af", position: "insideTopRight" }} />
-                        <Tooltip
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          formatter={(v: any) => [fmtCurrency(v as number), T.equity]}
-                          labelStyle={{ fontSize: 10 }}
-                          contentStyle={{ fontSize: 11, borderRadius: 8 }}
-                        />
-                        <Area type="monotone" dataKey="equity" stroke={strokeColor} strokeWidth={2} fill="url(#pnlSimGradient)" dot={false} activeDot={{ r: 4 }} />
-                      </AreaChart>
-                    </ResponsiveContainer>
+            ) : (
+              <>
+                {/* 破産警告 */}
+                {result.bankrupt && (
+                  <div className="p-3 bg-red-100 dark:bg-red-950/50 border border-red-400 rounded-lg text-sm font-bold text-red-700 dark:text-red-400 text-center">
+                    {T.bankrupt}
                   </div>
-                  <p className="text-[9px] text-gray-400 dark:text-gray-500 text-right mt-1">{T.dashed}</p>
-                </div>
-              );
-            })()}
+                )}
 
-            {/* 免責 */}
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed">{T.disclaimer}</p>
+                {/* ━━━ 結果 4カード ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-center">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{T.initial}</div>
+                    <div className="font-bold text-lg text-gray-700 dark:text-gray-200">{fmtCurrency(execCapital)}</div>
+                  </div>
+                  <div className={`p-4 rounded-xl border text-center ${
+                    result.finalEquity >= execCapital
+                      ? "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800"
+                      : "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
+                  }`}>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{T.final}</div>
+                    <div className={`font-bold text-lg ${
+                      result.finalEquity >= execCapital
+                        ? "text-green-700 dark:text-green-400"
+                        : "text-red-700 dark:text-red-400"
+                    }`}>
+                      {fmtCurrency(result.finalEquity)}
+                    </div>
+                  </div>
+                  <div className={`p-4 rounded-xl border text-center ${
+                    result.totalReturn >= 0
+                      ? "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800"
+                      : "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
+                  }`}>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{T.pnl}</div>
+                    <div className={`font-bold text-lg ${result.totalReturn >= 0 ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+                      {result.totalReturn >= 0 ? "+" : ""}{result.totalReturn.toFixed(1)}%
+                    </div>
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      ({pnlJpy >= 0 ? "+" : ""}{fmtCurrency(pnlJpy)})
+                    </div>
+                  </div>
+                  <div className="bg-orange-50 dark:bg-orange-950/30 p-4 rounded-xl border border-orange-200 dark:border-orange-800 text-center">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{T.maxDD}</div>
+                    <div className={`font-bold text-lg ${
+                      result.maxDrawdown > 30 ? "text-red-600 dark:text-red-400"
+                      : result.maxDrawdown > 15 ? "text-orange-600 dark:text-orange-400"
+                      : "text-orange-500"
+                    }`}>
+                      -{result.maxDrawdown.toFixed(1)}%
+                    </div>
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      (-{fmtCurrency(maxDDJpy)})
+                    </div>
+                  </div>
+                </div>
+
+                {/* ━━━ 詳細統計 6カード ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-sm">
+                  {[
+                    {
+                      label: T.totalTrades,
+                      val: `${result.totalTrades}${T.trades}`,
+                      cls: "text-gray-700 dark:text-gray-200",
+                    },
+                    {
+                      label: T.winRate,
+                      val: `${result.winRate.toFixed(1)}%`,
+                      cls: result.winRate >= 50
+                        ? "text-green-700 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400",
+                    },
+                    {
+                      label: T.avgWin,
+                      val: `+${fmtCurrency(avgWinJpy)}`,
+                      cls: "text-green-600 dark:text-green-400",
+                    },
+                    {
+                      label: T.avgLoss,
+                      val: `-${fmtCurrency(avgLossJpy)}`,
+                      cls: "text-red-600 dark:text-red-400",
+                    },
+                    {
+                      label: T.profitFactor,
+                      val: result.profitFactor === Infinity ? "∞" : result.profitFactor.toFixed(2),
+                      cls: result.profitFactor >= 1.5
+                        ? "text-green-700 dark:text-green-400"
+                        : result.profitFactor >= 1
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-red-600 dark:text-red-400",
+                    },
+                    {
+                      label: T.sharpe,
+                      val: sharpe == null ? "—" : sharpe.toFixed(2),
+                      cls: sharpe == null ? "text-gray-400"
+                        : sharpe >= 1 ? "text-green-700 dark:text-green-400"
+                        : sharpe >= 0 ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-red-600 dark:text-red-400",
+                    },
+                  ].map(s => (
+                    <div
+                      key={s.label}
+                      className="text-center p-2.5 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700"
+                    >
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{s.label}</div>
+                      <div className={`font-bold ${s.cls}`}>{s.val}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ━━━ 資金推移チャート ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                {result.equityCurve.length >= 3 && (() => {
+                  const {
+                    AreaChart, Area, XAxis, YAxis, Tooltip,
+                    ResponsiveContainer, ReferenceLine, CartesianGrid,
+                    // eslint-disable-next-line @typescript-eslint/no-require-imports
+                  } = require("recharts") as typeof import("recharts");
+                  const isProfit    = result.finalEquity >= execCapital;
+                  const strokeColor = isProfit ? "#10b981" : "#ef4444";
+                  return (
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+                      <div style={{ height: 224 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={result.equityCurve} margin={{ top: 8, right: 8, bottom: 40, left: 0 }}>
+                            <defs>
+                              <linearGradient id="pnlSimGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%"  stopColor={strokeColor} stopOpacity={0.25} />
+                                <stop offset="95%" stopColor={strokeColor} stopOpacity={0.02} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                            <XAxis dataKey="label" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} interval="preserveStartEnd" tickLine={false} />
+                            <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtAxisTick(v as number)} width={70} />
+                            <ReferenceLine y={execCapital} stroke="#9ca3af" strokeDasharray="3 3" label={{ value: T.initial, fontSize: 10, fill: "#9ca3af", position: "insideTopRight" }} />
+                            <Tooltip
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              formatter={(v: any) => [fmtCurrency(v as number), T.equity]}
+                              labelStyle={{ fontSize: 10 }}
+                              contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                            />
+                            <Area type="monotone" dataKey="equity" stroke={strokeColor} strokeWidth={2} fill="url(#pnlSimGradient)" dot={false} activeDot={{ r: 4 }} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <p className="text-[9px] text-gray-400 dark:text-gray-500 text-right mt-1">{T.dashed}</p>
+                    </div>
+                  );
+                })()}
+
+                {/* 免責 */}
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed">{T.disclaimer}</p>
+              </>
+            )}
           </>
         )}
       </div>
