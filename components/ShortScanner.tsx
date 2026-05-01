@@ -30,6 +30,7 @@ import { calcPortfolioVaR } from "@/app/lib/portfolioRisk";
 import { recordScanResults, getHealthMap, getActiveSymbols, getDeadSymbols, clearHealth, isDangerSymbol, getDangerSymbols, buildDangerListFromRecords, removeFromDangerList } from "@/app/lib/symbolHealth";
 import type { SymbolHealth, DangerSymbol } from "@/app/lib/symbolHealth";
 import BacktestPanel from "@/components/BacktestPanel";
+import PnlSimulator from "@/components/PnlSimulator";
 import TradeSetupCard from "@/components/TradeSetupCard";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
@@ -1784,6 +1785,12 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
   if (isDangerSymbol(c.symbol)) return "banned";
   // 上場24h以内 → 異常値が出やすい
   if (c.listedDaysAgo < 1) return "banned";
+  // [BT-R2] 新規上場14日以内 × MEXC独占 × ATH近い(dropScore≤1) → SL3連続パターン(UPEG/BULL/NOCK)
+  if (
+    c.listedDaysAgo <= 14 &&
+    c.exclusivityScore >= 2 &&
+    (c.scoreBreakdown?.dropScore ?? 3) <= 1
+  ) return "banned";
   // 新規上場14日以内 × ATH下落30%未満 → スクイーズ誘発リスク
   if (
     (c.scoreBreakdown?.freshnessScore ?? 0) >= 1 &&
@@ -1813,6 +1820,10 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
   if (c.liquidityInfo?.spread != null && c.liquidityInfo.spread > 0.5) return "caution";
   // FR < 0 or 出来高急増 or 上場3日以内 or OI過剰
   if ((fr !== null && fr < 0) || c.volumeChangeRatio > 5.0 || c.listedDaysAgo <= 3 || c.oiRatio > 500) return "caution";
+  // [BT-R1] trendAlignment≤1 → NEUTRAL/UPトレンド、ショート勝率低下(24% vs 57%)
+  if (c.trendMultiTF != null && c.trendMultiTF.alignment <= 1) return "caution";
+  // [BT-R3] 下落根拠スコア合計(drop+volumeDry+trend)≤2 → 下落根拠不足
+  if ((c.scoreBreakdown?.dropScore ?? 0) + (c.scoreBreakdown?.volumeDryScore ?? 0) + (c.scoreBreakdown?.trendScore ?? 0) <= 2) return "caution";
 
   // ── 推奨 ───────────────────────────────────────────────────────────────────
   if (c.displayScore >= 10 && (fr === null || fr >= 0)) return "recommended";
@@ -3495,6 +3506,21 @@ export default function ShortScanner() {
                                 const strat = ALL_STRATEGIES.find(s => s.tag === stratMatch.tag);
                                 if (strat) tier3flags.push(`${strat.icon}${strat.shortName} ${stratMatch.confidence}%`);
                               }
+                              // バックテスト導出フィルタールール（73件 / 7敗パターン分析）
+                              if (c.trendMultiTF != null && c.trendMultiTF.alignment <= 1) {
+                                tier3flags.push("⚠️ トレンド非DOWN");
+                              }
+                              if (
+                                c.listedDaysAgo <= 14 &&
+                                c.exclusivityScore >= 2 &&
+                                (c.scoreBreakdown?.dropScore ?? 3) <= 1
+                              ) {
+                                tier3flags.push("🚫 新規×独占×低ドロップ");
+                              }
+                              {
+                                const bearEvidence = (c.scoreBreakdown?.dropScore ?? 0) + (c.scoreBreakdown?.volumeDryScore ?? 0) + (c.scoreBreakdown?.trendScore ?? 0);
+                                if (bearEvidence <= 2) tier3flags.push(`⚠️ 下落根拠不足(${bearEvidence}/9)`);
+                              }
 
                               return (
                                 <div className="flex flex-col gap-0.5">
@@ -3716,6 +3742,9 @@ export default function ShortScanner() {
           </div>}
         </div>
       )}
+
+      {/* PnL Simulator (独立コンポーネント、常時表示) */}
+      <PnlSimulator records={btRecords} lang={lang} />
 
       {/* Backtest Panel */}
       <BacktestPanel
