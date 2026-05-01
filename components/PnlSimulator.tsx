@@ -66,10 +66,17 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
   const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
   const [manualSymbol,    setManualSymbol]    = useState("");
 
+  // ── 期間フィルター state ───────────────────────────────────────────────────
+  const [simPeriod,       setSimPeriod]       = useState<"all" | "7d" | "14d" | "30d" | "60d" | "90d" | "custom">("all");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate,   setCustomEndDate]   = useState("");
+
   // ── 実行済みスナップショット state（ボタン押下時に確定） ──────────────────
-  const [executedConfig,     setExecutedConfig]     = useState<SimulationConfig | null>(null);
-  const [executedDataSource, setExecutedDataSource] = useState<"all" | "custom">("all");
-  const [executedSymbols,    setExecutedSymbols]    = useState<Set<string>>(new Set());
+  const [executedConfig,        setExecutedConfig]        = useState<SimulationConfig | null>(null);
+  const [executedDataSource,    setExecutedDataSource]    = useState<"all" | "custom">("all");
+  const [executedSymbols,       setExecutedSymbols]       = useState<Set<string>>(new Set());
+  const [executedPeriodRecords, setExecutedPeriodRecords] = useState<BacktestRecord[] | null>(null);
+  const [executedSimPeriod,     setExecutedSimPeriod]     = useState<string>("all");
 
   useEffect(() => {
     try {
@@ -94,24 +101,45 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     return `$${value}`;
   }
 
-  // ── 実行対象レコード ─────────────────────────────────────────────────────
-  const executedRecords = useMemo(() => {
-    if (!executedConfig) return [];
-    if (executedDataSource === "all") return records;
-    return records.filter(r => executedSymbols.has(r.symbol));
-  }, [executedConfig, executedDataSource, executedSymbols, records]);
+  // ── 期間フィルター ────────────────────────────────────────────────────────
+  const filterByPeriod = React.useCallback((recs: BacktestRecord[]): BacktestRecord[] => {
+    const now = Date.now();
+    const DAY = 86_400_000;
+    switch (simPeriod) {
+      case "all":  return recs;
+      case "7d":   return recs.filter(r => r.recordedAt >= now - 7  * DAY);
+      case "14d":  return recs.filter(r => r.recordedAt >= now - 14 * DAY);
+      case "30d":  return recs.filter(r => r.recordedAt >= now - 30 * DAY);
+      case "60d":  return recs.filter(r => r.recordedAt >= now - 60 * DAY);
+      case "90d":  return recs.filter(r => r.recordedAt >= now - 90 * DAY);
+      case "custom": {
+        const start = customStartDate ? new Date(customStartDate).getTime() : 0;
+        const end   = customEndDate   ? new Date(customEndDate).getTime() + DAY : Infinity;
+        return recs.filter(r => r.recordedAt >= start && r.recordedAt <= end);
+      }
+      default: return recs;
+    }
+  }, [simPeriod, customStartDate, customEndDate]);
+
+  // 対象レコード件数（リアルタイム表示用）
+  const periodFilteredCount = useMemo(() => {
+    const resolved = records.filter(r =>
+      ["tp1_hit", "tp2_hit", "tp3_hit", "sl_hit"].includes(r.status)
+    );
+    return filterByPeriod(resolved).length;
+  }, [records, filterByPeriod]);
 
   // ── シミュレーション結果（実行後のみ） ────────────────────────────────────
   const result = useMemo(() => {
-    if (!executedConfig) return null;
-    return simulateBacktest(executedRecords, executedConfig);
-  }, [executedRecords, executedConfig]);
+    if (!executedConfig || !executedPeriodRecords) return null;
+    return simulateBacktest(executedPeriodRecords, executedConfig);
+  }, [executedPeriodRecords, executedConfig]);
 
   // ── シャープレシオ（実行済み設定で計算） ─────────────────────────────────
   const sharpe = useMemo(() => {
-    if (!executedConfig) return null;
+    if (!executedConfig || !executedPeriodRecords) return null;
     const cfg = executedConfig;
-    const resolved = [...executedRecords]
+    const resolved = [...executedPeriodRecords]
       .filter(r => r.resolvedAt != null && r.resolvedPrice != null && r.status !== "active")
       .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
     if (resolved.length < 3) return null;
@@ -137,7 +165,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     const mean     = rets.reduce((a, b) => a + b, 0) / rets.length;
     const variance = rets.reduce((a, b) => a + (b - mean) ** 2, 0) / rets.length;
     return variance > 0 ? (mean / Math.sqrt(variance)) * Math.sqrt(rets.length) : 0;
-  }, [executedConfig, executedRecords]);
+  }, [executedConfig, executedPeriodRecords]);
 
   // ── 平均利益/損失（equity curve の差分から） ──────────────────────────────
   const { avgWinJpy, avgLossJpy } = useMemo(() => {
@@ -161,12 +189,13 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
 
   // ── 設定変更検知 ─────────────────────────────────────────────────────────
   const hasSettingsChanged = executedConfig !== null && (
-    executedConfig.initialCapital !== capital ||
-    executedConfig.mode           !== calcMode ||
-    executedConfig.riskPerTrade   !== riskPct ||
-    executedConfig.positionSizePct !== posSizePct ||
-    executedConfig.leverage       !== leverage ||
-    executedDataSource            !== dataSource
+    executedConfig.initialCapital  !== capital     ||
+    executedConfig.mode            !== calcMode    ||
+    executedConfig.riskPerTrade    !== riskPct     ||
+    executedConfig.positionSizePct !== posSizePct  ||
+    executedConfig.leverage        !== leverage    ||
+    executedDataSource             !== dataSource  ||
+    executedSimPeriod              !== simPeriod
   );
 
   // ── 銘柄プール ───────────────────────────────────────────────────────────
@@ -187,6 +216,11 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
 
   // ── ハンドラー ───────────────────────────────────────────────────────────
   function runSimulation() {
+    const periodFiltered = filterByPeriod(records);
+    const targetRecords  = dataSource === "all"
+      ? periodFiltered
+      : periodFiltered.filter(r => selectedSymbols.has(r.symbol));
+
     setExecutedConfig({
       initialCapital:  capital,
       riskPerTrade:    riskPct,
@@ -197,6 +231,18 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     });
     setExecutedDataSource(dataSource);
     setExecutedSymbols(new Set(selectedSymbols));
+    setExecutedPeriodRecords(targetRecords);
+    setExecutedSimPeriod(simPeriod);
+  }
+
+  function getPeriodLabel(): string {
+    if (!executedPeriodRecords || executedPeriodRecords.length === 0) return "—";
+    const resolved = executedPeriodRecords.filter(r => r.resolvedAt);
+    if (resolved.length === 0) return "—";
+    const first = new Date(Math.min(...resolved.map(r => r.recordedAt)));
+    const last  = new Date(Math.max(...resolved.map(r => r.resolvedAt ?? r.recordedAt)));
+    const fmt = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+    return `${fmt(first)} 〜 ${fmt(last)}`;
   }
 
   function addManualSymbol() {
@@ -610,6 +656,52 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
           </div>
         )}
 
+        {/* ━━━ シミュレーション期間 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        <div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            📅 {ja ? "シミュレーション期間" : "Simulation Period"}
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {(["all", "7d", "14d", "30d", "60d", "90d", "custom"] as const).map(key => (
+              <button
+                key={key}
+                onClick={() => setSimPeriod(key)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                  simPeriod === key
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                }`}
+              >
+                {key === "all"    ? (ja ? "全期間" : "All") :
+                 key === "custom" ? (ja ? "カスタム" : "Custom") :
+                 key}
+              </button>
+            ))}
+          </div>
+
+          {simPeriod === "custom" && (
+            <div className="flex gap-3 mt-2 items-center flex-wrap">
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={e => setCustomStartDate(e.target.value)}
+                className="border-2 border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:border-emerald-500"
+              />
+              <span className="text-gray-400 dark:text-gray-500">〜</span>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={e => setCustomEndDate(e.target.value)}
+                className="border-2 border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          )}
+
+          <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            {ja ? `対象レコード: ${periodFilteredCount}件` : `Target records: ${periodFilteredCount}`}
+          </div>
+        </div>
+
         {/* ━━━ 実行ボタン ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <div className="flex justify-center">
           <button
@@ -652,6 +744,13 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
               </div>
             ) : (
               <>
+                {/* 期間サマリ */}
+                <div className="text-xs text-gray-500 dark:text-gray-400 text-center py-1">
+                  {ja ? "期間" : "Period"}: {getPeriodLabel()}
+                  {" / "}
+                  {ja ? "対象" : "Trades"}: {result.totalTrades}{T.trades}
+                </div>
+
                 {/* 破産警告 */}
                 {result.bankrupt && (
                   <div className="p-3 bg-red-100 dark:bg-red-950/50 border border-red-400 rounded-lg text-sm font-bold text-red-700 dark:text-red-400 text-center">
