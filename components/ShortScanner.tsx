@@ -2264,19 +2264,17 @@ const EN_NAMES: Record<string, string> = {
   "🔥 高レバ (5-10×)": "🔥 High Lev (5-10×)",
 };
 
-function FilterPresets({ t, lang, customPresets, onApply, onSaveCurrent, onDeleteCustom }: {
+function FilterPresets({ t, lang, customPresets, onApply, onSaveCurrent, onDeleteCustom, activePreset }: {
   t: Translations;
   lang: Lang;
   customPresets: FilterPreset[];
   onApply: (p: FilterPreset) => void;
   onSaveCurrent: () => void;
   onDeleteCustom: (idx: number) => void;
+  activePreset: string | null;
 }) {
-  const [activePreset, setActivePreset] = useState<string | null>(null);
-
   const handleApply = (p: FilterPreset) => {
     onApply(p);
-    setActivePreset(p.name);
   };
 
   const presetLabel = (p: FilterPreset) => {
@@ -2446,6 +2444,7 @@ export default function ShortScanner() {
   const [maxDays,          setMaxDays]           = useState(9999);
   const [minVol24k,        setMinVol24k]         = useState(100);
   const [minOiK,           setMinOiK]            = useState(50);
+  const [activePreset,     setActivePreset]      = useState<string | null>(null);
   const [filterSettledOnly, setFilterSettledOnly] = useState(false);
   const [filterFsRatio5x,   setFilterFsRatio5x]   = useState(false);
 
@@ -2496,6 +2495,7 @@ export default function ShortScanner() {
     setMinVol24k(p.minVol24k);
     setMaxDays(p.maxDays);
     setMinOiK(p.minOiK);
+    setActivePreset(p.name);
     setFilterSettledOnly(p.filterSettledOnly ?? false);
     setFilterFsRatio5x(p.filterFsRatio5x ?? false);
     if (p.sortBy) setSortBy(p.sortBy);
@@ -2581,6 +2581,7 @@ export default function ShortScanner() {
   }
 
   const scan = useCallback(async (mode?: "new30", filterOverrides?: { minDrop: number; maxVolRatio: number; minVol24k: number; maxDays: number; minOiK: number }, forceRefresh?: boolean) => {
+    if (mode === "new30") setActivePreset("🆕 新規上場 (30d)");
     // filterRef.current は常に最新のスライダー値（stale closure 回避）
     const f = filterRef.current;
     const effective = {
@@ -3046,6 +3047,10 @@ export default function ShortScanner() {
     if (p.has("max_days"))   setMaxDays(Number(p.get("max_days")));
     if (p.has("min_oi"))     setMinOiK(Number(p.get("min_oi")));
     if (p.has("sort"))       setSortBy(p.get("sort") as SortKey);
+    // URL復元時はカスタム値なのでプリセット解除
+    if (p.has("min_drop") || p.has("max_vol") || p.has("min_vol24h") || p.has("max_days") || p.has("min_oi")) {
+      setActivePreset(null);
+    }
     if (p.toString()) scan();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -3110,7 +3115,7 @@ export default function ShortScanner() {
       <div className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm space-y-3">
 
         {/* 行1: プリセット */}
-        <FilterPresets t={t} lang={lang} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
+        <FilterPresets t={t} lang={lang} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} activePreset={activePreset} />
 
         {/* 行2: スキャン実行（左） + サブ操作（右） */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-gray-100 dark:border-gray-800">
@@ -3230,7 +3235,7 @@ export default function ShortScanner() {
                   {label} <span className={color}>{val}</span>
                 </label>
                 <input type="range" min={min} max={max} step={step} value={v}
-                  onChange={e => set(+e.target.value)} className={`w-full ${accent}`} />
+                  onChange={e => { set(+e.target.value); setActivePreset(null); }} className={`w-full ${accent}`} />
               </div>
             ))}
             {/* Phase / F/S フィルター + リセット */}
@@ -3295,7 +3300,7 @@ export default function ShortScanner() {
           <span>{t.passed}: <strong className="text-indigo-600">{data.meta.filtered}</strong></span>
           <span title="安定期・summaryフィルターなどクライアント側絞り込み後の件数">最終候補: <strong className="text-purple-600">{extended.length}</strong>件</span>
           <span>{t.showing}: <strong className="text-gray-700">{paginatedItems.length}</strong>（全{extended.length}件中）</span>
-          {data.mode === "new30" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
+          {data.mode === "new30" && activePreset === "🆕 新規上場 (30d)" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
           {snapshots.length > 0 && <span>{t.snapshots}: <strong className="text-teal-600">{snapshots.length}</strong></span>}
           {HAS_CG && cgLoading && <span className="text-violet-600">{t.cgFetching} {cgProgress}%</span>}
           {healthData.size > 0 && (() => {
@@ -3343,7 +3348,7 @@ export default function ShortScanner() {
             strongThreshold={strongThreshold}
             btcChange24h={marketBtcChange}
           />
-          {data?.mode === "new30" && (
+          {data?.mode === "new30" && activePreset === "🆕 新規上場 (30d)" && (
             <span className="text-xs px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 font-semibold">
               📋 {t.newMode}
             </span>
