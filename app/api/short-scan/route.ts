@@ -596,12 +596,12 @@ export async function GET(req: NextRequest) {
   }
 
   // Apply client slider params as filter for normal mode (new30 already filtered in analyzeCandidate)
-  // When kline data is unavailable, skip that filter condition to avoid false negatives:
-  //   ath14dFromKline=false → kline4h failed → ath14d=price → athDropPct=0 → skip ATH filter
-  //   vol7dFromKline=false  → kline1d failed → volumeChangeRatio=1.0 fallback → skip volRatio filter
+  // ATH escape hatch: ath14dFromKline=false → kline4h failed → athDropPct=0 → skip ATH filter to avoid false negatives
+  // volRatio escape hatch: only when volumeChangeRatio===1 (exact fallback for missing kline1d data).
+  //   vol7dFromKline=false but ratio > 1 means ratio was computed from other data sources and IS reliable.
   const filteredResults = results.filter(c =>
     (!c.ath14dFromKline || Math.abs(c.athDropPct) >= qMinDrop) &&
-    (!c.vol7dFromKline  || c.volumeChangeRatio * 100 <= qMaxVolRatio) &&
+    (c.volumeChangeRatio * 100 <= qMaxVolRatio || (!c.vol7dFromKline && c.volumeChangeRatio === 1)) &&
     c.volume24h >= qMinVol24k * 1_000 &&
     c.listedDaysAgo <= qMaxDays &&
     c.openInterest >= qMinOiK * 1_000

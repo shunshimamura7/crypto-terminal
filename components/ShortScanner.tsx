@@ -93,7 +93,7 @@ const T = {
     scrollHint: "← 横スクロールで全列表示",
     clickHint: "行をクリックするとスコア内訳が表示されます",
     scanTarget: "スキャン対象",
-    passed: "フィルター通過",
+    passed: "分析完了",
     showing: "表示中",
     snapshots: "スナップショット",
     lastUpdate: "最終更新",
@@ -327,7 +327,7 @@ const T = {
     scrollHint: "← Scroll for more columns",
     clickHint: "Click a row to see score breakdown",
     scanTarget: "Scanned",
-    passed: "Passed filter",
+    passed: "Analyzed",
     showing: "Showing",
     snapshots: "Snapshots",
     lastUpdate: "Last updated",
@@ -2825,7 +2825,17 @@ export default function ShortScanner() {
   // Extended candidates — server already applied filter params; no client-side re-filter
   const extended = useMemo((): ExtendedCandidate[] => {
     if (!data?.candidates) return [];
-    const mapped: ExtendedCandidate[] = data.candidates.map(c => {
+    // クライアント側でもフィルターを再適用（サーバー側のエスケープハッチをバイパスする銘柄への安全網）
+    // ATH: ath14dFromKline=false の銘柄は athDropPct が不正確なため除外しない
+    // volRatio: vol7dFromKline=false かつ ratio===1.0 の銘柄のみスキップ（その他は適用）
+    const serverCandidates = data.candidates.filter(c =>
+      (Math.abs(c.athDropPct) >= minDrop || !c.ath14dFromKline) &&
+      (c.volumeChangeRatio * 100 <= maxVolRatio || (!c.vol7dFromKline && c.volumeChangeRatio === 1)) &&
+      c.listedDaysAgo <= maxDays &&
+      c.volume24h >= minVol24k * 1_000 &&
+      c.openInterest >= minOiK * 1_000
+    );
+    const mapped: ExtendedCandidate[] = serverCandidates.map(c => {
       const base = c.symbol.replace(/_USDT$/, "");
       const listedOnBinance  = binanceSyms.has(base);
       const listedOnBybit    = bybitSyms.has(base);
@@ -2887,7 +2897,7 @@ export default function ShortScanner() {
       });
     }
     return result;
-  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, filterSettledOnly, filterFsRatio5x, strongThreshold]);
+  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, filterSettledOnly, filterFsRatio5x, strongThreshold, minDrop, maxVolRatio, minVol24k, maxDays, minOiK]);
 
   const totalPages = Math.ceil(extended.length / ITEMS_PER_PAGE);
   const paginatedItems = extended.slice(
@@ -3297,8 +3307,8 @@ export default function ShortScanner() {
       {data && !loading && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
           <span>{t.scanTarget}: <strong className="text-gray-700">{totalScanned}</strong></span>
-          <span>{t.passed}: <strong className="text-indigo-600">{data.meta.filtered}</strong></span>
-          <span title="安定期・summaryフィルターなどクライアント側絞り込み後の件数">最終候補: <strong className="text-purple-600">{extended.length}</strong>件</span>
+          <span title="サーバーがスコア計算を完了した件数">{t.passed}: <strong className="text-indigo-600">{data.meta.filtered}</strong></span>
+          <span title="スライダーフィルター適用後の件数（この件数でテーブル表示）">{lang === "ja" ? "フィルター通過" : "Filtered"}: <strong className="text-purple-600">{extended.length}</strong></span>
           <span>{t.showing}: <strong className="text-gray-700">{paginatedItems.length}</strong>（全{extended.length}件中）</span>
           {data.mode === "new30" && activePreset === "🆕 新規上場 (30d)" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
           {snapshots.length > 0 && <span>{t.snapshots}: <strong className="text-teal-600">{snapshots.length}</strong></span>}
