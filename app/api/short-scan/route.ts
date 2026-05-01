@@ -141,6 +141,7 @@ async function analyzeCandidate(
   ticker: any,
   day14AgoSec: number,
   day7AgoSec: number,
+  day90AgoSec: number,
   nowSec: number,
   isNew30: boolean,
   btcReturns: number[],  // 施策1: BTC収益率系列
@@ -170,7 +171,7 @@ async function analyzeCandidate(
     prefetchedKline4h !== undefined
       ? Promise.resolve(prefetchedKline4h)
       : mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 7000),
-    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Day1&start=${day14AgoSec}&end=${nowSec}`, 7000),
+    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Day1&start=${day90AgoSec}&end=${nowSec}`, 7000),
     mexcGet(`/api/v1/contract/funding_rate/${symbol}`, 4000),
     fetchLiquidityInfo(symbol),
   ]);
@@ -248,6 +249,12 @@ async function analyzeCandidate(
     if (closes1d.length >= 2) {
       const oldest = closes1d[0];
       if (oldest > 0) priceChange7d = (price - oldest) / oldest * 100;
+    }
+    // ATH: 1d klineのhighから90日高値を取得し、4h kline由来のath14dとマージ
+    const highs1d: number[] = (kd.high || []).map(Number).filter((n: number) => n > 0);
+    if (highs1d.length > 0) {
+      ath14d = Math.max(ath14d, ...highs1d);
+      ath14dFromKline = true;
     }
     // 修正8: 最古D1 open = 上場初日の始値
     if (isNew30 && Array.isArray(kd.open) && kd.open.length > 0) {
@@ -377,6 +384,7 @@ export async function GET(req: NextRequest) {
   const nowSec      = Math.floor(now / 1000);
   const day14AgoSec = nowSec - 14 * 86_400;
   const day7AgoSec  = nowSec - 7 * 86_400;
+  const day90AgoSec = nowSec - 90 * 86_400;
 
   // BTC 4h kline + ticker + detail を並列取得（ticker/detailはキャッシュ優先）
   let cachedTicker = getCached("ticker");
@@ -560,7 +568,7 @@ export async function GET(req: NextRequest) {
     const batch = validWithKline4h.slice(i, i + BATCH);
     const settled = await Promise.allSettled(
       batch.map(({ meta, kline4h }) =>
-        analyzeCandidate(meta, tickerMap[meta.symbol], day14AgoSec, day7AgoSec, nowSec, isNew30, btcReturns, kline4h)
+        analyzeCandidate(meta, tickerMap[meta.symbol], day14AgoSec, day7AgoSec, day90AgoSec, nowSec, isNew30, btcReturns, kline4h)
       )
     );
 
