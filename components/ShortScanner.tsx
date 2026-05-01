@@ -1820,10 +1820,8 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
   if (c.liquidityInfo?.spread != null && c.liquidityInfo.spread > 0.5) return "caution";
   // FR < 0 or 出来高急増 or 上場3日以内 or OI過剰
   if ((fr !== null && fr < 0) || c.volumeChangeRatio > 5.0 || c.listedDaysAgo <= 3 || c.oiRatio > 500) return "caution";
-  // [BT-R1] trendAlignment≤1 → NEUTRAL/UPトレンド、ショート勝率低下(24% vs 57%)
-  if (c.trendMultiTF != null && c.trendMultiTF.alignment <= 1) return "caution";
-  // [BT-R3] 下落根拠スコア合計(drop+volumeDry+trend)≤2 → 下落根拠不足
-  if ((c.scoreBreakdown?.dropScore ?? 0) + (c.scoreBreakdown?.volumeDryScore ?? 0) + (c.scoreBreakdown?.trendScore ?? 0) <= 2) return "caution";
+  // [BT-R1] trendAlignment===0 → 全TFがDOWNでない、ショート勝率低下
+  if (c.trendMultiTF != null && c.trendMultiTF.alignment === 0) return "caution";
 
   // ── 推奨 ───────────────────────────────────────────────────────────────────
   if (c.displayScore >= 10 && (fr === null || fr >= 0)) return "recommended";
@@ -3507,7 +3505,7 @@ export default function ShortScanner() {
                                 if (strat) tier3flags.push(`${strat.icon}${strat.shortName} ${stratMatch.confidence}%`);
                               }
                               // バックテスト導出フィルタールール（73件 / 7敗パターン分析）
-                              if (c.trendMultiTF != null && c.trendMultiTF.alignment <= 1) {
+                              if (c.trendMultiTF != null && c.trendMultiTF.alignment === 0) {
                                 tier3flags.push("⚠️ トレンド非DOWN");
                               }
                               if (

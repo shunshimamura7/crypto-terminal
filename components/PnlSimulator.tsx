@@ -378,17 +378,12 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
                   onChange={e => setRiskPct(Number(e.target.value))}
                   className="w-full border-2 border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
                 >
-                  <option value={1}>1%（{T.conservative}）</option>
-                  <option value={2}>2%（{T.standard}）</option>
-                  <option value={3}>3%（{T.aggressive}）</option>
-                  <option value={5}>5%（{T.highRisk}）</option>
+                  {([1, 2, 3, 5] as const).map(v => (
+                    <option key={v} value={v}>
+                      {v}% — {ja ? `損切り${fmtCurrency(capital * v / 100)}まで` : `SL loss up to ${fmtCurrency(capital * v / 100)}`}
+                    </option>
+                  ))}
                 </select>
-                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  {T.maxLossLabel}:{" "}
-                  <span className="font-bold text-red-600 dark:text-red-400">
-                    {fmtCurrency(capital * riskPct / 100)}
-                  </span>
-                </div>
               </>
             ) : (
               <>
@@ -402,17 +397,10 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
                 >
                   {POS_SIZE_OPTIONS.map(v => (
                     <option key={v} value={v}>
-                      {v}%{v === 5 ? `（${T.standard}）` : v >= 15 ? `（${T.highRisk}）` : ""}
+                      {v}% — {ja ? `投入${fmtCurrency(capital * v / 100)}` : `invest ${fmtCurrency(capital * v / 100)}`}
                     </option>
                   ))}
                 </select>
-                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  {T.investLabel}:{" "}
-                  <span className="font-bold text-blue-600 dark:text-blue-400">
-                    {fmtCurrency(capital * posSizePct / 100)}
-                  </span>
-                  <span className="ml-1">× {ja ? "レバ" : "Lev"}{leverage}x</span>
-                </div>
               </>
             )}
           </div>
