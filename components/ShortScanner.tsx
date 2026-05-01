@@ -26,7 +26,6 @@ import FRWatchToggle from "@/components/FRWatchToggle";
 import { addToWatchlist, removeFromWatchlist, isInWatchlist } from "@/app/lib/watchlist";
 import { detectPhase, phaseBadgeCls } from "@/app/lib/phaseDetector";
 import type { PhaseResult, Phase } from "@/app/lib/phaseDetector";
-import { calcPortfolioVaR } from "@/app/lib/portfolioRisk";
 import { recordScanResults, getHealthMap, getActiveSymbols, getDeadSymbols, clearHealth, isDangerSymbol, getDangerSymbols, buildDangerListFromRecords, removeFromDangerList } from "@/app/lib/symbolHealth";
 import type { SymbolHealth, DangerSymbol } from "@/app/lib/symbolHealth";
 import BacktestPanel from "@/components/BacktestPanel";
@@ -3759,61 +3758,6 @@ export default function ShortScanner() {
           onClear={() => { clearHealth(); setHealthData(new Map()); }}
         />
       )}
-
-      {/* Portfolio VaR — スナップショット5件以上 + アクティブ2銘柄以上で表示 */}
-      {snapshots.length >= 5 && btRecords.filter(r => r.status === "active").length >= 2 && (() => {
-        const activeSymbols = btRecords.filter(r => r.status === "active").map(r => r.symbol);
-        const priceHistories = activeSymbols.map(sym => {
-          const closes = snapshots
-            .map(s => (s.data as Record<string, { price?: number }>)[sym]?.price ?? null)
-            .filter((p): p is number => p !== null && p > 0);
-          return { symbol: sym, closes };
-        }).filter(h => h.closes.length >= 3);
-
-        if (priceHistories.length < 2) return null;
-
-        const varResult = calcPortfolioVaR(priceHistories);
-        if (!varResult) return null;
-
-        return (
-          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-3">
-            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-2">⚠️ ポートフォリオリスク ({priceHistories.length}銘柄)</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
-              <div className="text-center">
-                <div className={`font-bold text-sm ${varResult.var95 > 0.1 ? "text-red-600" : "text-amber-700"}`}>
-                  {(varResult.var95 * 100).toFixed(1)}%
-                </div>
-                <div className="text-gray-500 dark:text-gray-400">VaR 95%</div>
-              </div>
-              <div className="text-center">
-                <div className={`font-bold text-sm ${varResult.var99 > 0.15 ? "text-red-600" : "text-amber-700"}`}>
-                  {(varResult.var99 * 100).toFixed(1)}%
-                </div>
-                <div className="text-gray-500 dark:text-gray-400">VaR 99%</div>
-              </div>
-              <div className="text-center">
-                <div className={`font-bold text-sm ${varResult.maxCorrelation >= 0.7 ? "text-red-600" : "text-amber-700"}`}>
-                  {varResult.maxCorrelation.toFixed(2)}
-                </div>
-                <div className="text-gray-500 dark:text-gray-400">最大相関</div>
-              </div>
-              <div className="text-center">
-                <div className={`font-bold text-sm ${varResult.diversificationRatio > 0.8 ? "text-red-600" : "text-green-600"}`}>
-                  {(varResult.diversificationRatio * 100).toFixed(0)}%
-                </div>
-                <div className="text-gray-500 dark:text-gray-400">相関集中度</div>
-              </div>
-            </div>
-            {varResult.highCorrPairs.length > 0 && (
-              <div className="mt-2 text-[10px] text-red-600 dark:text-red-400">
-                ⚠️ 高相関ペア: {varResult.highCorrPairs.map(p =>
-                  `${p.symbolA.replace("_USDT","")}×${p.symbolB.replace("_USDT","")}(${p.correlation.toFixed(2)})`
-                ).join(", ")}
-              </div>
-            )}
-          </div>
-        );
-      })()}
 
       {/* Toast (施策10) */}
       <ToastContainer toasts={toasts} />
