@@ -296,9 +296,11 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     avgLoss:          ja ? "平均損失"              : "Avg Loss",
     profitFactor:     ja ? "PF"                  : "PF",
     sharpe:           ja ? "シャープ"              : "Sharpe",
-    lev1:             ja ? "1x（現物相当）"        : "1x (Spot)",
-    lev3:             ja ? "3x（推奨）"            : "3x (Recommended)",
-    lev10:            ja ? "10x（BTC/ETHのみ）"    : "10x (BTC/ETH only)",
+    lev1:             ja ? "1x（現物相当）"          : "1x (Spot equivalent)",
+    lev2:             ja ? "2x（低リスク）"          : "2x (Low risk)",
+    lev3:             ja ? "3x（推奨）"              : "3x (Recommended)",
+    lev5:             ja ? "5x（中〜大型のみ推奨）"  : "5x (Mid-Large caps)",
+    lev10:            ja ? "10x（ハイリスク）"       : "10x (High risk)",
     selectSymbols:    ja ? "シミュレーション銘柄を選択" : "Select Symbols to Simulate",
     addSymbol:        ja ? "追加"                 : "Add",
     noSymbolSelected: ja ? "銘柄を選択してください"  : "Select symbols above",
@@ -324,8 +326,8 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
       ? `⚠️ レバ${leverage}x × ポジション${posSizePct}%: SL hit時に資金の約${highLevRisk.toFixed(1)}%を失う可能性`
       : `⚠️ Lev ${leverage}x × pos ${posSizePct}%: ~${highLevRisk.toFixed(1)}% of capital at risk per SL hit`,
     highLevDanger:    ja
-      ? "🚨 1トレードで資金の10%以上のリスク！サイズを下げてください"
-      : "🚨 Over 10% of capital at risk per trade! Reduce position size.",
+      ? "🚨 レバ10xはアルトコインでは清算リスクが非常に高いです。3x以下を推奨します。"
+      : "🚨 10x leverage on altcoins carries extreme liquidation risk. 3x or below recommended.",
   };
 
   return (
@@ -496,9 +498,9 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
               }`}
             >
               <option value={1}>{T.lev1}</option>
-              <option value={2}>2x</option>
+              <option value={2}>{T.lev2}</option>
               <option value={3}>{T.lev3}</option>
-              <option value={5}>5x</option>
+              <option value={5}>{T.lev5}</option>
               <option value={10}>{T.lev10}</option>
             </select>
             <div className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">
@@ -511,7 +513,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
         {calcMode === "position" && leverage >= 5 && (
           <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-400">
             {T.highLevWarn}
-            {highLevRisk > 10 && (
+            {leverage >= 10 && (
               <span className="font-bold block mt-1">{T.highLevDanger}</span>
             )}
           </div>
