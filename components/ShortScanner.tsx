@@ -3084,85 +3084,88 @@ export default function ShortScanner() {
         </button>
       </div>
 
-      {/* Action buttons — Row 1 */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <button onClick={() => scan()} disabled={loading}
-          className="px-4 py-1.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
-          {loading ? "⏳ ..." : t.scanBtn}
-        </button>
-        <button onClick={() => scan(undefined, undefined, true)} disabled={loading}
-          title="キャッシュを無視して再スキャン"
-          className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
-          🔄
-        </button>
-        <button onClick={exportCSV} disabled={extended.length === 0}
-          className="px-3 py-1.5 text-xs bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed border border-gray-300 rounded-lg text-gray-600 transition-colors">
-          {t.csvBtn}
-        </button>
-        {/* Auto-refresh interval dropdown (施策5) */}
-        <div className="relative">
-          <button onClick={() => setShowAutoMenu(v => !v)}
-            className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoIntervalMin > 0 ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
-            {t.autoRefresh} {autoIntervalMin > 0 ? `${autoIntervalMin}m` : t.autoOff} ▾
-            {autoIntervalMin > 0 && countdown != null && (
-              <span className="ml-1 text-indigo-400">🔄 {t.autoCountdown}: {Math.floor(countdown / 60)}:{String(Math.floor(countdown % 60)).padStart(2,"0")}</span>
-            )}
+      {/* Toolbar: Presets (左) + Actions (右) — 1行統合 */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* 左: プリセット */}
+        <FilterPresets t={t} lang={lang} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
+
+        {/* 右: CSV・自動更新・スキャン・設定 */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button onClick={exportCSV} disabled={extended.length === 0}
+            className="px-3 py-1.5 text-xs bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300 transition-colors">
+            {t.csvBtn}
           </button>
-          {showAutoMenu && (
-            <div className="absolute left-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px]">
-              {([0,5,10,30,60] as const).map(m => (
-                <button key={m} onClick={() => setAutoInterval(m)}
-                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-colors ${autoIntervalMin === m ? "text-indigo-600 font-bold" : "text-gray-600 dark:text-gray-300"}`}>
-                  {m === 0 ? t.autoOff : `${m}分ごと`}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {/* Settings menu */}
-        <div className="relative ml-auto">
-          <button onClick={() => setShowSettingsMenu(v => !v)}
-            className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
-            title="設定">
-            ⚙️
-          </button>
-          {showSettingsMenu && (
-            <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[170px]">
-              <button onClick={toggleSound}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
-                {soundEnabled ? t.soundOn : t.soundOff}
-              </button>
-              {notifState !== "granted" ? (
-                <button onClick={requestNotif}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-amber-700">
-                  {t.notifEnable}
-                </button>
-              ) : (
-                <div className="px-3 py-1.5 text-xs text-green-700">{t.notifOn}</div>
+          {/* Auto-refresh interval dropdown */}
+          <div className="relative">
+            <button onClick={() => setShowAutoMenu(v => !v)}
+              className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${autoIntervalMin > 0 ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50"}`}>
+              {t.autoRefresh} {autoIntervalMin > 0 ? `${autoIntervalMin}m` : t.autoOff} ▾
+              {autoIntervalMin > 0 && countdown != null && (
+                <span className="ml-1 text-indigo-400">🔄 {t.autoCountdown}: {Math.floor(countdown / 60)}:{String(Math.floor(countdown % 60)).padStart(2,"0")}</span>
               )}
-              <button onClick={shareResults} disabled={extended.length === 0}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors text-gray-600 dark:text-gray-300">
-                {t.shareBtn}
-              </button>
-              <button onClick={shareFilterURL}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
-                {t.shareUrl}
-              </button>
-              <a href={MEXC_REG_URL} target="_blank" rel="noopener noreferrer"
-                className="block px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-orange-700">
-                {t.mexcReg}
-              </a>
-              <button onClick={() => { setShowShortcutHelp(true); setShowSettingsMenu(false); }}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-500 dark:text-gray-400">
-                ⌨️ ショートカット
-              </button>
-            </div>
-          )}
+            </button>
+            {showAutoMenu && (
+              <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px]">
+                {([0,5,10,30,60] as const).map(m => (
+                  <button key={m} onClick={() => setAutoInterval(m)}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-colors ${autoIntervalMin === m ? "text-indigo-600 font-bold" : "text-gray-600 dark:text-gray-300"}`}>
+                    {m === 0 ? t.autoOff : `${m}分ごと`}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={() => scan(undefined, undefined, true)} disabled={loading}
+            title="キャッシュを無視して再スキャン"
+            className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors">
+            🔄
+          </button>
+          <button onClick={() => scan()} disabled={loading}
+            className="px-4 py-1.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
+            {loading ? "⏳ ..." : t.scanBtn}
+          </button>
+          {/* Settings menu */}
+          <div className="relative">
+            <button onClick={() => setShowSettingsMenu(v => !v)}
+              className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              title="設定">
+              ⚙️
+            </button>
+            {showSettingsMenu && (
+              <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[170px]">
+                <button onClick={toggleSound}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
+                  {soundEnabled ? t.soundOn : t.soundOff}
+                </button>
+                {notifState !== "granted" ? (
+                  <button onClick={requestNotif}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-amber-700">
+                    {t.notifEnable}
+                  </button>
+                ) : (
+                  <div className="px-3 py-1.5 text-xs text-green-700">{t.notifOn}</div>
+                )}
+                <button onClick={shareResults} disabled={extended.length === 0}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors text-gray-600 dark:text-gray-300">
+                  {t.shareBtn}
+                </button>
+                <button onClick={shareFilterURL}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
+                  {t.shareUrl}
+                </button>
+                <a href={MEXC_REG_URL} target="_blank" rel="noopener noreferrer"
+                  className="block px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-orange-700">
+                  {t.mexcReg}
+                </a>
+                <button onClick={() => { setShowShortcutHelp(true); setShowSettingsMenu(false); }}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-500 dark:text-gray-400">
+                  ⌨️ ショートカット
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* Filter Presets (施策6) — Row 2 */}
-      <FilterPresets t={t} lang={lang} customPresets={customPresets} onApply={applyPresetAndScan} onSaveCurrent={saveCurrentPreset} onDeleteCustom={deleteCustomPreset} />
 
       {/* Filters — collapsible */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
