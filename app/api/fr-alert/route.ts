@@ -117,7 +117,7 @@ interface TickerData {
 }
 
 // ── MEXC fetch helpers (short-scanと同じ方式) ──
-const MEXC = "https://contract.mexc.com";
+const MEXC = "https://api.mexc.com";
 
 async function fetchWithTimeout(url: string, ms = 10_000): Promise<Response | null> {
   const ctrl = new AbortController();

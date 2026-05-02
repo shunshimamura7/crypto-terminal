@@ -1,7 +1,7 @@
 import type { LiquidityInfo } from "@/app/lib/shortScorer";
 export type { LiquidityInfo };
 
-const MEXC_FUTURES = "https://contract.mexc.com";
+const MEXC_FUTURES = "https://api.mexc.com";
 const _cache = new Map<string, { data: LiquidityInfo; ts: number }>();
 const TTL = 60_000; // 1 min
 

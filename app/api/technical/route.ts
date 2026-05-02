@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MEXC = "https://contract.mexc.com";
+const MEXC = "https://api.mexc.com";
 
 // ─── Indicator helpers ────────────────────────────────────────────────────────
 

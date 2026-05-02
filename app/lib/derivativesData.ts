@@ -61,11 +61,11 @@ async function fetchFrGate(sym: string): Promise<number | null> {
 }
 
 // MEXC: funding rate
-// GET https://contract.mexc.com/api/v1/contract/funding_rate/{symbol}_USDT
+// GET https://api.mexc.com/api/v1/contract/funding_rate/{symbol}_USDT
 // data.fundingRate → number
 async function fetchFrMexc(sym: string): Promise<number | null> {
   const raw = await apiFetch(
-    `https://contract.mexc.com/api/v1/contract/funding_rate/${sym}_USDT`
+    `https://api.mexc.com/api/v1/contract/funding_rate/${sym}_USDT`
   );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = raw as any;

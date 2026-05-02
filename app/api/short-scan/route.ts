@@ -29,7 +29,7 @@ function pearsonCorrelation(x: number[], y: number[]): number {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const MEXC = "https://contract.mexc.com";
+const MEXC = "https://api.mexc.com";
 
 // ─── In-memory cache (warm instance reuse, 10-min TTL) ───────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,7 +67,10 @@ async function fetchKline4h(symbol: string, day14AgoSec: number, nowSec: number)
       10000,
     );
   }
-  _kline4hCache.set(key, { value: res, ts: Date.now() });
+  // Only cache valid responses; don't poison the cache with failed/empty fetches
+  if (Array.isArray(res?.data?.close) && res.data.close.length > 0) {
+    _kline4hCache.set(key, { value: res, ts: Date.now() });
+  }
   return res;
 }
 
@@ -100,7 +103,7 @@ const MAJOR_PAIRS = new Set([
 
 // Stage 2 concurrency: 40 parallel / 30ms delay
 // 500 targets / 40 = 13 batches × ~7s = ~91s well within 120s deadline
-const MAX_KLINE_TARGETS = 500;
+const MAX_KLINE_TARGETS = 400;
 const BATCH = 40;
 const BATCH_DELAY = 30;
 
@@ -171,7 +174,7 @@ async function analyzeCandidate(
     prefetchedKline4h !== undefined
       ? Promise.resolve(prefetchedKline4h)
       : mexcGet(`/api/v1/contract/kline/${symbol}?interval=Hour4&start=${day14AgoSec}&end=${nowSec}`, 7000),
-    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Day1&start=${day90AgoSec}&end=${nowSec}`, 7000),
+    mexcGet(`/api/v1/contract/kline/${symbol}?interval=Day1&start=${day90AgoSec}&end=${nowSec}`, 10000),
     mexcGet(`/api/v1/contract/funding_rate/${symbol}`, 4000),
     fetchLiquidityInfo(symbol),
   ]);
@@ -260,6 +263,18 @@ async function analyzeCandidate(
     if (isNew30 && Array.isArray(kd.open) && kd.open.length > 0) {
       const firstOpen = parseFloat(String(kd.open[0]));
       if (firstOpen > 0) initialPrice = firstOpen;
+    }
+  }
+
+  // Fallback: synthesize daily closes from 4h klines when 1d kline is unavailable
+  // Enables EMA/trend calculation and priceChange7d for coins where 1d kline fails
+  if (closes1d.length === 0 && closes4h.length >= 24) {
+    for (let i = 5; i < closes4h.length; i += 6) {
+      closes1d.push(closes4h[i]);
+    }
+    if (closes1d.length >= 2) {
+      const oldest = closes1d[0];
+      if (oldest > 0) priceChange7d = (price - oldest) / oldest * 100;
     }
   }
 
@@ -364,7 +379,7 @@ export async function GET(req: NextRequest) {
   const mode    = req.nextUrl.searchParams.get("mode") ?? "";
   const isNew30 = mode === "new30";
 
-  // Filter params sent by client sliders (normal mode only; new30 uses passesFilterNew30)
+  // Filter params sent by client sliders (normal mode only)
   const qMinDrop     = Number(req.nextUrl.searchParams.get("minDrop")     ?? "10");
   const qMaxVolRatio = Number(req.nextUrl.searchParams.get("maxVolRatio") ?? "500");
   const qMinVol24k   = Number(req.nextUrl.searchParams.get("minVol24k")   ?? "50");

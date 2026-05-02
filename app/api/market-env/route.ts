@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const MEXC       = "https://contract.mexc.com";
+const MEXC       = "https://api.mexc.com";
 const YAHOO      = "https://query1.finance.yahoo.com/v8/finance/chart";
 const CG_GLOBAL  = "https://api.coingecko.com/api/v3/global";
 const CG_STABLES = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=tether,usd-coin&order=market_cap_desc&per_page=2&sparkline=false";

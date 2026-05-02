@@ -13,7 +13,7 @@ export interface FrRateItem {
 async function fetchTicker(symbol: string): Promise<FrRateItem | null> {
   try {
     const res = await fetch(
-      `https://contract.mexc.com/api/v1/contract/ticker/${symbol}_USDT`,
+      `https://api.mexc.com/api/v1/contract/ticker/${symbol}_USDT`,
       { signal: AbortSignal.timeout(6_000) }
     );
     if (!res.ok) return null;

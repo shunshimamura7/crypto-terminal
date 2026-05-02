@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const prices: Record<string, number> = {};
 
   try {
-    const res = await fetch("https://contract.mexc.com/api/v1/contract/ticker", {
+    const res = await fetch("https://api.mexc.com/api/v1/contract/ticker", {
       signal: AbortSignal.timeout(5000),
       headers: { "Accept": "application/json" },
     });

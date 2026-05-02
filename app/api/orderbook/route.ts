@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 
-const MEXC = "https://contract.mexc.com";
+const MEXC = "https://api.mexc.com";
 
 export async function GET(req: NextRequest) {
   const symbol = req.nextUrl.searchParams.get("symbol");

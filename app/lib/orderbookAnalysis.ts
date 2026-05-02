@@ -9,7 +9,7 @@ export interface OrderbookImbalance {
 
 export async function fetchOrderbookImbalance(symbol: string): Promise<OrderbookImbalance | null> {
   try {
-    const res = await fetch(`https://contract.mexc.com/api/v1/contract/depth/${symbol}`, {
+    const res = await fetch(`https://api.mexc.com/api/v1/contract/depth/${symbol}`, {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return null;
