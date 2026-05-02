@@ -42,6 +42,13 @@ const MEXC_REG_URL = MEXC_REF
   ? `https://www.mexc.com/register?inviteCode=${MEXC_REF}`
   : "https://www.mexc.com/register";
 
+// ─── Score thresholds ────────────────────────────────────────────────────────
+const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
+const HAS_CG = CG_API_KEY.length > 0;
+const DISPLAY_MAX = HAS_CG ? 34 : 28;
+// CG連携時はmax34ptの約35%=12pt、なし時はmax28ptの約35%=10pt
+const RECOMMEND_THRESHOLD = HAS_CG ? 12 : 10;
+
 // ─── i18n (G) ────────────────────────────────────────────────────────────────
 type Lang = "ja" | "en";
 const T = {
@@ -87,7 +94,7 @@ const T = {
     colSns: "SNS",
     openLink: "開く ↗",
     scoreLabel: "スコア凡例",
-    scoreHigh: "10以上: 強いショート候補",
+    scoreHigh: `${RECOMMEND_THRESHOLD}以上: 強いショート候補`,
     scoreMid: "6-9: 中程度",
     scoreLow: "5以下: 弱い",
     scrollHint: "← 横スクロールで全列表示",
@@ -322,7 +329,7 @@ const T = {
     colSns: "SNS",
     openLink: "Open ↗",
     scoreLabel: "Score legend",
-    scoreHigh: "10+: Strong short candidate",
+    scoreHigh: `${RECOMMEND_THRESHOLD}+: Strong short candidate`,
     scoreMid: "6-9: Moderate",
     scoreLow: "≤5: Weak",
     scrollHint: "← Scroll for more columns",
@@ -541,10 +548,6 @@ interface AnalyzeResult {
   isBinanceListed: boolean;
 }
 
-const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
-const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 34 : 28;
-
 type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest" | "fundingRate" | "volume24h" | "phase";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -634,9 +637,9 @@ function getEntryJudgment(
 }
 
 function scoreBadgeStyle(s: number): React.CSSProperties {
-  const bg    = s >= 10 ? "#fef2f2" : s >= 6 ? "#fff7ed" : "#f9fafb";
-  const color = s >= 10 ? "#b91c1c" : s >= 6 ? "#c2410c" : "#6b7280";
-  const border = s >= 10 ? "#fca5a5" : s >= 6 ? "#fdba74" : "#d1d5db";
+  const bg    = s >= RECOMMEND_THRESHOLD ? "#fef2f2" : s >= 6 ? "#fff7ed" : "#f9fafb";
+  const color = s >= RECOMMEND_THRESHOLD ? "#b91c1c" : s >= 6 ? "#c2410c" : "#6b7280";
+  const border = s >= RECOMMEND_THRESHOLD ? "#fca5a5" : s >= 6 ? "#fdba74" : "#d1d5db";
   return { background: bg, color, border: `1px solid ${border}`, borderRadius: "9999px", padding: "2px 8px", fontWeight: 900, fontSize: "12px", display: "inline-block", whiteSpace: "nowrap" };
 }
 
@@ -1599,7 +1602,7 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
 
   function bubbleColor(c: ExtendedCandidate): string {
     if (isLongBias(c)) return "#3b82f6";          // blue
-    if (c.displayScore >= 10) return "#ef4444";   // red
+    if (c.displayScore >= RECOMMEND_THRESHOLD) return "#ef4444";   // red
     if (c.displayScore >= 6)  return "#f97316";   // orange
     return "#9ca3af";                              // gray
   }
@@ -1626,9 +1629,9 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
       <p className="text-xs text-gray-500 mb-3">{t.heatDesc}</p>
       <ResponsiveContainer width="100%" height={400}>
         <ScatterChart margin={{ top: 20, right: 30, bottom: 30, left: 10 }}>
-          {/* 狙い目ゾーン: score≥10, corr<0.3 */}
+          {/* 狙い目ゾーン: score≥RECOMMEND_THRESHOLD, corr<0.3 */}
           <ReferenceArea
-            x1={10} x2={DISPLAY_MAX} y1={-0.5} y2={0.3}
+            x1={RECOMMEND_THRESHOLD} x2={DISPLAY_MAX} y1={-0.5} y2={0.3}
             fill="#16a34a" fillOpacity={0.07}
             stroke="#16a34a" strokeOpacity={0.3} strokeDasharray="4 4"
           />
@@ -1712,8 +1715,121 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
   );
 }
 
+// ─── Mobile Card List ────────────────────────────────────────────────────────
+function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts, t, lang, watchlistSet, onWatchlistToggle, marketBtcChange }: {
+  candidates: ExtendedCandidate[];
+  expandedRows: Set<string>;
+  toggleRow: (sym: string) => void;
+  snapshots: ScanSnapshot[];
+  alerts: DiffAlert[];
+  t: Translations;
+  lang: Lang;
+  watchlistSet: Set<string>;
+  onWatchlistToggle: (sym: string) => void;
+  marketBtcChange?: number;
+}) {
+  if (candidates.length === 0) return null;
+  return (
+    <div className="space-y-2 px-2 py-3">
+      {candidates.map(c => {
+        const base = c.symbol.replace("_USDT", "");
+        const isOpen = expandedRows.has(c.symbol);
+        const rec = getShortRecommendation(c, marketBtcChange ?? 0);
+        const borderColor =
+          rec === "banned" || rec === "banned_fresh" ? "border-l-red-500" :
+          rec === "caution" ? "border-l-orange-400" :
+          rec === "recommended" ? "border-l-emerald-500" :
+          "border-l-gray-200";
+        const frPct = c.fundingRate != null ? c.fundingRate * 100 : null;
+
+        return (
+          <div
+            key={c.symbol}
+            className={`bg-white rounded-lg border border-gray-200 border-l-4 ${borderColor} shadow-sm`}
+            onClick={() => toggleRow(c.symbol)}
+          >
+            {/* ヘッダー行 */}
+            <div className="flex items-center justify-between px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-gray-900 text-sm">{base}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  rec === "recommended" ? "bg-emerald-100 text-emerald-700" :
+                  rec === "caution" ? "bg-orange-100 text-orange-700" :
+                  rec === "banned" || rec === "banned_fresh" ? "bg-red-100 text-red-700" :
+                  "bg-gray-100 text-gray-500"
+                }`}>
+                  {rec === "recommended" ? "✅推奨" : rec === "caution" ? "⚠️注意" : rec === "banned" || rec === "banned_fresh" ? "🚫禁止" : "—"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-baseline gap-0.5">
+                  <span className={`text-lg font-bold ${
+                    c.displayScore >= RECOMMEND_THRESHOLD ? "text-red-600" :
+                    c.displayScore >= 6 ? "text-orange-500" : "text-gray-500"
+                  }`}>{c.displayScore}</span>
+                  <span className="text-[10px] text-gray-400">/{DISPLAY_MAX}</span>
+                </div>
+                <a href={mexcUrl(base)} target="_blank" rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="text-blue-500 hover:text-blue-700">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+
+            {/* 主要データ */}
+            <div className="grid grid-cols-4 gap-1 px-3 pb-2 text-[10px]">
+              <div className="text-center">
+                <div className="text-gray-400">価格</div>
+                <div className="font-mono font-semibold text-gray-700 truncate">{fmtPrice(c.currentPrice)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-400">ATH比</div>
+                <div className="font-mono font-semibold text-red-600">{c.athDropPct.toFixed(0)}%</div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-400">FR</div>
+                <div className={`font-mono font-semibold ${frPct != null && frPct < 0 ? "text-green-600" : "text-gray-700"}`}>
+                  {frPct != null ? `${frPct >= 0 ? "+" : ""}${frPct.toFixed(4)}%` : "—"}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-400">24h</div>
+                <div className={`font-mono font-semibold ${c.priceChange24h >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {c.priceChange24h >= 0 ? "+" : ""}{c.priceChange24h.toFixed(1)}%
+                </div>
+              </div>
+            </div>
+
+            {/* チャートパターン */}
+            {c.chartPattern && (
+              <div className="px-3 pb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  {c.chartPattern.type === "bear_flag" ? "🚩 Bear Flag" :
+                   c.chartPattern.type === "dead_cat" ? "🐱 Dead Cat" :
+                   c.chartPattern.type === "descending_wedge" ? "📐 Desc Wedge" :
+                   c.chartPattern.type === "break_of_structure" ? "💥 BOS" :
+                   c.chartPattern.type === "fair_value_gap" ? "⚡ FVG" :
+                   c.chartPattern.type === "supply_zone" ? "🏔 Supply Zone" :
+                   c.chartPattern.type}
+                  {` ${(c.chartPattern.confidence * 100).toFixed(0)}%`}
+                </span>
+              </div>
+            )}
+
+            {/* 展開: スコア内訳 */}
+            {isOpen && <ScoreDetail c={c} snapshots={snapshots} alerts={alerts} t={t} lang={lang} watchlistSet={watchlistSet} onWatchlistToggle={onWatchlistToggle} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Summary Bar (修正5) ─────────────────────────────────────────────────────
-function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strongThreshold = 10, btcChange24h = 0 }: {
+function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strongThreshold = RECOMMEND_THRESHOLD, btcChange24h = 0 }: {
   candidates: ExtendedCandidate[];
   t: Translations;
   onFilter: (key: "strong" | "long" | "pattern" | "allTf" | "spike") => void;
@@ -1834,7 +1950,7 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
   if (c.trendMultiTF != null && c.trendMultiTF.alignment === 0) return "caution";
 
   // ── 推奨 ───────────────────────────────────────────────────────────────────
-  if (c.displayScore >= 10 && (fr === null || fr >= 0)) return "recommended";
+  if (c.displayScore >= RECOMMEND_THRESHOLD && (fr === null || fr >= 0)) return "recommended";
   return "neutral";
 }
 
@@ -2819,7 +2935,7 @@ export default function ShortScanner() {
     return { fng: marketFearGreed, btcChange24h: marketBtcChange, regime, scoreAdjust };
   }, [marketBtcChange, marketFearGreed]);
 
-  const strongThreshold = regimeFilterOn && marketRegime ? 10 + marketRegime.scoreAdjust : 10;
+  const strongThreshold = regimeFilterOn && marketRegime ? RECOMMEND_THRESHOLD + marketRegime.scoreAdjust : RECOMMEND_THRESHOLD;
 
   // Extended candidates — server already applied filter params; no client-side re-filter
   const extended = useMemo((): ExtendedCandidate[] => {
@@ -3475,9 +3591,27 @@ export default function ShortScanner() {
             </div>
           )}
 
-          {/* Table view */}
-          {viewMode === "table" && <div ref={topScrollRef} onScroll={onTopScroll} className="overflow-x-auto overflow-y-hidden border-b border-gray-100 short-scan-scrollbar" style={{height:16}}><div ref={topScrollInnerRef} style={{height:1}} /></div>}
-          {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll} className="overflow-x-auto short-scan-table short-scan-scrollbar" style={{ overflowX: "auto" }}><table className="table-auto text-xs" style={{ minWidth: "1100px", width: "100%" }}>
+          {/* スマホ: カードビュー (640px未満) */}
+          {viewMode === "table" && (
+            <div className="block sm:hidden">
+              <MobileCardList
+                candidates={paginatedItems}
+                expandedRows={expandedRows}
+                toggleRow={toggleRow}
+                snapshots={snapshots}
+                alerts={alerts}
+                t={t}
+                lang={lang}
+                watchlistSet={watchlistSet}
+                onWatchlistToggle={toggleWatchlist}
+                marketBtcChange={marketBtcChange}
+              />
+            </div>
+          )}
+
+          {/* PC: テーブルビュー (640px以上) */}
+          {viewMode === "table" && <div ref={topScrollRef} onScroll={onTopScroll} className="hidden sm:block overflow-x-auto overflow-y-hidden border-b border-gray-100 short-scan-scrollbar" style={{height:16}}><div ref={topScrollInnerRef} style={{height:1}} /></div>}
+          {viewMode === "table" && <div ref={tableScrollRef} onScroll={onTableScroll} className="hidden sm:block overflow-x-auto short-scan-table short-scan-scrollbar" style={{ overflowX: "auto" }}><table className="table-auto text-xs" style={{ minWidth: "1100px", width: "100%" }}>
               <thead style={{ whiteSpace: "nowrap" }}>
                 <tr className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-600 dark:text-gray-300">
                   <th className="px-1 py-1 text-left sticky left-0 bg-white dark:bg-gray-900 z-10 min-w-[80px]">{t.colSymbol}</th>
