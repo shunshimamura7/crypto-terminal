@@ -101,10 +101,9 @@ const MAJOR_PAIRS = new Set([
   "JUP_USDT","WLD_USDT","PEPE_USDT","WIF_USDT","BONK_USDT","FLOKI_USDT","SHIB_USDT",
 ]);
 
-// Stage 2 concurrency: 40 parallel / 30ms delay
-// 500 targets / 40 = 13 batches × ~7s = ~91s well within 120s deadline
+// Stage 2 concurrency: 30 parallel / 30ms delay (reduced to accommodate Spot API fallback per coin)
 const MAX_KLINE_TARGETS = 400;
-const BATCH = 40;
+const BATCH = 30;
 const BATCH_DELAY = 30;
 
 async function fetchWithTimeout(url: string, ms = 10000): Promise<Response | null> {
@@ -129,6 +128,38 @@ async function mexcGet(path: string, ms = 10000): Promise<any> {
 
 function sleep(ms: number) {
   return new Promise<void>(r => setTimeout(r, ms));
+}
+
+// ─── MEXC Spot API kline (先物kline失敗時のフォールバック) ───────────────────
+// 先物シンボル "OKB_USDT" → スポットシンボル "OKBUSDT"（アンダースコアなし）
+function toSpotSymbol(futuresSymbol: string): string {
+  return futuresSymbol.replace("_", "");
+}
+
+const SPOT_INTERVAL: Record<string, string> = { Hour1: "1h", Hour4: "4h", Day1: "1d" };
+
+async function mexcSpotKline(
+  futuresSymbol: string,
+  interval: "Hour1" | "Hour4" | "Day1",
+  limit: number,
+): Promise<{ closes: number[]; highs: number[]; lows: number[]; vols: number[] } | null> {
+  const spotSymbol = toSpotSymbol(futuresSymbol);
+  const spotInterval = SPOT_INTERVAL[interval];
+  const url = `${MEXC}/api/v3/klines?symbol=${spotSymbol}&interval=${spotInterval}&limit=${limit}`;
+  const res = await fetchWithTimeout(url, 8000);
+  if (!res?.ok) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any[] = await res.json();
+    if (!Array.isArray(data) || data.length < 3) return null;
+    // Spot kline format: [timestamp, open, high, low, close, volume, ...]
+    const closes: number[] = [], highs: number[] = [], lows: number[] = [], vols: number[] = [];
+    for (const bar of data) {
+      const h = parseFloat(bar[2]), l = parseFloat(bar[3]), c = parseFloat(bar[4]), v = parseFloat(bar[5]);
+      if (c > 0) { closes.push(c); highs.push(h); lows.push(l); vols.push(v); }
+    }
+    return closes.length >= 3 ? { closes, highs, lows, vols } : null;
+  } catch { return null; }
 }
 
 interface CandidateMeta {
@@ -214,6 +245,21 @@ async function analyzeCandidate(
     }
   }
 
+  // Spot API 4h fallback: futures kline has no data → try MEXC Spot API
+  if (closes4h.length < 3) {
+    const spotData = await mexcSpotKline(symbol, "Hour4", 84);
+    if (spotData) {
+      closes4h.push(...spotData.closes);
+      kHighs4h = spotData.highs;
+      kLows4h = spotData.lows;
+      kVols4h = spotData.vols;
+      if (kHighs4h.length > 0) { ath14d = Math.max(price, ...kHighs4h); ath14dFromKline = true; }
+      if (kHighs4h.length >= 3 && kLows4h.length === kHighs4h.length && kVols4h.length === kHighs4h.length) {
+        volumeProfile = calcVolumeProfile(kHighs4h, kLows4h, kVols4h, price);
+      }
+    }
+  }
+
   // Kline quality gate: reject tokens with no meaningful price history
   // (tokenized equities/commodities often return empty or single-candle klines)
   if (closes4h.length < 3) return null;
@@ -266,8 +312,26 @@ async function analyzeCandidate(
     }
   }
 
-  // Fallback: synthesize daily closes from 4h klines when 1d kline is unavailable
-  // Enables EMA/trend calculation and priceChange7d for coins where 1d kline fails
+  // Spot API 1d fallback: futures 1d kline failed → try MEXC Spot API
+  if (closes1d.length === 0) {
+    const spotData1d = await mexcSpotKline(symbol, "Day1", 90);
+    if (spotData1d) {
+      closes1d.push(...spotData1d.closes);
+      if (spotData1d.highs.length > 0) { ath14d = Math.max(ath14d, ...spotData1d.highs); ath14dFromKline = true; }
+      if (spotData1d.vols.length >= 7 && spotData1d.closes.length >= 7) {
+        const last7Vols = spotData1d.vols.slice(-7);
+        const last7Closes = spotData1d.closes.slice(-7);
+        volumeAvg7d = last7Vols.reduce((a, v, i) => a + v * last7Closes[i], 0) / 7;
+        vol7dFromKline = true;
+      }
+      if (spotData1d.closes.length >= 7) {
+        const first = spotData1d.closes[spotData1d.closes.length - 7];
+        if (first > 0) priceChange7d = ((price - first) / first) * 100;
+      }
+    }
+  }
+
+  // Last resort: synthesize daily closes from 4h klines (when both futures and Spot 1d fail)
   if (closes1d.length === 0 && closes4h.length >= 24) {
     for (let i = 5; i < closes4h.length; i += 6) {
       closes1d.push(closes4h[i]);
@@ -275,6 +339,15 @@ async function analyzeCandidate(
     if (closes1d.length >= 2) {
       const oldest = closes1d[0];
       if (oldest > 0) priceChange7d = (price - oldest) / oldest * 100;
+    }
+  }
+
+  // Spot API 1h fallback: futures 1h kline insufficient → try MEXC Spot API
+  if (closes1h.length < 10) {
+    const spotData1h = await mexcSpotKline(symbol, "Hour1", 48);
+    if (spotData1h && spotData1h.closes.length > closes1h.length) {
+      closes1h.length = 0;
+      closes1h.push(...spotData1h.closes);
     }
   }
 
@@ -536,6 +609,7 @@ export async function GET(req: NextRequest) {
   const PHASE_A_DELAY = 50;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const validWithKline4h: Array<{ meta: CandidateMeta; kline4h: any }> = [];
+  const failedKlineMetas: CandidateMeta[] = [];
   let phaseACacheHits = 0, phaseAFetched = 0, phaseAFailed = 0;
 
   for (let i = 0; i < orderedTargets.length; i += PHASE_A_BATCH) {
@@ -559,28 +633,36 @@ export async function GET(req: NextRequest) {
         const hasData = Array.isArray(kline4h?.data?.close) && kline4h.data.close.length > 0;
         if (isCached) phaseACacheHits++; else phaseAFetched++;
         if (hasData) validWithKline4h.push({ meta, kline4h });
-        else phaseAFailed++;
+        else { phaseAFailed++; failedKlineMetas.push(meta); }
       } else {
         phaseAFailed++;
       }
     }
     if (i + PHASE_A_BATCH < klineTargets.length) await sleep(PHASE_A_DELAY);
   }
-  console.log(`[short-scan] ── Phase A ── 4h kline fetched: ${phaseAFetched}/${orderedTargets.length}, cached: ${phaseACacheHits}, failed: ${phaseAFailed}, valid: ${validWithKline4h.length}`);
+  console.log(`[short-scan] ── Phase A ── futures 4h: fetched=${phaseAFetched}, cached=${phaseACacheHits}, valid=${validWithKline4h.length}, failed=${phaseAFailed} → spot fallback`);
 
-  // ── Phase B (Stage 2): 補助データ取得 + フル分析（validのみ対象）──────────────
+  // ── Phase B (Stage 2): 補助データ取得 + フル分析 ──────────────────────────────
+  // futures valid → prefetched kline4h を渡す
+  // failed metas → null を渡す（analyzeCandidate 内の Spot fallback が対応）
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const phaseBTargets: Array<{ meta: CandidateMeta; kline4h: any }> = [
+    ...validWithKline4h,
+    ...failedKlineMetas.map(meta => ({ meta, kline4h: null })),
+  ];
+  const futuresSucceededSyms = new Set(validWithKline4h.map(v => v.meta.symbol));
   const results: ShortCandidate[] = [];
   let stage2Fetched = 0;
   let stage2Failed  = 0;
-  console.log(`[short-scan] ── Phase B ── supplementary data for ${validWithKline4h.length} symbols`);
+  console.log(`[short-scan] ── Phase B ── futures valid: ${validWithKline4h.length}, spot fallback: ${failedKlineMetas.length}, total: ${phaseBTargets.length}`);
 
-  for (let i = 0; i < validWithKline4h.length; i += BATCH) {
+  for (let i = 0; i < phaseBTargets.length; i += BATCH) {
     if (Date.now() >= DEADLINE) {
-      console.warn(`[short-scan] deadline reached at batch ${i}/${validWithKline4h.length}`);
+      console.warn(`[short-scan] deadline reached at batch ${i}/${phaseBTargets.length}`);
       break;
     }
 
-    const batch = validWithKline4h.slice(i, i + BATCH);
+    const batch = phaseBTargets.slice(i, i + BATCH);
     const settled = await Promise.allSettled(
       batch.map(({ meta, kline4h }) =>
         analyzeCandidate(meta, tickerMap[meta.symbol], day14AgoSec, day7AgoSec, day90AgoSec, nowSec, isNew30, btcReturns, kline4h)
@@ -597,7 +679,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (i + BATCH < validWithKline4h.length) await sleep(BATCH_DELAY);
+    if (i + BATCH < phaseBTargets.length) await sleep(BATCH_DELAY);
   }
 
   // ── Diagnostic log: kline success rate + filter breakdown ───────────────────
@@ -614,7 +696,8 @@ export async function GET(req: NextRequest) {
     const ad50 = withAthResults.filter(r => Math.abs(r.athDropPct) >= 30 && Math.abs(r.athDropPct) < 50).length;
     const ad70 = withAthResults.filter(r => Math.abs(r.athDropPct) >= 50).length;
     console.log(`[short-scan] kline4h ATH: withData=${withAth}/${results.length}, athDrop: <10%=${ad10}, 10-30%=${ad30}, 30-50%=${ad50}, ≥50%=${ad70}`);
-    console.log(`[short-scan] kline1d vol: withData=${withVol}/${results.length}`);
+    const spotFallbackResults = results.filter(r => !futuresSucceededSyms.has(r.symbol)).length;
+    console.log(`[short-scan] kline1d vol: withData=${withVol}/${results.length}, spot fallback results: ${spotFallbackResults}`);
     console.log(`[short-scan] filter: passAth=${passAth}, passVolRatio=${passVol}, passVol24h=${passVol24}, params=${JSON.stringify({ qMinDrop, qMaxVolRatio, qMinVol24k, qMaxDays, qMinOiK })}`);
   }
 

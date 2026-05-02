@@ -2235,8 +2235,8 @@ const DEFAULT_PRESETS: FilterPreset[] = [
   {
     name: "🐢 低レバ (1-2×)",
     icon: "🐢",
-    description: "ATH30%下落+出来高枯渇のスイングショート。低レバ推奨",
-    minDrop: 30, maxVolRatio: 150, minVol24k: 50, maxDays: 9999, minOiK: 20,
+    description: "ATH15%下落+出来高枯渇のスイングショート。低レバ推奨",
+    minDrop: 15, maxVolRatio: 150, minVol24k: 50, maxDays: 9999, minOiK: 20,
     sortBy: "displayScore",
     summaryFilter: null,
   },
@@ -2439,7 +2439,7 @@ export default function ShortScanner() {
 
   // Filters
   const [filtersOpen,      setFiltersOpen]       = useState(false);
-  const [minDrop,          setMinDrop]          = useState(30);
+  const [minDrop,          setMinDrop]          = useState(15);
   const [maxVolRatio,      setMaxVolRatio]       = useState(70);
   const [maxDays,          setMaxDays]           = useState(9999);
   const [minVol24k,        setMinVol24k]         = useState(100);
@@ -3037,7 +3037,7 @@ export default function ShortScanner() {
   // URL share (施策4)
   function shareFilterURL() {
     const params = new URLSearchParams();
-    if (minDrop !== 30)     params.set("min_drop",    String(minDrop));
+    if (minDrop !== 15)     params.set("min_drop",    String(minDrop));
     if (maxVolRatio !== 70) params.set("max_vol",     String(maxVolRatio));
     if (minVol24k !== 100)  params.set("min_vol24h",  String(minVol24k));
     if (maxDays !== 9999)   params.set("max_days",    String(maxDays));
