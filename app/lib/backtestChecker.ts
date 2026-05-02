@@ -260,6 +260,8 @@ export function recordNewCandidates(
         btcCorrScore:   bd?.btcCorrScore,
         patternScore:   bd?.patternScore,
         rsiScore:       bd?.rsiScore,
+        pocDistanceScore: bd?.pocDistanceScore,
+        volTrendScore:    bd?.volTrendScore,
         exclusivityScore: cs?.exclusivityScore,
         frBonus:          cs?.frBonus,
         // futuresHeatScore/snsHeatScore/mcFdvScore patched later via patchBacktestCgData
@@ -269,7 +271,7 @@ export function recordNewCandidates(
         id: `${c.symbol}_${now}`,
         symbol: c.symbol,
         score: c.shortScore,
-        scoreMax: 23,
+        scoreMax: 27,
         recordedAt: now,
         entryPrice: c.currentPrice,
         sl:      ts.sl,

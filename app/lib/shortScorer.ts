@@ -36,6 +36,8 @@ export interface ShortScoreBreakdown {
   btcCorrScore: number;    // 0-1 (BTC非連動ボーナス)
   patternScore: number;    // 0-3 (SMCパターン: Task3で拡張)
   rsiScore: number;        // 0-2 (RSI過熱度)
+  pocDistanceScore: number; // 0-2 (現在価格がPOCより上方にある距離)
+  volTrendScore: number;    // 0-2 (日足出来高の連続減少)
 }
 
 // ─── Chart Pattern (施策4 + Phase2 Task3: SMC拡張) ───────────────────────────
@@ -629,6 +631,24 @@ export function calcRSIScore(closes4h: number[]): number {
   return 0;
 }
 
+// pocDistanceScore (0-2): 現在価格がPOCより何%上にいるか (下落余地の大きさ)
+export function calcPocDistanceScore(pocVsPricePct: number | null): number {
+  if (pocVsPricePct === null) return 0;
+  // pocVsPricePct = (currentPrice - poc) / poc * 100: 正値 = 現在価格がPOCより上
+  if (pocVsPricePct >= 20) return 2;
+  if (pocVsPricePct >= 10) return 1;
+  return 0;
+}
+
+// volTrendScore (0-2): 日足出来高の連続減少（関心の低下を検知）
+export function calcVolTrendScore(dailyVols: number[]): number {
+  if (dailyVols.length < 4) return 0;
+  const [d4, d3, d2, d1] = dailyVols.slice(-4); // 古→新
+  if (d1 < d2 && d2 < d3 && d3 < d4) return 2; // 4日連続減少
+  if (d1 < d2 && d2 < d3) return 1;              // 3日連続減少
+  return 0;
+}
+
 // exclusivityScore (0-2): 取引所独占度 (施策2, client-side)
 export function calcExclusivityScore(listedOnBinance: boolean, listedOnBybit: boolean): number {
   if (!listedOnBinance && !listedOnBybit) return 2;
@@ -636,7 +656,7 @@ export function calcExclusivityScore(listedOnBinance: boolean, listedOnBybit: bo
   return 0;
 }
 
-// Server-side score max: 3+3+2+2+2+3+2+1+3+2 = 23 (Phase2: oiChange+2, pattern0-3+2, rsiScore+2)
+// Server-side score max: 3+3+2+2+2+3+2+1+3+2+2+2 = 27 (poc+2, volTrend+2; oiChange常時0サーバー)
 export function calcShortScore(
   athDropPct: number,
   volumeChangeRatio: number,
@@ -653,6 +673,8 @@ export function calcShortScore(
   lows4h: number[],        // 施策4: パターン検知
   priceChange24h: number,  // 施策4: デッドキャット判定
   oiChange4hPct: number | null = null,  // Phase2 Task1: OI変化率 (サーバーはnull固定)
+  pocVsPricePct: number | null = null,  // POC距離スコア用
+  dailyVols: number[] = [],             // 出来高連続減少スコア用
 ): {
   score: number;
   breakdown: ShortScoreBreakdown;
@@ -685,10 +707,12 @@ export function calcShortScore(
   const patternScore = calcPatternScore(null, allPatterns);
 
   const rsiScore = calcRSIScore(closes4h);
+  const pocDistanceScore = calcPocDistanceScore(pocVsPricePct);
+  const volTrendScore = calcVolTrendScore(dailyVols);
 
   return {
-    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + oiChangeScore + trendScore + pumpScore + btcCorrScore + patternScore + rsiScore,
-    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, oiChangeScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore },
+    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + oiChangeScore + trendScore + pumpScore + btcCorrScore + patternScore + rsiScore + pocDistanceScore + volTrendScore,
+    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, oiChangeScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore, pocDistanceScore, volTrendScore },
     oiRatio,
     trendDirection,
     trendMultiTF,

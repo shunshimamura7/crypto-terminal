@@ -9,15 +9,18 @@ const SCORING_ITEMS = [
   { label: "上場新しさ",    pts: "2pt", color: "#3b82f6" },
   { label: "TF一致度",     pts: "3pt", color: "#10b981" },
   { label: "OI過剰",       pts: "2pt", color: "#06b6d4" },
-  { label: "OI急増",       pts: "2pt", color: "#7c3aed" },
-  { label: "取引所独占",    pts: "2pt", color: "#22c55e" },
-  { label: "FR連続",       pts: "1pt", color: "#8b5cf6" },
   { label: "7d急騰",       pts: "2pt", color: "#f43f5e" },
   { label: "BTC非連動",    pts: "1pt", color: "#8b5cf6" },
   { label: "パターン(SMC)", pts: "3pt", color: "#0ea5e9" },
   { label: "RSI過熱",      pts: "2pt", color: "#f59e0b" },
+  { label: "POC距離",      pts: "2pt", color: "#14b8a6" },
+  { label: "出来高トレンド", pts: "2pt", color: "#d97706" },
+  { label: "OI急増",       pts: "2pt", color: "#7c3aed" },
+  { label: "取引所独占",    pts: "2pt", color: "#22c55e" },
+  { label: "FR連続",       pts: "1pt", color: "#8b5cf6" },
+  { label: "先物ヒート",    pts: "2pt", color: "#0ea5e9" },
+  { label: "SNSヒート",    pts: "1pt", color: "#ec4899" },
   { label: "MC/FDV乖離",   pts: "3pt", color: "#dc2626" },
-  { label: "アンロック",    pts: "3pt", color: "#fbbf24" },
 ];
 
 function ScoringBar() {
@@ -39,9 +42,9 @@ function ScoringBar() {
                 {i < SCORING_ITEMS.length - 1 && <span className="text-gray-300 dark:text-gray-600 mx-0.5">+</span>}
               </span>
             ))}
-            <span className="text-gray-400 dark:text-gray-500 ml-1">= 最大 27pt</span>
+            <span className="text-gray-400 dark:text-gray-500 ml-1">= 最大 32pt</span>
           </div>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">※取引所独占・FR連続・OI急増・MC/FDV乖離はクライアントサイド加算。CoinGecko連携時は最大37pt。</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">※OI急増・取引所独占・FR連続はクライアントサイド加算。CoinGecko連携時は最大38pt（先物ヒート・SNSヒート・MC/FDV乖離を追加）。</p>
         </div>
       )}
     </div>

@@ -45,9 +45,9 @@ const MEXC_REG_URL = MEXC_REF
 // ─── Score thresholds ────────────────────────────────────────────────────────
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 34 : 28;
-// CG連携時はmax34ptの約35%=12pt、なし時はmax28ptの約35%=10pt
-const RECOMMEND_THRESHOLD = HAS_CG ? 12 : 10;
+const DISPLAY_MAX = HAS_CG ? 38 : 32;
+// CG連携時はmax38ptの約35%=13pt、なし時はmax32ptの約35%=11pt
+const RECOMMEND_THRESHOLD = HAS_CG ? 13 : 11;
 
 // ─── i18n (G) ────────────────────────────────────────────────────────────────
 type Lang = "ja" | "en";
@@ -644,16 +644,19 @@ function scoreBadgeStyle(s: number): React.CSSProperties {
 }
 
 const SCORE_BARS: Array<{ key: keyof ShortScoreBreakdown; label: string; max: number; color: string }> = [
-  { key: "dropScore",      label: "ATH下落",    max: 3, color: "#ef4444" },
-  { key: "volumeDryScore", label: "出来高枯渇",  max: 3, color: "#f97316" },
-  { key: "frScore",        label: "FR逆張り",   max: 2, color: "#a855f7" },
-  { key: "freshnessScore", label: "上場新しさ",  max: 2, color: "#3b82f6" },
-  { key: "oiScore",        label: "OI過剰",     max: 2, color: "#06b6d4" },
-  { key: "oiChangeScore",  label: "OI急増",     max: 2, color: "#7c3aed" },
-  { key: "trendScore",     label: "TF一致度",   max: 3, color: "#10b981" },
-  { key: "pumpScore",      label: "7d急騰",     max: 2, color: "#f43f5e" },
-  { key: "btcCorrScore",   label: "BTC非連動",  max: 1, color: "#8b5cf6" },
-  { key: "patternScore",   label: "SMCパターン", max: 3, color: "#0ea5e9" },
+  { key: "dropScore",         label: "ATH下落",       max: 3, color: "#ef4444" },
+  { key: "volumeDryScore",    label: "出来高枯渇",    max: 3, color: "#f97316" },
+  { key: "frScore",           label: "FR逆張り",      max: 2, color: "#a855f7" },
+  { key: "freshnessScore",    label: "上場新しさ",    max: 2, color: "#3b82f6" },
+  { key: "oiScore",           label: "OI過剰",        max: 2, color: "#06b6d4" },
+  { key: "oiChangeScore",     label: "OI急増",        max: 2, color: "#7c3aed" },
+  { key: "trendScore",        label: "TF一致度",      max: 3, color: "#10b981" },
+  { key: "pumpScore",         label: "7d急騰",        max: 2, color: "#f43f5e" },
+  { key: "btcCorrScore",      label: "BTC非連動",     max: 1, color: "#8b5cf6" },
+  { key: "patternScore",      label: "SMCパターン",   max: 3, color: "#0ea5e9" },
+  { key: "rsiScore",          label: "RSI過熱",       max: 2, color: "#f59e0b" },
+  { key: "pocDistanceScore",  label: "POC距離",       max: 2, color: "#14b8a6" },
+  { key: "volTrendScore",     label: "出来高トレンド", max: 2, color: "#d97706" },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────

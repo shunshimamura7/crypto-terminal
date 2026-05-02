@@ -278,6 +278,7 @@ async function analyzeCandidate(
   let vol7dFromKline = false;
   let priceChange7d = 0;
   let initialPrice: number | null = null;
+  let dailyVols: number[] = [];
   const closes1d: number[] = [];
   if (kline1dRes.status === "fulfilled" && kline1dRes.value?.data) {
     const kd = kline1dRes.value.data;
@@ -286,6 +287,7 @@ async function analyzeCandidate(
     const nums: number[] = raw.map(Number).filter((n: number) => n > 0);
     if (nums.length > 0) {
       const vals = useAmount ? nums : nums.map(v => v * price);
+      dailyVols = vals;
       volumeAvg7d = vals.reduce((a, b) => a + b, 0) / vals.length;
       vol7dFromKline = true;
     }
@@ -319,6 +321,7 @@ async function analyzeCandidate(
       if (spotData1d.vols.length >= 7 && spotData1d.closes.length >= 7) {
         const last7Vols = spotData1d.vols.slice(-7);
         const last7Closes = spotData1d.closes.slice(-7);
+        dailyVols = spotData1d.vols.map((v, i) => v * (spotData1d.closes[i] ?? price));
         volumeAvg7d = last7Vols.reduce((a, v, i) => a + v * last7Closes[i], 0) / 7;
         vol7dFromKline = true;
       }
@@ -404,6 +407,8 @@ async function analyzeCandidate(
   const { score, breakdown, oiRatio, trendDirection, trendMultiTF, chartPattern, allPatterns } = calcShortScore(
     athDropPct, volumeChangeRatio, fundingRate, listedDaysAgo, openInterest, vol24h, closes4h, priceChange7d, btcCorrelation, closes1h, closes1d,
     kHighs4h, kLows4h, priceChange24h, null,  // 施策4: パターン検知 / oiChange4hPct=null (サーバー固定)
+    volumeProfile?.pocVsPricePct ?? null,       // pocDistanceScore用
+    dailyVols,                                   // volTrendScore用
   );
 
   // 施策5: 清算カスケードゾーン推定

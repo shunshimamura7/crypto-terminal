@@ -70,15 +70,15 @@ export interface BacktestRecord {
   // 価格ソース（undefined = レガシー・スキャン結果のみ）
   priceSource?: "scan" | "direct_api";
 
-  // ★ v2.0: スコア内訳（全15指標）
+  // ★ v2.0: スコア内訳
   scoreBreakdown?: {
     dropScore?: number; volumeDryScore?: number; frScore?: number;
     freshnessScore?: number; oiScore?: number; oiChangeScore?: number;
     trendScore?: number; pumpScore?: number; btcCorrScore?: number;
     patternScore?: number; rsiScore?: number;
+    pocDistanceScore?: number; volTrendScore?: number;
     exclusivityScore?: number; frBonus?: number;
     futuresHeatScore?: number; snsHeatScore?: number; mcFdvScore?: number;
-    unlockScore?: number;
   };
 
   // ★ v2.0: エントリー時市場コンテキスト
