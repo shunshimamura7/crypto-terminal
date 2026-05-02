@@ -1873,7 +1873,7 @@ function ShortRecBadge({ rec, t }: { rec: ShortRec; t: Translations }) {
 }
 
 function LongBiasPanel({ candidates, t }: { candidates: ExtendedCandidate[]; t: Translations }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const biased = useMemo(
     () => candidates.filter(isLongBias).slice(0, 5),
     [candidates]
