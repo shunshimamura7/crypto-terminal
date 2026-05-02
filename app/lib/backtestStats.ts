@@ -62,10 +62,11 @@ export function calculateStats(
   const isPending = (s: string) => s.startsWith("pending_");
   const active   = records.filter(r => r.status === "active" || isPending(r.status));
   const pending  = records.filter(r => isPending(r.status));
-  const resolved = records.filter(r => r.status !== "active" && !isPending(r.status));
+  const expired  = records.filter(r => r.status === "expired");
+  // expired は判定不能（14日経過未決着）なので勝率分母から除外
+  const resolved = records.filter(r => r.status !== "active" && r.status !== "expired" && !isPending(r.status));
   const wins     = resolved.filter(r => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit");
   const losses   = resolved.filter(r => r.status === "sl_hit");
-  const expired  = resolved.filter(r => r.status === "expired");
 
   const winRate = resolved.length > 0 ? (wins.length / resolved.length) * 100 : 0;
 
