@@ -4,13 +4,6 @@ export type TrendDirection = "UP" | "DOWN" | "NEUTRAL";
 
 // ─── Shared interfaces (used server + client) ────────────────────────────────
 
-export interface UnlockData {
-  nextUnlockDate: string | null;
-  nextUnlockDays: number | null;
-  nextUnlockPercent: number | null;
-  nextUnlockAmount: number | null;
-}
-
 export interface CoinNewsContext {
   positiveCount: number;
   negativeCount: number;
@@ -43,7 +36,6 @@ export interface ShortScoreBreakdown {
   btcCorrScore: number;    // 0-1 (BTC非連動ボーナス)
   patternScore: number;    // 0-3 (SMCパターン: Task3で拡張)
   rsiScore: number;        // 0-2 (RSI過熱度)
-  unlockScore: number;     // 0-3 (アンロック供給圧: Post-Stage2でTop50のみ付与)
 }
 
 // ─── Chart Pattern (施策4 + Phase2 Task3: SMC拡張) ───────────────────────────
@@ -222,14 +214,9 @@ export interface ShortCandidate {
     topPair: string | null;
     dexVolume24h: number | null;
   };
-  shortScore: number;        // server max 26 (23 + unlock 3) after Post-Stage2 patch
+  shortScore: number;
   scoreBreakdown: ShortScoreBreakdown;
-  // ─── アンロックフィールド (Post-Stage2 Top50のみ付与) ─────────────────────
-  nextUnlockDays: number | null;
-  nextUnlockPercent: number | null;
-  nextUnlockDate: string | null;
   // ─── optional enrichment (Phase B / Stage 3.5) ───────────────────────────
-  unlockData?: UnlockData;
   newsContext?: CoinNewsContext;
   liquidityInfo?: LiquidityInfo;
 }
@@ -642,22 +629,6 @@ export function calcRSIScore(closes4h: number[]): number {
   return 0;
 }
 
-// unlockScore (0-3): アンロック供給圧スコア (Post-Stage2 patch, Top50のみ)
-// ショート観点: アンロック直前は大量売り圧が予想される = ショート有利
-// ただし3日以内は外部スクイーズ誘発リスクもあるため最高点でも禁止判定と組み合わせる
-export function calcUnlockScore(
-  daysUntilUnlock: number | null,
-  pctOfSupply: number | null,
-): number {
-  if (daysUntilUnlock === null || pctOfSupply === null) return 0;
-  if (pctOfSupply < 1) return 0; // 1%未満は影響軽微
-  if (daysUntilUnlock <= 7  && pctOfSupply >= 5)  return 3; // 7日以内 + 5%以上: 強烈供給圧
-  if ((daysUntilUnlock <= 30 && pctOfSupply >= 10) ||
-      (daysUntilUnlock <= 14 && pctOfSupply >= 3)) return 2; // 30日以内 10%+ or 14日以内 3%+
-  if (daysUntilUnlock <= 60 && pctOfSupply >= 5)  return 1; // 60日以内 5%+
-  return 0;
-}
-
 // exclusivityScore (0-2): 取引所独占度 (施策2, client-side)
 export function calcExclusivityScore(listedOnBinance: boolean, listedOnBybit: boolean): number {
   if (!listedOnBinance && !listedOnBybit) return 2;
@@ -717,7 +688,7 @@ export function calcShortScore(
 
   return {
     score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + oiChangeScore + trendScore + pumpScore + btcCorrScore + patternScore + rsiScore,
-    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, oiChangeScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore, unlockScore: 0 },
+    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, oiChangeScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore },
     oiRatio,
     trendDirection,
     trendMultiTF,

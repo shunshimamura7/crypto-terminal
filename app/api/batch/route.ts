@@ -4,11 +4,9 @@ import { researchCoin, getCachedCommunity, getCachedMetrics } from "@/app/lib/co
 import type { MarketMetrics } from "@/app/lib/coinResearch";
 import { fetchCoinglassData, formatCoinglass } from "@/app/lib/derivativesData";
 import { fetchEtfFlows, formatEtfFlows } from "@/app/lib/sosovalue";
-import { fetchUnlockData, formatUnlock, unlockRiskScore } from "@/app/lib/tokenomist";
 import { fetchArkhamData, formatArkham } from "@/app/lib/arkham";
 import { calculateXHeatScore } from "@/app/lib/socialScore";
 import type { CoinglassData } from "@/app/lib/derivativesData";
-import type { UnlockData } from "@/app/lib/tokenomist";
 import type { ArkhamData } from "@/app/lib/arkham";
 import type { EtfFlowData } from "@/app/lib/sosovalue";
 
@@ -118,7 +116,6 @@ function adjustScores(
   baseAlpha: number,
   baseRisk: number,
   glass: CoinglassData,
-  unlock: UnlockData,
   etf: EtfFlowData,
   xheat: number,
   inputStr: string,
@@ -154,9 +151,6 @@ function adjustScores(
     const longPct = glass.longRatio > 1 ? glass.longRatio : glass.longRatio * 100;
     if (longPct > 70) riskDelta += 10;
   }
-
-  // Unlock risk
-  riskDelta += unlockRiskScore(unlock);
 
   // ── MC/FDV比 補正 ──
   if (metrics.mc && metrics.fdv && metrics.fdv > 0) {
@@ -254,7 +248,6 @@ export async function POST(req: NextRequest) {
     chainName: string;
     context: string;
     glass: CoinglassData;
-    unlock: UnlockData;
     arkham: ArkhamData;
   }> = [];
 
@@ -265,20 +258,17 @@ export async function POST(req: NextRequest) {
     const isTicker = kind === "ticker";
     const isAddress = !isTicker;
 
-    const [context, glass, unlock, arkham] = await Promise.all([
+    const [context, glass, arkham] = await Promise.all([
       researchCoin(input),
       isTicker
         ? fetchCoinglassData(input).catch(() => ({ fundingRate: null, openInterest: null, openInterestChange24h: null, longRatio: null } as CoinglassData))
         : Promise.resolve({ fundingRate: null, openInterest: null, openInterestChange24h: null, longRatio: null } as CoinglassData),
-      isTicker
-        ? fetchUnlockData(input).catch(() => ({ nextUnlockDate: null, nextUnlockDays: null, nextUnlockPercent: null, nextUnlockAmount: null } as UnlockData))
-        : Promise.resolve({ nextUnlockDate: null, nextUnlockDays: null, nextUnlockPercent: null, nextUnlockAmount: null } as UnlockData),
       isAddress
         ? fetchArkhamData(input).catch(() => ({ entityName: null, entityType: null, labels: [], isInstitutional: false } as ArkhamData))
         : Promise.resolve({ entityName: null, entityType: null, labels: [], isInstitutional: false } as ArkhamData),
     ]);
 
-    researched.push({ input, kind, chainName, context, glass, unlock, arkham });
+    researched.push({ input, kind, chainName, context, glass, arkham });
   }
 
   const client = new Anthropic();
@@ -287,15 +277,14 @@ export async function POST(req: NextRequest) {
 
   for (let i = 0; i < researched.length; i++) {
     if (i > 0) await sleep(1000);
-    const { input, context, glass, unlock, arkham } = researched[i];
+    const { input, context, glass, arkham } = researched[i];
 
     // Build supplemental context strings
     const glassStr   = formatCoinglass(glass);
-    const unlockStr  = formatUnlock(unlock) || "Tokenomist: APIキーなし — https://tokenomist.ai で手動確認";
     const arkhamStr  = formatArkham(arkham);
     const etfStr     = formatEtfFlows(etfFlows);
 
-    const supplemental = [glassStr, unlockStr, arkhamStr, etfStr]
+    const supplemental = [glassStr, arkhamStr, etfStr]
       .filter(Boolean)
       .join("\n");
 
@@ -381,7 +370,7 @@ ${fullContext || "データなし"}
         const baseRisk  = parsed.risk  ?? 50;
 
         const metrics = getCachedMetrics(input) ?? { mc: null, fdv: null, vol24h: null, priceChange24h: null, priceChange7d: null };
-        const adjusted = adjustScores(baseAlpha, baseRisk, glass, unlock, etfFlows, xheatResult.score, input, metrics);
+        const adjusted = adjustScores(baseAlpha, baseRisk, glass, etfFlows, xheatResult.score, input, metrics);
 
         analysisResults.push({
           input: parsed.input ?? input,
@@ -397,13 +386,13 @@ ${fullContext || "データなし"}
           xheatScore: community ? xheatResult.score : null,
           etfBtcDirection: etfFlows.btcDirection,
           etfBtcFlow: etfFlows.btcNetFlow,
-          unlockDays: unlock.nextUnlockDays,
-          unlockPercent: unlock.nextUnlockPercent,
+          unlockDays: null,
+          unlockPercent: null,
           arkhamEntity: arkham.entityName,
           isInstitutional: arkham.isInstitutional,
         });
       } else {
-        analysisResults.push(makeDefault(input, glass, unlock, etfFlows, xheatResult.score, community !== null, arkham));
+        analysisResults.push(makeDefault(input, glass, etfFlows, xheatResult.score, community !== null, arkham));
       }
     } catch (err) {
       let message = err instanceof Error ? err.message : String(err);
@@ -415,7 +404,7 @@ ${fullContext || "データなし"}
       }
       console.error(`[batch] Error analyzing ${input}:`, err);
       analysisResults.push({
-        ...makeDefault(input, glass, unlock, etfFlows, xheatResult.score, community !== null, arkham),
+        ...makeDefault(input, glass, etfFlows, xheatResult.score, community !== null, arkham),
         one_line_reason: `分析エラー: ${message}`,
       });
     }
@@ -436,7 +425,6 @@ ${fullContext || "データなし"}
 function makeDefault(
   input: string,
   glass: CoinglassData,
-  unlock: UnlockData,
   etf: EtfFlowData,
   xheat: number,
   hasCommunity: boolean,
@@ -456,8 +444,8 @@ function makeDefault(
     xheatScore: hasCommunity ? xheat : null,
     etfBtcDirection: etf.btcDirection,
     etfBtcFlow: etf.btcNetFlow,
-    unlockDays: unlock.nextUnlockDays,
-    unlockPercent: unlock.nextUnlockPercent,
+    unlockDays: null,
+    unlockPercent: null,
     arkhamEntity: arkham.entityName,
     isInstitutional: arkham.isInstitutional,
   };

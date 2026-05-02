@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { calcShortScore, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone, calcATRData } from "@/app/lib/shortScorer";
 import type { ShortCandidate, VolumeProfile, TradeSetup, ATRData } from "@/app/lib/shortScorer";
 import { fetchGtDexData } from "@/app/lib/geckoTerminal";
-import { fetchUnlockData } from "@/app/lib/tokenomist";
 import { fetchLiquidityInfo } from "@/app/lib/orderbook";
 import { fetchCoinNews } from "@/app/lib/newsCheck";
-import { calcUnlockScore } from "@/app/lib/shortScorer";
 
 // ─── BTC相関計算 (施策1) ──────────────────────────────────────────────────────
 function priceToReturns(closes: number[]): number[] {
@@ -441,9 +439,6 @@ async function analyzeCandidate(
     shortScore: score,
     scoreBreakdown: breakdown,
     priceDeviation,
-    nextUnlockDays: null,
-    nextUnlockPercent: null,
-    nextUnlockDate: null,
     liquidityInfo: liquidityRes.status === "fulfilled" && liquidityRes.value != null ? liquidityRes.value : undefined,
   };
 }
@@ -732,37 +727,6 @@ export async function GET(req: NextRequest) {
   );
   // Re-sort after potential score updates
   sorted.sort((a, b) => b.shortScore - a.shortScore);
-
-  // ── Stage 3.2: Unlock data for Top50 (Tokenomist, 5-min cache, key optional) ─
-  const UNLOCK_BATCH = 5;
-  const UNLOCK_DELAY_MS = 500;
-  const top50ForUnlock = sorted.slice(0, 50);
-
-  if (Date.now() < DEADLINE) {
-    for (let i = 0; i < top50ForUnlock.length; i += UNLOCK_BATCH) {
-      if (Date.now() >= DEADLINE) break;
-      const batch = top50ForUnlock.slice(i, i + UNLOCK_BATCH);
-      const unlockResults = await Promise.allSettled(
-        batch.map(c => fetchUnlockData(c.symbol.replace(/_USDT$/, "")))
-      );
-      unlockResults.forEach((r, idx) => {
-        const c = batch[idx];
-        if (r.status === "fulfilled" && r.value) {
-          c.nextUnlockDays    = r.value.nextUnlockDays;
-          c.nextUnlockPercent = r.value.nextUnlockPercent;
-          c.nextUnlockDate    = r.value.nextUnlockDate;
-          const us = calcUnlockScore(r.value.nextUnlockDays, r.value.nextUnlockPercent);
-          if (us > 0) {
-            c.scoreBreakdown.unlockScore = us;
-            c.shortScore += us;
-          }
-        }
-      });
-      if (i + UNLOCK_BATCH < top50ForUnlock.length) await sleep(UNLOCK_DELAY_MS);
-    }
-    // Re-sort after unlock score patch
-    sorted.sort((a, b) => b.shortScore - a.shortScore);
-  }
 
   // ── Stage 3.5: News context for top 20 (CryptoPanic, optional, 30-min cache) ─
   if (Date.now() < DEADLINE) {

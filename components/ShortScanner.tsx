@@ -543,7 +543,7 @@ interface AnalyzeResult {
 
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 31 : 25; // サーバー25(+unlock3)+CG(先物ヒート2+SNSヒート1+MC/FDV乖離3)=31
+const DISPLAY_MAX = HAS_CG ? 34 : 28;
 
 type SortKey = "displayScore" | "athDropPct" | "priceChange24h" | "priceChange7d" | "openInterest" | "fundingRate" | "volume24h" | "phase";
 
@@ -651,7 +651,6 @@ const SCORE_BARS: Array<{ key: keyof ShortScoreBreakdown; label: string; max: nu
   { key: "pumpScore",      label: "7d急騰",     max: 2, color: "#f43f5e" },
   { key: "btcCorrScore",   label: "BTC非連動",  max: 1, color: "#8b5cf6" },
   { key: "patternScore",   label: "SMCパターン", max: 3, color: "#0ea5e9" },
-  { key: "unlockScore",    label: "アンロック",  max: 3, color: "#fbbf24" },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -1798,9 +1797,6 @@ type ShortRec = "banned" | "banned_fresh" | "caution" | "recommended" | "neutral
 
 function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRec {
   const fr = c.fundingRate;
-  const unlockDays = c.nextUnlockDays;
-  const unlockPct  = c.nextUnlockPercent ?? 0;
-
   // ── 禁止条件 ───────────────────────────────────────────────────────────────
   // 危険銘柄リスト (SL3回以上)
   if (isDangerSymbol(c.symbol)) return "banned";
@@ -1819,8 +1815,6 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
   ) return "banned_fresh";
   // BTC急騰 +5%以上 → くそコインのβで吹き上げリスク
   if (btcChange24h >= 5) return "banned";
-  // アンロック3日以内 ≥3% → スクイーズ誘発リスク
-  if (unlockDays != null && unlockDays <= 3 && unlockPct >= 3) return "banned";
   // メジャー取引所上場ニュース → 急騰リスク
   if (c.newsContext?.hasMajorListing) return "banned";
   // FRマイナス(スクイーズリスク) or ロング優位
@@ -1829,10 +1823,6 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRe
   if (c.liquidityInfo?.maxSafePosition != null && c.liquidityInfo.maxSafePosition < 5_000) return "banned";
 
   // ── 注意条件 ───────────────────────────────────────────────────────────────
-  // アンロック7日以内 ≥3%
-  if (unlockDays != null && unlockDays <= 7 && unlockPct >= 3) return "caution";
-  // アンロック30日以内 (任意%)
-  if (unlockDays != null && unlockDays <= 30) return "caution";
   // パートナーシップ/提携ニュース
   if (c.newsContext?.hasPartnership) return "caution";
   // スプレッド高い (>0.5%)
@@ -3587,7 +3577,6 @@ export default function ShortScanner() {
                               if (isLongBias(c)) tier3flags.push(`🟢${t.longBiasBadge}`);
                               if (c.liquidityInfo?.maxSafePosition != null && c.liquidityInfo.maxSafePosition < 5_000) tier3flags.push("🔴流動性危険");
                               if (c.allPatterns && c.allPatterns.length > 0) tier3flags.push(`📐${c.allPatterns.length}パターン`);
-                              if (c.nextUnlockDays != null && c.nextUnlockDays <= 30) tier3flags.push(`⏰アンロック${c.nextUnlockDays}日${c.nextUnlockPercent != null ? ` ${c.nextUnlockPercent.toFixed(1)}%` : ""}`);
                               if (c.newsContext?.hasMajorListing) tier3flags.push("📰上場ニュース");
                               if (c.newsContext?.hasSecurity) tier3flags.push("🔓脆弱性ニュース");
                               if (c.newsContext?.hasPartnership && !c.newsContext.hasMajorListing) tier3flags.push("🤝提携ニュース");

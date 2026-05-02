@@ -262,7 +262,6 @@ export function recordNewCandidates(
         rsiScore:       bd?.rsiScore,
         exclusivityScore: cs?.exclusivityScore,
         frBonus:          cs?.frBonus,
-        unlockScore:    bd?.unlockScore,
         // futuresHeatScore/snsHeatScore/mcFdvScore patched later via patchBacktestCgData
       };
 
@@ -291,15 +290,6 @@ export function recordNewCandidates(
         scoreBreakdown,
         marketContext: marketContext ?? undefined,
         version: SCORING_VERSION,
-        unlockData: c.nextUnlockDays != null ? {
-          daysUntil: c.nextUnlockDays,
-          percent:   c.nextUnlockPercent,
-          date:      c.nextUnlockDate,
-        } : c.unlockData ? {
-          daysUntil: c.unlockData.nextUnlockDays,
-          percent:   c.unlockData.nextUnlockPercent,
-          date:      c.unlockData.nextUnlockDate,
-        } : undefined,
         newsContext: c.newsContext,
         liquidityInfo: c.liquidityInfo,
       };
