@@ -526,10 +526,21 @@ function HistoricalAnalysisSection() {
       }));
 
       setHStatus("analyzing");
+      const trimmed = collected.map(s => ({
+        symbol:       s.symbol,
+        listedDaysAgo: s.listedDaysAgo,
+        candles:      s.candles.slice(-60).map(c => ({
+          time:   c.time,
+          high:   c.high,
+          low:    c.low,
+          close:  c.close,
+          volume: Math.round(c.volume),
+        })),
+      }));
       const analyzeRes = await fetch("/api/historical/analyze", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ symbols: collected, btcCandles }),
+        body:    JSON.stringify({ symbols: trimmed, btcCandles }),
       });
       if (!analyzeRes.ok) throw new Error(`analyze failed: ${analyzeRes.status}`);
       const analyzeData = await analyzeRes.json() as HAnalyzeResult;

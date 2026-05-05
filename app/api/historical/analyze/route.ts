@@ -13,7 +13,6 @@ const MIN_SAMPLES = 5;
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Candle {
   time: number;
-  open: number;
   high: number;
   low: number;
   close: number;
@@ -210,7 +209,7 @@ const PATTERNS: PatternDef[] = [
       const prev = cs[i - 1];
       if (base <= 0) return false;
       const spiked   = prev.volume / base >= 3.0;
-      const wasUp    = prev.close > prev.open;
+      const wasUp    = prev.close > cs[i - 2].close;
       const reversal = cs[i].close < prev.close;
       return spiked && wasUp && reversal;
     },
@@ -287,9 +286,10 @@ const PATTERNS: PatternDef[] = [
     fn(cs, i) {
       if (i < 3) return false;
       const prev = cs[i - 1], curr = cs[i];
-      const bearEngulf = curr.open > prev.close && curr.close < prev.open;
-      const prevWasUp  = prev.close > prev.open;
-      return bearEngulf && prevWasUp;
+      // open 不使用: 前日が陽線(close > 2日前close)、当日がその始値相当を下抜け
+      const prevWasUp  = prev.close > cs[i - 2].close;
+      const bearEngulf = prevWasUp && curr.close < cs[i - 2].close;
+      return bearEngulf;
     },
   },
   {
@@ -298,7 +298,7 @@ const PATTERNS: PatternDef[] = [
       if (i < 21) return false;
       let upDays = 0, downDays = 0;
       for (let k = i - 6; k <= i; k++) {
-        if (cs[k].close > cs[k].open) upDays++; else downDays++;
+        if (cs[k].close > cs[k - 1].close) upDays++; else downDays++;
       }
       const highVol = avgVol(cs, i - 7, 7);
       const baseVol = avgVol(cs, i - 21, 14);
