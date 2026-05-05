@@ -461,9 +461,14 @@ interface HSymbol {
   candles: Array<{ time: number; high: number; low: number; close: number; volume: number }>;
 }
 interface HPattern {
-  patternId: string; label: string; category: string;
-  sampleSize: number; winRate: number; avgPnlPct: number; score: number;
+  id: string; name: string; description: string;
+  winRate: number; avgReturn: number;
+  avgWin: number | null; avgLoss: number | null;
+  profitFactor: number;
+  sampleSize: number; wins: number; losses: number; neutrals: number;
   winRateByBtcTrend: { up: number | null; flat: number | null; down: number | null };
+  winRate5pct: number; winRate10pct: number; winRate15pct: number; winRate20pct: number;
+  avgMaxDrop: number;
 }
 interface HAnalyzeResult {
   patterns: HPattern[];
@@ -559,9 +564,9 @@ function HistoricalAnalysisSection() {
     ? 98
     : hProgress.total > 0 ? (hProgress.current / hProgress.total) * 100 : 0;
 
-  const calcPF = (wr: number) =>
-    wr >= 1 ? "∞" : wr <= 0 ? "0.00" : ((wr * 10) / ((1 - wr) * 8)).toFixed(2);
   const fmtTrend = (v: number | null) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+  const fmtPF    = (v: number) => v >= 99 ? "∞" : v.toFixed(2);
+  const fmtDrop  = (v: number) => `${(v * 100).toFixed(1)}%`;
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-1">
@@ -617,14 +622,17 @@ function HistoricalAnalysisSection() {
           ? <p className="text-xs text-gray-400">有効なパターンが見つかりませんでした（サンプル5件以上なし）</p>
           : (
             <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="w-full text-xs min-w-[640px]">
+              <table className="w-full text-xs min-w-[860px]">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 text-[10px]">
                     <th className="px-2 py-1.5 text-center">#</th>
                     <th className="px-2 py-1.5 text-left">パターン名</th>
-                    <th className="px-2 py-1.5 text-right">勝率</th>
-                    <th className="px-2 py-1.5 text-right">avg Ret</th>
-                    <th className="px-2 py-1.5 text-right">PF</th>
+                    <th className="px-2 py-1.5 text-right" title="勝率(-10%到達)">勝率</th>
+                    <th className="px-2 py-1.5 text-right" title="-5%到達率">-5%</th>
+                    <th className="px-2 py-1.5 text-right" title="-15%到達率">-15%</th>
+                    <th className="px-2 py-1.5 text-right" title="-20%到達率">-20%</th>
+                    <th className="px-2 py-1.5 text-right" title="平均最大下落率">avg↓</th>
+                    <th className="px-2 py-1.5 text-right" title="Profit Factor">PF</th>
                     <th className="px-2 py-1.5 text-right">n</th>
                     <th className="px-2 py-1.5 text-right">BTC↑</th>
                     <th className="px-2 py-1.5 text-right">BTC→</th>
@@ -633,26 +641,26 @@ function HistoricalAnalysisSection() {
                 </thead>
                 <tbody>
                   {hResult.patterns.map((p, idx) => {
-                    const isTop8 = hResult.summary.top8.includes(p.patternId);
+                    const isTop8 = hResult.summary.top8.includes(p.id);
                     return (
                       <tr
-                        key={p.patternId}
+                        key={p.id}
                         className={`border-b border-gray-100 dark:border-gray-700 last:border-0 ${isTop8 ? "bg-emerald-500/10" : ""}`}
+                        title={p.description}
                       >
                         <td className="px-2 py-1.5 text-center text-gray-400 font-mono text-[10px]">{idx + 1}</td>
                         <td className="px-2 py-1.5">
-                          <span className="text-[9px] text-gray-400 font-mono mr-1">{p.patternId}</span>
-                          <span className="font-medium text-gray-700 dark:text-gray-300">{p.label}</span>
+                          <span className="text-[9px] text-gray-400 font-mono mr-1">{p.id}</span>
+                          <span className="font-medium text-gray-700 dark:text-gray-300">{p.name}</span>
                         </td>
                         <td className={`px-2 py-1.5 text-right font-bold ${p.winRate >= 0.6 ? "text-green-700 dark:text-green-400" : p.winRate >= 0.4 ? "text-yellow-600" : "text-red-600"}`}>
                           {(p.winRate * 100).toFixed(1)}%
                         </td>
-                        <td className={`px-2 py-1.5 text-right font-mono ${p.avgPnlPct >= 0 ? "text-green-600" : "text-red-500"}`}>
-                          {p.avgPnlPct >= 0 ? "+" : ""}{p.avgPnlPct.toFixed(1)}%
-                        </td>
-                        <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">
-                          {calcPF(p.winRate)}
-                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmtTrend(p.winRate5pct)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-indigo-500 dark:text-indigo-400">{fmtTrend(p.winRate15pct)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-purple-500 dark:text-purple-400">{fmtTrend(p.winRate20pct)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-emerald-600 dark:text-emerald-400">{fmtDrop(p.avgMaxDrop)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">{fmtPF(p.profitFactor)}</td>
                         <td className="px-2 py-1.5 text-right text-gray-500">{p.sampleSize}</td>
                         <td className="px-2 py-1.5 text-right font-mono text-blue-500 dark:text-blue-400">{fmtTrend(p.winRateByBtcTrend.up)}</td>
                         <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmtTrend(p.winRateByBtcTrend.flat)}</td>

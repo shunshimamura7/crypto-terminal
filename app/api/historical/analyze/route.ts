@@ -29,34 +29,35 @@ interface TradeResult {
   outcome: "win" | "loss" | "neutral";
   btcTrend: "up" | "flat" | "down";
   pnlPct: number;
+  hit5pct: boolean;
+  hit10pct: boolean;
+  hit15pct: boolean;
+  hit20pct: boolean;
+  maxDrop: number; // fraction ≥ 0, e.g. 0.15 = 15% drop
 }
 
 interface PatternStats {
-  patternId: string;
-  label: string;
-  category: string;
-  sampleSize: number;
+  id: string;
+  name: string;
+  description: string;
   winRate: number;
-  avgPnlPct: number;
-  score: number;
+  avgReturn: number;
+  avgWin: number | null;
+  avgLoss: number | null;
+  profitFactor: number;
+  sampleSize: number;
+  wins: number;
+  losses: number;
+  neutrals: number;
   winRateByBtcTrend: { up: number | null; flat: number | null; down: number | null };
+  winRate5pct: number;
+  winRate10pct: number;
+  winRate15pct: number;
+  winRate20pct: number;
+  avgMaxDrop: number;
 }
 
-// ─── Math Helpers ─────────────────────────────────────────────────────────────
-function calcEMA(values: number[], period: number): number[] {
-  const k = 2 / (period + 1);
-  const result: number[] = [];
-  for (let i = 0; i < values.length; i++) {
-    if (i < period - 1) { result.push(NaN); continue; }
-    if (i === period - 1) {
-      result.push(values.slice(0, period).reduce((a, b) => a + b, 0) / period);
-    } else {
-      result.push(values[i] * k + result[i - 1] * (1 - k));
-    }
-  }
-  return result;
-}
-
+// ─── RSI ──────────────────────────────────────────────────────────────────────
 function calcRSI(closes: number[], period = 14): number[] {
   const result: number[] = new Array(closes.length).fill(NaN);
   if (closes.length < period + 1) return result;
@@ -77,44 +78,6 @@ function calcRSI(closes: number[], period = 14): number[] {
   return result;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function calcBBands(closes: number[], period = 20, mult = 2): { mid: number[]; upper: number[]; lower: number[] } {
-  const mid: number[] = [], upper: number[] = [], lower: number[] = [];
-  for (let i = 0; i < closes.length; i++) {
-    if (i < period - 1) { mid.push(NaN); upper.push(NaN); lower.push(NaN); continue; }
-    const slice = closes.slice(i - period + 1, i + 1);
-    const mean = slice.reduce((a, b) => a + b, 0) / period;
-    const std = Math.sqrt(slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period);
-    mid.push(mean);
-    upper.push(mean + mult * std);
-    lower.push(mean - mult * std);
-  }
-  return { mid, upper, lower };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function calcCorrelation(a: number[], b: number[]): number {
-  const n = Math.min(a.length, b.length);
-  if (n < 3) return 0;
-  const meanA = a.slice(0, n).reduce((s, v) => s + v, 0) / n;
-  const meanB = b.slice(0, n).reduce((s, v) => s + v, 0) / n;
-  let num = 0, da = 0, db = 0;
-  for (let i = 0; i < n; i++) {
-    const dA = a[i] - meanA, dB = b[i] - meanB;
-    num += dA * dB; da += dA * dA; db += dB * dB;
-  }
-  return da === 0 || db === 0 ? 0 : num / Math.sqrt(da * db);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function dailyReturns(candles: Candle[]): number[] {
-  const ret: number[] = [];
-  for (let i = 1; i < candles.length; i++) {
-    ret.push((candles[i].close - candles[i - 1].close) / candles[i - 1].close);
-  }
-  return ret;
-}
-
 // ─── Pattern Utils ────────────────────────────────────────────────────────────
 function athDrop(candles: Candle[], upTo: number): number {
   const maxHigh = Math.max(...candles.slice(0, upTo + 1).map(c => c.high));
@@ -128,63 +91,110 @@ function avgVol(candles: Candle[], from: number, len: number): number {
   return sl.reduce((s, c) => s + c.volume, 0) / sl.length;
 }
 
+// Approximate age (days since listing) of coin at candle index i
+function ageAt(listedDaysAgo: number, csLen: number, i: number): number {
+  return listedDaysAgo - (csLen - 1 - i);
+}
+
+// ─── Trade Simulation ─────────────────────────────────────────────────────────
+function simulateTrade(cs: Candle[], entryIdx: number): Omit<TradeResult, "btcTrend"> | null {
+  const entryPrice = cs[entryIdx].close;
+  if (entryPrice <= 0) return null;
+
+  const slPrice = entryPrice * (1 + SL_PCT);
+  const tp10    = entryPrice * (1 - TP_PCT);
+  const tp5     = entryPrice * (1 - 0.05);
+  const tp15    = entryPrice * (1 - 0.15);
+  const tp20    = entryPrice * (1 - 0.20);
+
+  let outcome: "win" | "loss" | "neutral" = "neutral";
+  let exitPrice = cs[Math.min(entryIdx + HORIZON, cs.length - 1)].close;
+  let minLow    = entryPrice;
+  let hit5pct   = false, hit10pct = false, hit15pct = false, hit20pct = false;
+
+  for (let j = entryIdx + 1; j <= Math.min(entryIdx + HORIZON, cs.length - 1); j++) {
+    // SL checked first (high of the day)
+    if (cs[j].high >= slPrice) {
+      outcome   = "loss";
+      exitPrice = slPrice;
+      break;
+    }
+    // Track lows only on non-SL days
+    if (cs[j].low < minLow) minLow = cs[j].low;
+    if (cs[j].low <= tp5)  hit5pct  = true;
+    if (cs[j].low <= tp10) hit10pct = true;
+    if (cs[j].low <= tp15) hit15pct = true;
+    if (cs[j].low <= tp20) hit20pct = true;
+    // TP check
+    if (cs[j].low <= tp10) {
+      outcome   = "win";
+      exitPrice = tp10;
+      break;
+    }
+  }
+
+  const pnlPct = outcome === "win"  ?  TP_PCT * 100
+               : outcome === "loss" ? -SL_PCT * 100
+               : ((entryPrice - exitPrice) / entryPrice) * 100;
+
+  return { outcome, pnlPct, hit5pct, hit10pct, hit15pct, hit20pct, maxDrop: (entryPrice - minLow) / entryPrice };
+}
+
 // ─── Pattern Definitions ──────────────────────────────────────────────────────
 type PatternFn = (cs: Candle[], i: number, listedDaysAgo: number) => boolean;
 
 interface PatternDef {
   id: string;
-  label: string;
-  category: string;
+  name: string;
+  description: string;
   fn: PatternFn;
 }
 
 const PATTERNS: PatternDef[] = [
   // ── A: 上場後タイミング ────────────────────────────────────────────────────
   {
-    id: "A1", label: "上場30日崩壊", category: "A",
+    id: "A1", name: "上場30日崩壊", description: "上場25-45日 + ATH-30%以上",
     fn(cs, i, listed) {
       if (i < 4) return false;
-      const age = listed - (cs.length - 1 - i);
+      const age = ageAt(listed, cs.length, i);
       return age >= 25 && age <= 45 && athDrop(cs, i) <= -0.30;
     },
   },
   {
-    id: "A2", label: "上場60日崩壊", category: "A",
+    id: "A2", name: "上場60日崩壊", description: "上場55-75日 + ATH-40%以上",
     fn(cs, i, listed) {
       if (i < 4) return false;
-      const age = listed - (cs.length - 1 - i);
+      const age = ageAt(listed, cs.length, i);
       return age >= 55 && age <= 75 && athDrop(cs, i) <= -0.40;
     },
   },
   {
-    id: "A3", label: "上場後ポンプフェード", category: "A",
+    id: "A3", name: "上場後ポンプフェード", description: "上場7-30日 + 7日+20%以上 + 当日-5%以上",
     fn(cs, i, listed) {
       if (i < 7) return false;
-      const age = listed - (cs.length - 1 - i);
+      const age = ageAt(listed, cs.length, i);
       if (age < 7 || age > 30) return false;
       const ref = cs[i - 7].close;
       if (ref <= 0) return false;
-      const pump = (cs[i].close - ref) / ref;
-      const drop1d = (cs[i].close - cs[i - 1].close) / cs[i - 1].close;
-      return pump >= 0.20 && drop1d <= -0.05;
+      return (cs[i].close - ref) / ref >= 0.20 && (cs[i].close - cs[i - 1].close) / cs[i - 1].close <= -0.05;
     },
   },
   {
-    id: "A4", label: "上場後出来高崩壊", category: "A",
+    id: "A4", name: "上場後出来高崩壊", description: "上場14-90日 + 直近7日出来高が前週比20%未満",
     fn(cs, i, listed) {
       if (i < 14) return false;
-      const age = listed - (cs.length - 1 - i);
+      const age = ageAt(listed, cs.length, i);
       if (age < 14 || age > 90) return false;
-      const earlyVol = avgVol(cs, i - 14, 7);
+      const earlyVol  = avgVol(cs, i - 14, 7);
       const recentVol = avgVol(cs, i - 7, 7);
       return earlyVol > 0 && recentVol / earlyVol < 0.20;
     },
   },
   {
-    id: "A5", label: "上場ハネムーン終了", category: "A",
+    id: "A5", name: "上場ハネムーン終了", description: "上場20-50日 + ATH-25%以上 + 出来高前週比40%未満",
     fn(cs, i, listed) {
-      if (i < 10) return false;
-      const age = listed - (cs.length - 1 - i);
+      if (i < 14) return false;
+      const age = ageAt(listed, cs.length, i);
       if (age < 20 || age > 50) return false;
       const vol7d  = avgVol(cs, i - 7, 7);
       const vol14d = avgVol(cs, i - 14, 7);
@@ -194,222 +204,245 @@ const PATTERNS: PatternDef[] = [
 
   // ── B: 出来高 ──────────────────────────────────────────────────────────────
   {
-    id: "B6", label: "出来高枯渇", category: "B",
-    fn(cs, i) {
-      if (i < 14) return false;
-      const base = avgVol(cs, i - 14, 14);
-      return base > 0 && cs[i].volume / base < 0.15;
-    },
-  },
-  {
-    id: "B7", label: "出来高スパイク反転", category: "B",
+    id: "B7", name: "出来高スパイク反転", description: "前日出来高9日平均の3倍以上 + 陽線 → 当日陰線",
     fn(cs, i) {
       if (i < 10) return false;
       const base = avgVol(cs, i - 10, 9);
-      const prev = cs[i - 1];
       if (base <= 0) return false;
-      const spiked   = prev.volume / base >= 3.0;
-      const wasUp    = prev.close > cs[i - 2].close;
-      const reversal = cs[i].close < prev.close;
-      return spiked && wasUp && reversal;
+      const prev = cs[i - 1];
+      return prev.volume / base >= 3.0 && prev.close > cs[i - 2].close && cs[i].close < prev.close;
     },
   },
   {
-    id: "B8", label: "出来高下降継続", category: "B",
+    id: "B8", name: "出来高下降継続", description: "3日連続出来高減少 + 当日終値切り下げ",
     fn(cs, i) {
       if (i < 4) return false;
-      return (
-        cs[i].volume < cs[i - 1].volume &&
-        cs[i - 1].volume < cs[i - 2].volume &&
-        cs[i - 2].volume < cs[i - 3].volume &&
-        cs[i].close <= cs[i - 1].close
-      );
+      return cs[i].volume < cs[i - 1].volume &&
+             cs[i - 1].volume < cs[i - 2].volume &&
+             cs[i - 2].volume < cs[i - 3].volume &&
+             cs[i].close <= cs[i - 1].close;
     },
   },
   {
-    id: "B9", label: "低出来高下落継続", category: "B",
+    id: "B9", name: "低出来高下落継続", description: "7日間出来高が14日平均の40%未満 + 7日で下落",
     fn(cs, i) {
       if (i < 14) return false;
       const base = avgVol(cs, i - 14, 14);
       if (base <= 0) return false;
-      const allLow = cs.slice(i - 6, i + 1).every(c => c.volume / base < 0.40);
-      return allLow && cs[i].close < cs[i - 6].close;
+      return cs.slice(i - 6, i + 1).every(c => c.volume / base < 0.40) && cs[i].close < cs[i - 6].close;
     },
   },
 
   // ── C: 価格構造 ────────────────────────────────────────────────────────────
   {
-    id: "C10", label: "デッドキャットバウンス", category: "C",
+    id: "C10", name: "デッドキャットバウンス", description: "ATH-50%以上 + 7日で20-40%反発中",
     fn(cs, i) {
       if (i < 14) return false;
-      const drop    = athDrop(cs, i);
-      const ref7    = cs[i - 7].close;
+      const ref7 = cs[i - 7].close;
       if (ref7 <= 0) return false;
       const bounce7 = (cs[i].close - ref7) / ref7;
-      return drop <= -0.50 && bounce7 >= 0.20 && bounce7 <= 0.40;
+      return athDrop(cs, i) <= -0.50 && bounce7 >= 0.20 && bounce7 <= 0.40;
     },
   },
   {
-    id: "C11", label: "ロワーハイ継続", category: "C",
-    fn(cs, i) {
-      if (i < 6) return false;
-      return (
-        cs[i].high < cs[i - 2].high &&
-        cs[i - 2].high < cs[i - 4].high &&
-        cs[i].close < cs[i - 1].close
-      );
-    },
-  },
-  {
-    id: "C12", label: "レジスタンス拒否", category: "C",
+    id: "C12", name: "レジスタンス拒否", description: "前日が10日高値圏 + 当日-3%以上下落",
     fn(cs, i) {
       if (i < 11) return false;
       const resistance = Math.max(...cs.slice(i - 10, i).map(c => c.high));
-      const nearRes    = cs[i - 1].high >= resistance * 0.97;
-      const rejected   = cs[i].close < cs[i - 1].close * 0.97;
-      return nearRes && rejected;
+      return cs[i - 1].high >= resistance * 0.97 && cs[i].close < cs[i - 1].close * 0.97;
     },
   },
   {
-    id: "C13", label: "ブレイクダウンリテスト", category: "C",
+    id: "C13", name: "ブレイクダウンリテスト", description: "サポート割れ後リテスト → 再下落",
     fn(cs, i) {
       if (i < 11) return false;
       const support  = Math.min(...cs.slice(i - 10, i - 2).map(c => c.low));
       const broke    = cs[i - 2].close < support;
       const retested = cs[i - 1].close >= support * 0.98 && cs[i - 1].close <= support * 1.03;
-      const rejected = cs[i].close < cs[i - 1].close;
-      return broke && retested && rejected;
+      return broke && retested && cs[i].close < cs[i - 1].close;
     },
   },
   {
-    id: "C14", label: "ベアリッシュエンガルフ", category: "C",
+    id: "C14", name: "ベアリッシュエンガルフ", description: "前日陽線 + 当日が前々日終値以下に急落",
     fn(cs, i) {
       if (i < 3) return false;
       const prev = cs[i - 1], curr = cs[i];
-      // open 不使用: 前日が陽線(close > 2日前close)、当日がその始値相当を下抜け
-      const prevWasUp  = prev.close > cs[i - 2].close;
-      const bearEngulf = prevWasUp && curr.close < cs[i - 2].close;
-      return bearEngulf;
+      return prev.close > cs[i - 2].close && curr.close < cs[i - 2].close;
     },
   },
   {
-    id: "C15", label: "分配フェーズ", category: "C",
-    fn(cs, i) {
-      if (i < 21) return false;
-      let upDays = 0, downDays = 0;
-      for (let k = i - 6; k <= i; k++) {
-        if (cs[k].close > cs[k - 1].close) upDays++; else downDays++;
-      }
-      const highVol = avgVol(cs, i - 7, 7);
-      const baseVol = avgVol(cs, i - 21, 14);
-      return downDays >= 4 && upDays >= 2 && baseVol > 0 && highVol / baseVol > 1.5;
-    },
-  },
-  {
-    id: "C16", label: "EMAデスクロス", category: "C",
-    fn(cs, i) {
-      if (i < 26) return false;
-      const closes = cs.slice(0, i + 1).map(c => c.close);
-      const ema7   = calcEMA(closes, 7);
-      const ema21  = calcEMA(closes, 21);
-      return ema7[i] < ema21[i] && ema7[i - 2] >= ema21[i - 2];
-    },
-  },
-  {
-    id: "C17", label: "価格圧縮ブレイクダウン", category: "C",
+    id: "C17", name: "価格圧縮ブレイクダウン", description: "7日間レンジ8%未満 + 下方ブレイク",
     fn(cs, i) {
       if (i < 10) return false;
-      const slice    = cs.slice(i - 7, i);
-      const rangeHi  = Math.max(...slice.map(c => c.high));
-      const rangeLo  = Math.min(...slice.map(c => c.low));
-      const compress = rangeLo > 0 && (rangeHi - rangeLo) / rangeLo < 0.08;
-      return compress && cs[i].close < rangeLo * 0.98;
+      const slice   = cs.slice(i - 7, i);
+      const rangeHi = Math.max(...slice.map(c => c.high));
+      const rangeLo = Math.min(...slice.map(c => c.low));
+      return rangeLo > 0 && (rangeHi - rangeLo) / rangeLo < 0.08 && cs[i].close < rangeLo * 0.98;
     },
   },
 
   // ── D: RSI/モメンタム ──────────────────────────────────────────────────────
   {
-    id: "D18", label: "RSIオーバーボート反転", category: "D",
+    id: "D18", name: "RSIオーバーボート反転", description: "RSI70超から70割れ + 当日陰線",
     fn(cs, i) {
       if (i < 15) return false;
       const rsi = calcRSI(cs.slice(0, i + 1).map(c => c.close));
       return rsi[i - 1] >= 70 && rsi[i] < 70 && cs[i].close < cs[i - 1].close;
     },
   },
-  {
-    id: "D19", label: "RSI弱気ダイバージェンス", category: "D",
-    fn(cs, i) {
-      if (i < 20) return false;
-      const rsi = calcRSI(cs.slice(0, i + 1).map(c => c.close));
-      if (isNaN(rsi[i]) || isNaN(rsi[i - 10])) return false;
-      const priceHigher = cs[i].close > cs[i - 10].close;
-      const rsiLower    = rsi[i] < rsi[i - 10];
-      return priceHigher && rsiLower && rsi[i] > 50;
-    },
-  },
-  {
-    id: "D20", label: "モメンタム枯渇", category: "D",
-    fn(cs, i) {
-      if (i < 10) return false;
-      const rsi = calcRSI(cs.slice(0, i + 1).map(c => c.close));
-      if (isNaN(rsi[i]) || isNaN(rsi[i - 3])) return false;
-      const rsiDrop  = rsi[i] < rsi[i - 3] - 10;
-      const volDrop  = cs[i - 3].volume > 0 && cs[i].volume < cs[i - 3].volume * 0.6;
-      return rsiDrop && volDrop;
-    },
-  },
-  {
-    id: "D21", label: "RSI中線拒否", category: "D",
-    fn(cs, i) {
-      if (i < 20) return false;
-      const rsi = calcRSI(cs.slice(0, i + 1).map(c => c.close));
-      if (isNaN(rsi[i]) || isNaN(rsi[i - 1])) return false;
-      const nearMid = rsi[i - 1] >= 48 && rsi[i - 1] <= 55;
-      return nearMid && rsi[i] < 48 && cs[i].close < cs[i - 1].close;
-    },
-  },
 
   // ── E: BTC相関 ─────────────────────────────────────────────────────────────
   {
-    id: "E22", label: "BTC非相関独立下落", category: "E",
+    id: "E22", name: "BTC非相関独立下落", description: "7日で-10%以上の独立下落",
     fn(cs, i) {
       if (i < 14) return false;
       const ref = cs[i - 7].close;
-      if (ref <= 0) return false;
-      return (cs[i].close - ref) / ref <= -0.10;
+      return ref > 0 && (cs[i].close - ref) / ref <= -0.10;
     },
   },
   {
-    id: "E23", label: "BTC下落増幅", category: "E",
+    id: "E23", name: "BTC下落増幅", description: "7日で-20%以上の急落",
     fn(cs, i) {
       if (i < 7) return false;
       const ref = cs[i - 7].close;
-      if (ref <= 0) return false;
-      return (cs[i].close - ref) / ref <= -0.20;
+      return ref > 0 && (cs[i].close - ref) / ref <= -0.20;
     },
   },
 
-  // ── F: コンボ ──────────────────────────────────────────────────────────────
+  // ── 上場日数細分化 ──────────────────────────────────────────────────────────
   {
-    id: "F24", label: "出来高枯渇+RSI過熱", category: "F",
-    fn(cs, i) {
-      if (i < 14) return false;
-      const rsi  = calcRSI(cs.slice(0, i + 1).map(c => c.close));
-      const base = avgVol(cs, i - 14, 14);
-      return base > 0 && cs[i].volume / base < 0.25 && !isNaN(rsi[i]) && rsi[i] >= 65;
+    id: "listing_10_20d", name: "上場10-20日ショート", description: "上場10-20日目のショート成績検証",
+    fn(cs, i, listed) { const a = ageAt(listed, cs.length, i); return a >= 10 && a <= 20; },
+  },
+  {
+    id: "listing_20_30d", name: "上場20-30日ショート", description: "上場20-30日目のショート成績検証",
+    fn(cs, i, listed) { const a = ageAt(listed, cs.length, i); return a >= 20 && a <= 30; },
+  },
+  {
+    id: "listing_30_40d", name: "上場30-40日ショート", description: "上場30-40日目のショート成績検証",
+    fn(cs, i, listed) { const a = ageAt(listed, cs.length, i); return a >= 30 && a <= 40; },
+  },
+  {
+    id: "listing_40_50d", name: "上場40-50日ショート", description: "上場40-50日目のショート成績検証",
+    fn(cs, i, listed) { const a = ageAt(listed, cs.length, i); return a >= 40 && a <= 50; },
+  },
+  {
+    id: "listing_50_60d", name: "上場50-60日ショート", description: "上場50-60日目のショート成績検証",
+    fn(cs, i, listed) { const a = ageAt(listed, cs.length, i); return a >= 50 && a <= 60; },
+  },
+  {
+    id: "listing_60_70d", name: "上場60-70日ショート", description: "上場60-70日目のショート成績検証",
+    fn(cs, i, listed) { const a = ageAt(listed, cs.length, i); return a >= 60 && a <= 70; },
+  },
+  {
+    id: "listing_70_80d", name: "上場70-80日ショート", description: "上場70-80日目のショート成績検証",
+    fn(cs, i, listed) { const a = ageAt(listed, cs.length, i); return a >= 70 && a <= 80; },
+  },
+
+  // ── 上場×ATH下落率 ─────────────────────────────────────────────────────────
+  {
+    id: "listing_under30d_ath50", name: "上場30日未満+ATH-50%", description: "上場30日未満 + ATHから-50%以上下落",
+    fn(cs, i, listed) {
+      if (i < 4) return false;
+      const age = ageAt(listed, cs.length, i);
+      return age > 0 && age < 30 && athDrop(cs, i) <= -0.50;
     },
   },
   {
-    id: "F25", label: "上場後崩壊+デスクロス", category: "F",
+    id: "listing_30_60d_ath50", name: "上場30-60日+ATH-50%", description: "上場30-60日 + ATHから-50%以上下落",
     fn(cs, i, listed) {
-      if (i < 26) return false;
-      const age = listed - (cs.length - 1 - i);
-      if (age < 20 || age > 90) return false;
-      if (athDrop(cs, i) > -0.30) return false;
-      const closes = cs.slice(0, i + 1).map(c => c.close);
-      const ema7   = calcEMA(closes, 7);
-      const ema21  = calcEMA(closes, 21);
-      return ema7[i] < ema21[i] && ema7[i - 3] >= ema21[i - 3];
+      if (i < 4) return false;
+      const age = ageAt(listed, cs.length, i);
+      return age >= 30 && age <= 60 && athDrop(cs, i) <= -0.50;
+    },
+  },
+  {
+    id: "listing_30_60d_ath70", name: "上場30-60日+ATH-70%", description: "上場30-60日 + ATHから-70%以上下落",
+    fn(cs, i, listed) {
+      if (i < 4) return false;
+      const age = ageAt(listed, cs.length, i);
+      return age >= 30 && age <= 60 && athDrop(cs, i) <= -0.70;
+    },
+  },
+  {
+    id: "listing_30_60d_ath90", name: "上場30-60日+ATH-90%", description: "上場30-60日 + ATHから-90%以上下落",
+    fn(cs, i, listed) {
+      if (i < 4) return false;
+      const age = ageAt(listed, cs.length, i);
+      return age >= 30 && age <= 60 && athDrop(cs, i) <= -0.90;
+    },
+  },
+
+  // ── 上場×出来高 ────────────────────────────────────────────────────────────
+  {
+    id: "listing_30_60d_vol_declining", name: "上場30-60日+出来高7日連続減", description: "上場30-60日 + 7日連続で出来高が前日比減少",
+    fn(cs, i, listed) {
+      if (i < 7) return false;
+      const age = ageAt(listed, cs.length, i);
+      if (age < 30 || age > 60) return false;
+      for (let k = i - 6; k <= i; k++) {
+        if (cs[k].volume >= cs[k - 1].volume) return false;
+      }
+      return true;
+    },
+  },
+  {
+    id: "listing_30_60d_vol_low", name: "上場30-60日+出来高枯渇", description: "上場30-60日 + 当日出来高が7日平均の30%未満",
+    fn(cs, i, listed) {
+      if (i < 7) return false;
+      const age = ageAt(listed, cs.length, i);
+      if (age < 30 || age > 60) return false;
+      const avg7 = avgVol(cs, i - 7, 7);
+      return avg7 > 0 && cs[i].volume < avg7 * 0.30;
+    },
+  },
+  {
+    id: "listing_30_60d_vol_spike", name: "上場30-60日+出来高スパイク", description: "上場30-60日 + 前日出来高が7日平均の3倍以上",
+    fn(cs, i, listed) {
+      if (i < 8) return false;
+      const age = ageAt(listed, cs.length, i);
+      if (age < 30 || age > 60) return false;
+      const base = avgVol(cs, i - 8, 7);
+      return base > 0 && cs[i - 1].volume / base >= 3.0;
+    },
+  },
+
+  // ── 上場×価格パターン ───────────────────────────────────────────────────────
+  {
+    id: "listing_post_pump", name: "上場ポンプ後崩壊", description: "上場30日以内にATH + 現在ATHから-40%以上",
+    fn(cs, i, listed) {
+      if (i < 10) return false;
+      const ageAtI = ageAt(listed, cs.length, i);
+      if (ageAtI < 30 || ageAtI > 90) return false;
+      let maxHighIdx = 0, maxHighVal = 0;
+      for (let k = 0; k <= i; k++) {
+        if (cs[k].high > maxHighVal) { maxHighVal = cs[k].high; maxHighIdx = k; }
+      }
+      const ageAtATH = ageAt(listed, cs.length, maxHighIdx);
+      return ageAtATH > 0 && ageAtATH <= 30 && athDrop(cs, i) <= -0.40;
+    },
+  },
+  {
+    id: "listing_slow_bleed", name: "上場後スローブリード", description: "上場30-60日 + 7日連続で高値切り下げ",
+    fn(cs, i, listed) {
+      if (i < 7) return false;
+      const age = ageAt(listed, cs.length, i);
+      if (age < 30 || age > 60) return false;
+      for (let k = i - 6; k <= i; k++) {
+        if (cs[k].high >= cs[k - 1].high) return false;
+      }
+      return true;
+    },
+  },
+  {
+    id: "listing_bounce_short", name: "上場後バウンスショート", description: "上場30-60日 + ATH-50%後に安値から20%以上反発",
+    fn(cs, i, listed) {
+      if (i < 14) return false;
+      const age = ageAt(listed, cs.length, i);
+      if (age < 30 || age > 60) return false;
+      if (athDrop(cs, i) > -0.50) return false;
+      const recentLow = Math.min(...cs.slice(Math.max(0, i - 13), i + 1).map(c => c.low));
+      return recentLow > 0 && (cs[i].close - recentLow) / recentLow >= 0.20;
     },
   },
 ];
@@ -417,8 +450,7 @@ const PATTERNS: PatternDef[] = [
 // ─── BTC index lookup ─────────────────────────────────────────────────────────
 function findClosestIdx(candles: Candle[], targetTime: number): number {
   if (candles.length === 0) return -1;
-  let best = 0;
-  let bestDiff = Math.abs(candles[0].time - targetTime);
+  let best = 0, bestDiff = Math.abs(candles[0].time - targetTime);
   for (let i = 1; i < candles.length; i++) {
     const diff = Math.abs(candles[i].time - targetTime);
     if (diff < bestDiff) { best = i; bestDiff = diff; }
@@ -432,11 +464,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const deadline = startMs + BUDGET_MS;
 
   let body: { symbols: SymbolInput[]; btcCandles: Candle[] };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
   const { symbols, btcCandles } = body;
   if (!Array.isArray(symbols) || !Array.isArray(btcCandles)) {
@@ -444,7 +473,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const patternTrades = new Map<string, TradeResult[]>(PATTERNS.map(p => [p.id, []]));
-  const cooldown      = new Map<string, number>(); // key → last trigger time (seconds)
+  const cooldown      = new Map<string, number>();
   let symbolsProcessed = 0;
   let totalTrades      = 0;
 
@@ -467,32 +496,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         cooldown.set(cdKey, candles[i].time);
 
-        // Simulate short trade
-        const entryPrice = candles[i].close;
-        if (entryPrice <= 0) continue;
-        const slPrice = entryPrice * (1 + SL_PCT);
-        const tpPrice = entryPrice * (1 - TP_PCT);
-
-        let outcome: "win" | "loss" | "neutral" = "neutral";
-        let exitPrice = candles[Math.min(i + HORIZON, candles.length - 1)].close;
-
-        for (let j = i + 1; j <= Math.min(i + HORIZON, candles.length - 1); j++) {
-          if (candles[j].high >= slPrice) {          // SL checked first
-            outcome   = "loss";
-            exitPrice = slPrice;
-            break;
-          }
-          if (candles[j].low <= tpPrice) {
-            outcome   = "win";
-            exitPrice = tpPrice;
-            break;
-          }
-        }
-
-        const pnlPct =
-          outcome === "win"  ?  TP_PCT * 100 :
-          outcome === "loss" ? -SL_PCT * 100 :
-          ((entryPrice - exitPrice) / entryPrice) * 100;
+        const trade = simulateTrade(candles, i);
+        if (!trade) continue;
 
         // BTC trend at entry (7-day return)
         let btcTrend: "up" | "flat" | "down" = "flat";
@@ -506,48 +511,71 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           }
         }
 
-        tradeList.push({ outcome, btcTrend, pnlPct });
+        tradeList.push({ ...trade, btcTrend });
         totalTrades++;
       }
     }
   }
 
   // ── Compute stats ──────────────────────────────────────────────────────────
-  const results: PatternStats[] = [];
+  const results: (PatternStats & { _score: number })[] = [];
 
   for (const pattern of PATTERNS) {
     const trades = patternTrades.get(pattern.id)!;
     if (trades.length < MIN_SAMPLES) continue;
 
-    const wins    = trades.filter(t => t.outcome === "win").length;
-    const winRate = wins / trades.length;
-    const avgPnl  = trades.reduce((s, t) => s + t.pnlPct, 0) / trades.length;
-    const score   = winRate * Math.log(Math.max(trades.length, 1));
+    const wins     = trades.filter(t => t.outcome === "win");
+    const losses   = trades.filter(t => t.outcome === "loss");
+    const neutrals = trades.filter(t => t.outcome === "neutral");
 
+    const winRate   = wins.length / trades.length;
+    const avgReturn = trades.reduce((s, t) => s + t.pnlPct, 0) / trades.length;
+    const avgWin    = wins.length   > 0 ? wins.reduce((s, t)    => s + t.pnlPct, 0) / wins.length    : null;
+    const avgLoss   = losses.length > 0 ? losses.reduce((s, t)  => s + t.pnlPct, 0) / losses.length  : null;
+
+    const totalProfit = trades.filter(t => t.pnlPct > 0).reduce((s, t) => s + t.pnlPct, 0);
+    const totalLoss   = trades.filter(t => t.pnlPct < 0).reduce((s, t) => s + Math.abs(t.pnlPct), 0);
+    const pf = totalLoss === 0 ? (totalProfit > 0 ? 99.99 : 1.0) : totalProfit / totalLoss;
+
+    const n = trades.length;
     const byTrend = (trend: "up" | "flat" | "down"): number | null => {
       const sub = trades.filter(t => t.btcTrend === trend);
-      if (sub.length < 3) return null;
-      return sub.filter(t => t.outcome === "win").length / sub.length;
+      return sub.length >= 3 ? sub.filter(t => t.outcome === "win").length / sub.length : null;
     };
 
     results.push({
-      patternId: pattern.id,
-      label: pattern.label,
-      category: pattern.category,
-      sampleSize: trades.length,
+      id:          pattern.id,
+      name:        pattern.name,
+      description: pattern.description,
       winRate,
-      avgPnlPct: avgPnl,
-      score,
+      avgReturn,
+      avgWin,
+      avgLoss,
+      profitFactor: pf,
+      sampleSize:  n,
+      wins:        wins.length,
+      losses:      losses.length,
+      neutrals:    neutrals.length,
       winRateByBtcTrend: { up: byTrend("up"), flat: byTrend("flat"), down: byTrend("down") },
+      winRate5pct:  trades.filter(t => t.hit5pct).length  / n,
+      winRate10pct: trades.filter(t => t.hit10pct).length / n,
+      winRate15pct: trades.filter(t => t.hit15pct).length / n,
+      winRate20pct: trades.filter(t => t.hit20pct).length / n,
+      avgMaxDrop:   trades.reduce((s, t) => s + t.maxDrop, 0) / n,
+      _score:       winRate * Math.log(Math.max(n, 1)),
     });
   }
 
-  results.sort((a, b) => b.score - a.score);
+  results.sort((a, b) => b._score - a._score);
+
+  // Strip internal _score before returning
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const patterns = results.map(({ _score, ...rest }) => rest);
 
   return NextResponse.json({
-    patterns: results,
+    patterns,
     summary: {
-      top8: results.slice(0, 8).map(p => p.patternId),
+      top8:             patterns.slice(0, 8).map(p => p.id),
       totalTrades,
       symbolsProcessed,
       processingTimeMs: Date.now() - startMs,
