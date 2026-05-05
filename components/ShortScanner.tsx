@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { ShortCandidate, ShortScoreBreakdown } from "@/app/lib/shortScorer";
-import { calcExclusivityScore, calcOIChangeScore } from "@/app/lib/shortScorer";
+import { calcExclusivityScore, calcOIChangeScore, isExcessivePump } from "@/app/lib/shortScorer";
 import { saveSnapshot, getSnapshots, getConsecutivePositiveFR } from "@/app/lib/snapshotStorage";
 import type { ScanSnapshot } from "@/app/lib/snapshotStorage";
 import { detectAlerts, getDiffSummary } from "@/app/lib/snapshotDiff";
@@ -11,6 +11,9 @@ import type { CgMarketData } from "@/app/lib/coinGeckoClient";
 import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
 import { checkAndUpdateRecords, recordNewCandidates, recordNewCandidatesWithStrategy, patchBacktestCgData, expireOldRecords } from "@/app/lib/backtestChecker";
 import type { ExtendedCandidateLike } from "@/app/lib/backtestChecker";
+import { detectBadges } from "@/app/lib/badgeDetector";
+import { STRATEGY_BADGES } from "@/app/lib/strategyBadges";
+import type { StrategyBadgeId, ConvictionLevel } from "@/app/lib/strategyBadges";
 import { getCurrentMarketContext } from "@/app/lib/marketContext";
 import { getRecords, saveRecords, clearRecords } from "@/app/lib/backtestStorage";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
@@ -531,9 +534,27 @@ interface ExtendedCandidate extends ShortCandidate {
   mcFdvScore: number;
   oiChangePct: number | null;
   oiChangeScore: number;
+  mcFdvPenalty: number;
+  riskOffBonus: number;
   displayScore: number;
   phase: PhaseResult;
+  strategyBadges: StrategyBadgeId[];
+  convictionLevel: ConvictionLevel;
+  expiryDays: number | undefined;
 }
+
+const BADGE_CAT_CLS: Record<string, string> = {
+  post_listing_decay: "bg-blue-500/20 text-blue-400",
+  fr_normalization:   "bg-blue-500/20 text-blue-400",
+  dead_cat_bounce:    "bg-blue-500/20 text-blue-400",
+  asia_dump:          "bg-blue-500/20 text-blue-400",
+  volume_death:       "bg-amber-500/20 text-amber-400",
+  exclusivity_trap:   "bg-amber-500/20 text-amber-400",
+  fdv_overhang:       "bg-amber-500/20 text-amber-400",
+  sector_collapse:    "bg-amber-500/20 text-amber-400",
+  leverage_trap:      "bg-purple-500/20 text-purple-400",
+  btc_divergence:     "bg-purple-500/20 text-purple-400",
+};
 
 interface ScanResponse {
   success: boolean; scanTime: string; candidates: ShortCandidate[];
@@ -821,10 +842,10 @@ function ScoreDetail({ c, snapshots, alerts, t, lang, watchlistSet, onWatchlistT
               <div key={bar.key}>
                 <div className="flex justify-between text-xs text-gray-600 mb-1">
                   <span className="truncate">{bar.label}</span>
-                  <span className="font-bold ml-1 shrink-0">{c.scoreBreakdown[bar.key]}/{bar.max}</span>
+                  <span className="font-bold ml-1 shrink-0">{c.scoreBreakdown[bar.key] ?? 0}/{bar.max}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-1.5">
-                  <div className="h-1.5 rounded-full" style={{ width: `${(c.scoreBreakdown[bar.key] / bar.max) * 100}%`, background: bar.color }} />
+                  <div className="h-1.5 rounded-full" style={{ width: `${((c.scoreBreakdown[bar.key] ?? 0) / bar.max) * 100}%`, background: bar.color }} />
                 </div>
               </div>
             ))}
@@ -1719,7 +1740,7 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
 }
 
 // ─── Mobile Card List ────────────────────────────────────────────────────────
-function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts, t, lang, watchlistSet, onWatchlistToggle, marketBtcChange }: {
+function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts, t, lang, watchlistSet, onWatchlistToggle, marketBtcChange, slHitSet }: {
   candidates: ExtendedCandidate[];
   expandedRows: Set<string>;
   toggleRow: (sym: string) => void;
@@ -1730,6 +1751,7 @@ function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts
   watchlistSet: Set<string>;
   onWatchlistToggle: (sym: string) => void;
   marketBtcChange?: number;
+  slHitSet?: Set<string>;
 }) {
   if (candidates.length === 0) return null;
   return (
@@ -1737,7 +1759,7 @@ function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts
       {candidates.map(c => {
         const base = c.symbol.replace("_USDT", "");
         const isOpen = expandedRows.has(c.symbol);
-        const rec = getShortRecommendation(c, marketBtcChange ?? 0);
+        const rec = getShortRecommendation(c, marketBtcChange ?? 0, slHitSet);
         const borderColor =
           rec === "banned" || rec === "banned_fresh" ? "border-l-red-500" :
           rec === "caution" ? "border-l-orange-400" :
@@ -1832,7 +1854,7 @@ function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts
 }
 
 // ─── Summary Bar (修正5) ─────────────────────────────────────────────────────
-function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strongThreshold = RECOMMEND_THRESHOLD, btcChange24h = 0 }: {
+function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strongThreshold = RECOMMEND_THRESHOLD, btcChange24h = 0, slHitSet }: {
   candidates: ExtendedCandidate[];
   t: Translations;
   onFilter: (key: "strong" | "long" | "pattern" | "allTf" | "spike") => void;
@@ -1840,6 +1862,7 @@ function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strong
   summaryFilter: "strong" | "long" | "pattern" | "allTf" | "spike" | null;
   strongThreshold?: number;
   btcChange24h?: number;
+  slHitSet?: Set<string>;
 }) {
   const counts = useMemo(() => ({
     strong:  candidates.filter(c => c.displayScore >= strongThreshold).length,
@@ -1850,10 +1873,10 @@ function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strong
   }), [candidates, isLongBias, strongThreshold]);
 
   const recCounts = useMemo(() => ({
-    recommended: candidates.filter(c => getShortRecommendation(c, btcChange24h) === "recommended").length,
-    caution:     candidates.filter(c => getShortRecommendation(c, btcChange24h) === "caution").length,
-    banned:      candidates.filter(c => { const r = getShortRecommendation(c, btcChange24h); return r === "banned" || r === "banned_fresh"; }).length,
-  }), [candidates, btcChange24h]);
+    recommended: candidates.filter(c => getShortRecommendation(c, btcChange24h, slHitSet) === "recommended").length,
+    caution:     candidates.filter(c => getShortRecommendation(c, btcChange24h, slHitSet) === "caution").length,
+    banned:      candidates.filter(c => { const r = getShortRecommendation(c, btcChange24h, slHitSet); return r === "banned" || r === "banned_fresh"; }).length,
+  }), [candidates, btcChange24h, slHitSet]);
 
   const items: Array<{ key: "strong"|"long"|"pattern"|"allTf"|"spike"; label: string; count: number; cls: string }> = [
     { key: "strong",  label: t.summaryShort,   count: counts.strong,  cls: "text-red-600 bg-red-50 border-red-200" },
@@ -1914,9 +1937,11 @@ function isLongBias(c: ExtendedCandidate): boolean {
 
 type ShortRec = "banned" | "banned_fresh" | "caution" | "recommended" | "neutral";
 
-function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0): ShortRec {
+function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0, slHitSet?: Set<string>): ShortRec {
   const fr = c.fundingRate;
   // ── 禁止条件 ───────────────────────────────────────────────────────────────
+  // SL hit後24h再エントリー禁止
+  if (slHitSet?.has(c.symbol)) return "banned";
   // 危険銘柄リスト (SL3回以上)
   if (isDangerSymbol(c.symbol)) return "banned";
   // 上場24h以内 → 異常値が出やすい
@@ -2030,6 +2055,98 @@ function LongBiasPanel({ candidates, t }: { candidates: ExtendedCandidate[]; t: 
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Excessive Pump Panel ─────────────────────────────────────────────────────
+function ExcessivePumpPanel({ candidates, t }: { candidates: ExtendedCandidate[]; t: Translations }) {
+  const [open, setOpen] = useState(true);
+  if (candidates.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-orange-300 bg-orange-50 overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-orange-800 hover:bg-orange-100 transition-colors">
+        <span>
+          🔥 過剰上昇（HIGH RISK）
+          <span className="ml-1 text-xs font-normal text-orange-600">
+            ({candidates.length}件 — バックテスト対象外)
+          </span>
+        </span>
+        <span>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-1 space-y-2">
+          <p className="text-xs text-orange-700">
+            24h +100%以上 or 7d +200%以上の異常上昇銘柄。ショートはハイリターンだがスクイーズリスクが極めて高い。エントリーは Phase 3（分配）確認後を推奨。
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-orange-200">
+                  <th className="px-2 py-1.5">銘柄</th>
+                  <th className="px-2 py-1.5 text-right">価格</th>
+                  <th className="px-2 py-1.5 text-right">24h</th>
+                  <th className="px-2 py-1.5 text-right">7d</th>
+                  <th className="px-2 py-1.5 text-right">FR</th>
+                  <th className="px-2 py-1.5 text-right">OI</th>
+                  <th className="px-2 py-1.5 text-center">スコア</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map(c => {
+                  const frPct = c.fundingRate != null ? c.fundingRate * 100 : null;
+                  return (
+                    <tr key={c.symbol} className="border-b border-orange-100 hover:bg-orange-100/50">
+                      <td className="px-2 py-1.5">
+                        <a href={mexcUrl(c.symbol.replace("_USDT", ""))}
+                          target="_blank" rel="noopener noreferrer"
+                          className="font-mono font-bold text-gray-800 hover:text-orange-600">
+                          {c.symbol.replace("_USDT", "")}
+                        </a>
+                        <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-orange-200 text-orange-800 font-bold">
+                          🔥 過剰上昇
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-700">
+                        {fmtPrice(c.currentPrice)}
+                      </td>
+                      <td className={`px-2 py-1.5 text-right font-mono font-bold ${
+                        c.priceChange24h >= 100 ? "text-red-700" : c.priceChange24h >= 50 ? "text-red-500" : "text-gray-500"
+                      }`}>
+                        {c.priceChange24h >= 0 ? "+" : ""}{c.priceChange24h.toFixed(1)}%
+                      </td>
+                      <td className={`px-2 py-1.5 text-right font-mono font-bold ${
+                        c.priceChange7d >= 200 ? "text-red-700" : c.priceChange7d >= 100 ? "text-red-500" : "text-gray-500"
+                      }`}>
+                        {c.priceChange7d >= 0 ? "+" : ""}{c.priceChange7d.toFixed(1)}%
+                      </td>
+                      <td className={`px-2 py-1.5 text-right font-mono ${
+                        frPct == null ? "text-gray-400" : frPct < 0 ? "text-red-600 font-bold" : "text-purple-500"
+                      }`}>
+                        {frPct != null ? `${frPct >= 0 ? "+" : ""}${frPct.toFixed(4)}%` : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-600">
+                        {c.openInterest >= 1_000_000
+                          ? `${(c.openInterest / 1_000_000).toFixed(1)}M`
+                          : c.openInterest >= 1_000
+                          ? `${(c.openInterest / 1_000).toFixed(0)}K`
+                          : c.openInterest.toFixed(0)}
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <span style={scoreBadgeStyle(c.displayScore)}>
+                          {c.displayScore}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -2160,8 +2277,8 @@ function SymbolHealthPanel({ healthData, onClear }: { healthData: Map<string, Sy
 
 // ─── Recommended Short Picks Panel ───────────────────────────────────────────
 function RecommendedPanel({
-  candidates, t, btcChange24h, lang, isShortStopped = false,
-}: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number; lang: Lang; isShortStopped?: boolean }) {
+  candidates, t, btcChange24h, lang, isShortStopped = false, slHitSet,
+}: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number; lang: Lang; isShortStopped?: boolean; slHitSet?: Set<string> }) {
   const [open, setOpen] = useState(true);
   useEffect(() => {
     if (localStorage.getItem("bell:recommendedPanel:open") === "false") setOpen(false);
@@ -2177,7 +2294,7 @@ function RecommendedPanel({
 
   const { picks, hiddenCount } = useMemo(() => {
     const allRec = candidates.filter(
-      c => getShortRecommendation(c, btcChange24h) === "recommended",
+      c => getShortRecommendation(c, btcChange24h, slHitSet) === "recommended",
     );
     const qualified = allRec
       .filter(c => (c.tradeSetup?.rrTp2 ?? c.tradeSetup?.rrRatio ?? 0) >= 1.5)
@@ -2186,7 +2303,7 @@ function RecommendedPanel({
       picks: qualified.slice(0, 3),
       hiddenCount: Math.max(0, qualified.length - 3),
     };
-  }, [candidates, btcChange24h]);
+  }, [candidates, btcChange24h, slHitSet]);
 
   const rrColor = (rr: number) =>
     rr >= 1.0 ? "text-green-600" : rr >= 0.5 ? "text-yellow-600" : "text-red-500";
@@ -2341,15 +2458,20 @@ interface FilterPreset {
   sortBy?: SortKey;
   summaryFilter?: "strong" | "long" | "pattern" | "allTf" | "spike" | null;
   isNew30?: boolean;
+  btTag?: "collect" | "production" | "custom";
+  minScore?: number;
+  enableBtRecord?: boolean;
 }
 const DEFAULT_PRESETS: FilterPreset[] = [
   {
-    name: "🐢 低レバ (1-2×)",
-    icon: "🐢",
-    description: "ATH15%下落+出来高枯渇のスイングショート。低レバ推奨",
-    minDrop: 15, maxVolRatio: 150, minVol24k: 50, maxDays: 9999, minOiK: 20,
+    name: "🎯 本番",
+    icon: "🎯",
+    description: "ATH30%下落+出来高枯渇のスイングショート。低レバ推奨",
+    minDrop: 30, maxVolRatio: 300, minVol24k: 50, maxDays: 9999, minOiK: 30,
+    filterSettledOnly: true,
     sortBy: "displayScore",
     summaryFilter: null,
+    minScore: 12,
   },
   {
     name: "presetCollect",
@@ -2357,6 +2479,7 @@ const DEFAULT_PRESETS: FilterPreset[] = [
     minDrop: 10, maxVolRatio: 300, minVol24k: 30, maxDays: 9999, minOiK: 0,
     sortBy: "displayScore",
     summaryFilter: null,
+    filterSettledOnly: false,
   },
   {
     name: "🆕 新規上場 (30d)",
@@ -2377,7 +2500,7 @@ function saveCustomPresets(presets: FilterPreset[]) {
 }
 
 const EN_NAMES: Record<string, string> = {
-  "🐢 低レバ (1-2×)": "🐢 Low Lev (1-2×)",
+  "🎯 本番": "🎯 Production",
   "🆕 新規上場 (30d)": "🆕 New Listing (30d)",
   "🔥 高レバ (5-10×)": "🔥 High Lev (5-10×)",
 };
@@ -2486,7 +2609,7 @@ export default function ShortScanner() {
   const autoTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const scanAbortRef  = useRef<AbortController | null>(null);
-  const filterRef     = useRef({ minDrop: 10, maxVolRatio: 500, minVol24k: 50, maxDays: 9999, minOiK: 0 });
+  const filterRef     = useRef({ minDrop: 30, maxVolRatio: 70, minVol24k: 50, maxDays: 9999, minOiK: 30, filterSettledOnly: true });
   const playSoundRef  = useRef<((type: "alert"|"complete"|"warning") => void) | null>(null);
 
   // Sound (施策2)
@@ -2557,14 +2680,15 @@ export default function ShortScanner() {
 
   // Filters
   const [filtersOpen,      setFiltersOpen]       = useState(false);
-  const [minDrop,          setMinDrop]          = useState(15);
+  const [minDrop,          setMinDrop]          = useState(30);
   const [maxVolRatio,      setMaxVolRatio]       = useState(70);
   const [maxDays,          setMaxDays]           = useState(9999);
-  const [minVol24k,        setMinVol24k]         = useState(100);
-  const [minOiK,           setMinOiK]            = useState(50);
+  const [minVol24k,        setMinVol24k]         = useState(50);
+  const [minOiK,           setMinOiK]            = useState(30);
   const [activePreset,     setActivePreset]      = useState<string | null>(null);
-  const [filterSettledOnly, setFilterSettledOnly] = useState(false);
+  const [filterSettledOnly, setFilterSettledOnly] = useState(true);
   const [filterFsRatio5x,   setFilterFsRatio5x]   = useState(false);
+  const [minScore,          setMinScore]           = useState(12);
 
   // Sort & view
   const [sortBy, setSortBy] = useState<SortKey>("displayScore");
@@ -2618,6 +2742,7 @@ export default function ShortScanner() {
     setFilterFsRatio5x(p.filterFsRatio5x ?? false);
     if (p.sortBy) setSortBy(p.sortBy);
     if (p.summaryFilter !== undefined) setSummaryFilter(p.summaryFilter);
+    if (p.minScore !== undefined) setMinScore(p.minScore);
   }
   function applyPresetAndScan(p: FilterPreset) {
     applyPreset(p);
@@ -2805,21 +2930,33 @@ export default function ShortScanner() {
         if (expiredCount > 0) addToast(`⏱ ${expiredCount}件のレコードを期限切れに更新`, "info");
         await checkAndUpdateRecords(json.candidates);
         const beforeCount = getRecords().length;
-        const currentPreset = detectPreset(effective.minDrop, effective.maxVolRatio, effective.minVol24k, effective.minOiK, effective.maxDays, mode === "new30");
+        // フィルター値からpresetタグを自動判定
+        const f = filterRef.current;
+        const currentPreset: "low_lev" | "new_listing" | "high_lev" | "unknown" | "collect" | "production" =
+          mode === "new30" ? "new_listing"
+          : (f.minDrop >= 30 && f.minVol24k >= 50 && f.minOiK >= 30 && f.filterSettledOnly) ? "production"
+          : "collect";
 
         // Build client scores map (exclusivity + frBonus) for scoreBreakdown persistence
         const clientScoresMap = new Map<string, { exclusivityScore?: number; frBonus?: number }>();
+        const badgesMap = new Map<string, { strategyBadges?: string[]; convictionLevel?: string; expiryDays?: number }>();
         const currentSnapshots = getSnapshots();
         for (const c of json.candidates) {
           const base = c.symbol.replace(/_USDT$/, "");
-          const exclusivityScore = calcExclusivityScore(binanceSyms.has(base), bybitSyms.has(base));
+          const listedOnBinance = binanceSyms.has(base);
+          const listedOnBybit   = bybitSyms.has(base);
+          const exclusivityScore = calcExclusivityScore(listedOnBinance, listedOnBybit);
           const consecutivePositive = getConsecutivePositiveFR(c.symbol, currentSnapshots);
           const frBonus = (c.fundingRate !== null && c.fundingRate > 0 && consecutivePositive >= 3) ? 1 : 0;
           clientScoresMap.set(c.symbol, { exclusivityScore, frBonus });
+          const { badges, convictionLevel, expiryDays } = detectBadges({
+            candidate: c, snapshots: currentSnapshots, listedOnBinance, listedOnBybit,
+          });
+          if (badges.length > 0) badgesMap.set(c.symbol, { strategyBadges: badges, convictionLevel, expiryDays });
         }
 
         const currentMarketCtx = await marketCtxPromise;
-        recordNewCandidates(json.candidates, currentPreset, clientScoresMap, currentMarketCtx);
+        recordNewCandidates(json.candidates.filter(c => !isExcessivePump(c)), currentPreset, clientScoresMap, currentMarketCtx, badgesMap);
         const newRecords = getRecords();
         const recorded = newRecords.length - beforeCount;
         buildDangerListFromRecords(newRecords);
@@ -2881,8 +3018,8 @@ export default function ShortScanner() {
 
   // フィルター値の変化を常にrefに同期（setInterval内の stale closure 対策）
   useEffect(() => {
-    filterRef.current = { minDrop, maxVolRatio, minVol24k, maxDays, minOiK };
-  }, [minDrop, maxVolRatio, minVol24k, maxDays, minOiK]);
+    filterRef.current = { minDrop, maxVolRatio, minVol24k, maxDays, minOiK, filterSettledOnly };
+  }, [minDrop, maxVolRatio, minVol24k, maxDays, minOiK, filterSettledOnly]);
 
   function handleAutoRefresh() {
     if (autoRefresh) { if (autoTimerRef.current) clearInterval(autoTimerRef.current); autoTimerRef.current = null; setAutoRefresh(false); }
@@ -2974,14 +3111,28 @@ export default function ShortScanner() {
         }
       }
       const oiChangeScore = calcOIChangeScore(oiChangePct);
-      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore + oiChangeScore;
+      // MC≒FDV ショート不利ペナルティ (-2pt)
+      const mcFdvPenalty = mcFdvScore >= 2 ? 2 : 0;
+      // Risk-OFF 環境ボーナス (+1pt)
+      const riskOffBonus = marketRegime?.regime === "RISK_OFF" ? 1 : 0;
+      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore + oiChangeScore - mcFdvPenalty + riskOffBonus;
       const phase = detectPhase(c.fundingRate, null, null, c.priceChange24h);
+      const { badges: strategyBadges, convictionLevel, expiryDays } = detectBadges({
+        candidate: c,
+        snapshots,
+        listedOnBinance,
+        listedOnBybit,
+        cgMarketCap: cgData?.marketCap ?? null,
+        cgFdv: cgData?.fdv ?? null,
+        sectorCollapseActive: false,
+      });
       return {
         ...c,
-        scoreBreakdown: { ...c.scoreBreakdown, oiChangeScore },
+        scoreBreakdown: { ...c.scoreBreakdown, oiChangeScore, mcFdvPenalty, riskOffBonus },
         listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, mcFdvScore,
-        oiChangePct, oiChangeScore,
+        oiChangePct, oiChangeScore, mcFdvPenalty, riskOffBonus,
         displayScore, phase,
+        strategyBadges, convictionLevel, expiryDays,
       };
     });
     const sorted = mapped.sort((a, b) => {
@@ -3014,11 +3165,25 @@ export default function ShortScanner() {
         return sp && sp >= 1000 && c.volume24h / sp >= 5;
       });
     }
+    if (minScore > 0) result = result.filter(c => c.displayScore >= minScore);
     return result;
-  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, filterSettledOnly, filterFsRatio5x, strongThreshold, minDrop, maxVolRatio, minVol24k, maxDays, minOiK]);
+  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, filterSettledOnly, filterFsRatio5x, strongThreshold, minDrop, maxVolRatio, minVol24k, maxDays, minOiK, minScore, marketRegime]);
 
-  const totalPages = Math.ceil(extended.length / ITEMS_PER_PAGE);
-  const paginatedItems = extended.slice(
+  const { normalCandidates, excessivePumpCandidates } = useMemo(() => {
+    const normal: ExtendedCandidate[] = [];
+    const excessive: ExtendedCandidate[] = [];
+    for (const c of extended) {
+      if (isExcessivePump(c)) {
+        excessive.push(c);
+      } else {
+        normal.push(c);
+      }
+    }
+    return { normalCandidates: normal, excessivePumpCandidates: excessive };
+  }, [extended]);
+
+  const totalPages = Math.ceil(normalCandidates.length / ITEMS_PER_PAGE);
+  const paginatedItems = normalCandidates.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
@@ -3034,6 +3199,14 @@ export default function ShortScanner() {
       if (!prev || r.status === "active" || prev === "expired") m.set(r.symbol, r.status);
     }
     return m;
+  }, [btRecords]);
+
+  // SL hit 24h以内の銘柄セット（改善3: 再エントリー禁止UI用）
+  const recentSlHitSymbols = useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    return new Set(
+      btRecords.filter(r => r.status === "sl_hit" && r.resolvedAt != null && r.resolvedAt >= cutoff).map(r => r.symbol),
+    );
   }, [btRecords]);
 
   // v6: 戦略マッチングマップ
@@ -3155,11 +3328,11 @@ export default function ShortScanner() {
   // URL share (施策4)
   function shareFilterURL() {
     const params = new URLSearchParams();
-    if (minDrop !== 15)     params.set("min_drop",    String(minDrop));
+    if (minDrop !== 30)     params.set("min_drop",    String(minDrop));
     if (maxVolRatio !== 70) params.set("max_vol",     String(maxVolRatio));
-    if (minVol24k !== 100)  params.set("min_vol24h",  String(minVol24k));
+    if (minVol24k !== 50)   params.set("min_vol24h",  String(minVol24k));
     if (maxDays !== 9999)   params.set("max_days",    String(maxDays));
-    if (minOiK !== 0)       params.set("min_oi",      String(minOiK));
+    if (minOiK !== 30)      params.set("min_oi",      String(minOiK));
     if (sortBy !== "displayScore") params.set("sort", sortBy);
     const qs = params.toString();
     const url = `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ""}`;
@@ -3350,13 +3523,14 @@ export default function ShortScanner() {
 
         {/* フィルター調整パネル（開閉） */}
         {filtersOpen && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-3 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
             {[
               { label: `${t.athDrop} ≥`, val: `${minDrop}%`, color: "text-red-600", accent: "accent-red-500", min:0, max:100, step:5, v:minDrop, set:setMinDrop },
               { label: `${t.volRatio} ≤`, val: (maxVolRatio/100).toFixed(1), color: "text-orange-600", accent: "accent-orange-500", min:10, max:1000, step:10, v:maxVolRatio, set:setMaxVolRatio },
               { label: `${t.listDays} ≤`, val: maxDays >= 9999 ? "∞" : `${maxDays}日`, color: "text-blue-600", accent: "accent-blue-500", min:30, max:9999, step:30, v:maxDays, set:setMaxDays },
               { label: `${t.minVol} ≥`, val: `$${minVol24k}K`, color: "text-green-600", accent: "accent-green-500", min:0, max:1000, step:1, v:minVol24k, set:setMinVol24k },
               { label: `${t.minOi} ≥`, val: `$${minOiK}K`, color: "text-cyan-600", accent: "accent-cyan-500", min:0, max:1000, step:10, v:minOiK, set:setMinOiK },
+              { label: "最低スコア ≥", val: `${minScore}pt`, color: "text-purple-600", accent: "accent-purple-500", min:0, max:30, step:1, v:minScore, set:setMinScore },
             ].map(({ label, val, color, accent, min, max, step, v, set }) => (
               <div key={label}>
                 <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 block mb-1">
@@ -3367,7 +3541,7 @@ export default function ShortScanner() {
               </div>
             ))}
             {/* Phase / F/S フィルター + リセット */}
-            <div className="col-span-2 md:col-span-5 flex flex-wrap items-center gap-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="col-span-2 md:col-span-6 flex flex-wrap items-center gap-4 pt-2 border-t border-gray-200 dark:border-gray-700">
               <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none"
                 title="FRがほぼゼロの「安定期」銘柄のみ表示。ONにすると候補が大幅に減ります。OFF推奨。">
                 <input type="checkbox" checked={filterSettledOnly} onChange={e => setFilterSettledOnly(e.target.checked)} className="accent-green-500 w-3.5 h-3.5" />
@@ -3400,7 +3574,7 @@ export default function ShortScanner() {
                 </div>
               )}
               <button
-                onClick={() => { setMinDrop(30); setMaxVolRatio(70); setMaxDays(9999); setMinVol24k(100); setMinOiK(0); setFilterSettledOnly(false); setFilterFsRatio5x(false); }}
+                onClick={() => { setMinDrop(30); setMaxVolRatio(70); setMaxDays(9999); setMinVol24k(50); setMinOiK(30); setFilterSettledOnly(true); setFilterFsRatio5x(false); setMinScore(12); }}
                 className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-auto">
                 {t.filterReset}
               </button>
@@ -3416,7 +3590,10 @@ export default function ShortScanner() {
       <CustomAlertPanel t={t} candidates={extended} />
 
       {/* Long Bias Panel (修正3) */}
-      <LongBiasPanel candidates={extended} t={t} />
+      <LongBiasPanel candidates={normalCandidates} t={t} />
+
+      {/* Excessive Pump Panel */}
+      <ExcessivePumpPanel candidates={excessivePumpCandidates} t={t} />
 
       {/* Error */}
       {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">❌ {error}</div>}
@@ -3426,8 +3603,8 @@ export default function ShortScanner() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
           <span>{t.scanTarget}: <strong className="text-gray-700">{totalScanned}</strong></span>
           <span title="サーバーがスコア計算を完了した件数">{t.passed}: <strong className="text-indigo-600">{data.meta.filtered}</strong></span>
-          <span title="スライダーフィルター適用後の件数（この件数でテーブル表示）">{lang === "ja" ? "フィルター通過" : "Filtered"}: <strong className="text-purple-600">{extended.length}</strong></span>
-          <span>{t.showing}: <strong className="text-gray-700">{paginatedItems.length}</strong>（全{extended.length}件中）</span>
+          <span title="スライダーフィルター適用後の件数（この件数でテーブル表示）">{lang === "ja" ? "フィルター通過" : "Filtered"}: <strong className="text-purple-600">{normalCandidates.length}</strong></span>
+          <span>{t.showing}: <strong className="text-gray-700">{paginatedItems.length}</strong>（全{normalCandidates.length}件中）</span>
           {data.mode === "new30" && activePreset === "🆕 新規上場 (30d)" && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{t.newMode}</span>}
           {snapshots.length > 0 && <span>{t.snapshots}: <strong className="text-teal-600">{snapshots.length}</strong></span>}
           {HAS_CG && cgLoading && <span className="text-violet-600">{t.cgFetching} {cgProgress}%</span>}
@@ -3460,22 +3637,28 @@ export default function ShortScanner() {
       )}
 
       {/* Recommended Panel */}
-      {data && !loading && extended.length > 0 && (
-        <RecommendedPanel candidates={extended} t={t} btcChange24h={marketBtcChange} lang={lang} isShortStopped={dangerZone.shouldBlockEntry} />
+      {data && !loading && normalCandidates.length > 0 && (
+        <RecommendedPanel candidates={normalCandidates} t={t} btcChange24h={marketBtcChange} lang={lang} isShortStopped={dangerZone.shouldBlockEntry} slHitSet={recentSlHitSymbols} />
       )}
 
       {/* Summary bar (修正5) */}
-      {data && !loading && extended.length > 0 && (
+      {data && !loading && (normalCandidates.length > 0 || excessivePumpCandidates.length > 0) && (
         <div className="flex flex-wrap items-center gap-2">
           <SummaryBar
-            candidates={extended}
+            candidates={normalCandidates}
             t={t}
             isLongBias={isLongBias}
             onFilter={(key) => setSummaryFilter(f => f === key ? null : key)}
             summaryFilter={summaryFilter}
             strongThreshold={strongThreshold}
             btcChange24h={marketBtcChange}
+            slHitSet={recentSlHitSymbols}
           />
+          {excessivePumpCandidates.length > 0 && (
+            <span className="text-orange-600 font-semibold text-xs">
+              🔥 過剰上昇: {excessivePumpCandidates.length}
+            </span>
+          )}
           {data?.mode === "new30" && activePreset === "🆕 新規上場 (30d)" && (
             <span className="text-xs px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 font-semibold">
               📋 {t.newMode}
@@ -3520,13 +3703,13 @@ export default function ShortScanner() {
         </div>
       )}
       {loading && <LoadingProgress t={t} elapsed={elapsed} />}
-      {!loading && data && extended.length === 0 && (
+      {!loading && data && normalCandidates.length === 0 && excessivePumpCandidates.length === 0 && (
         <div className="text-center py-10">
           <div className="text-3xl mb-2 text-gray-300">🔍</div>
           <p className="text-sm text-gray-500">{t.noResult}</p>
           <p className="text-xs text-gray-400 mt-1">{t.noResultNote}</p>
           <button
-            onClick={() => { setMinDrop(30); setMaxVolRatio(70); setMaxDays(9999); setMinVol24k(100); setMinOiK(0); setSummaryFilter(null); }}
+            onClick={() => { setMinDrop(30); setMaxVolRatio(70); setMaxDays(9999); setMinVol24k(50); setMinOiK(30); setFilterSettledOnly(true); setSummaryFilter(null); setMinScore(12); }}
             className="mt-3 px-4 py-1.5 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors">
             {t.filterReset}
           </button>
@@ -3534,7 +3717,7 @@ export default function ShortScanner() {
       )}
 
       {/* Results table / heatmap */}
-      {!loading && extended.length > 0 && (
+      {!loading && normalCandidates.length > 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           {/* Legend + view toggle */}
           <div className="flex flex-wrap items-center gap-3 px-3 md:px-4 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
@@ -3546,7 +3729,7 @@ export default function ShortScanner() {
             {/* バッジ一括展開/折りたたみ */}
             <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
               <button
-                onClick={() => setExpandedBadges(new Set(extended.map(c => c.symbol)))}
+                onClick={() => setExpandedBadges(new Set(normalCandidates.map(c => c.symbol)))}
                 className="px-2 py-1 text-[10px] font-semibold bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 title="全銘柄のバッジを展開">
                 バッジ▾全開
@@ -3579,7 +3762,7 @@ export default function ShortScanner() {
           {viewMode === "heat" && (
             <div className="p-4">
               <HeatmapView
-                candidates={extended}
+                candidates={normalCandidates}
                 t={t}
                 isLongBias={isLongBias}
                 onClickSymbol={(sym) => {
@@ -3608,6 +3791,7 @@ export default function ShortScanner() {
                 watchlistSet={watchlistSet}
                 onWatchlistToggle={toggleWatchlist}
                 marketBtcChange={marketBtcChange}
+                slHitSet={recentSlHitSymbols}
               />
             </div>
           )}
@@ -3649,7 +3833,7 @@ export default function ShortScanner() {
                   const hasAlert = alerts.some(a => a.symbol === c.symbol);
                   const p24 = c.priceChange24h, p7 = c.priceChange7d;
                   const isSelected = idx === selectedIdx;
-                  const shortRec = getShortRecommendation(c, marketBtcChange);
+                  const shortRec = getShortRecommendation(c, marketBtcChange, recentSlHitSymbols);
                   return (
                     <React.Fragment key={c.symbol}>
                       <tr id={`row-${c.symbol}`}
@@ -3662,6 +3846,8 @@ export default function ShortScanner() {
                           <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-1 flex-wrap">
                               <span className="font-mono font-bold text-gray-800 text-xs md:text-sm">{base}</span>
+                              {c.convictionLevel === "maximum" && <span className="text-xs leading-none" title={`${c.strategyBadges.length}バッジ: 最高確信度`}>🎯</span>}
+                              {c.convictionLevel === "high"    && <span className="text-xs leading-none" title="2バッジ: 高確信度">🔥</span>}
                               <span className="text-gray-400 text-[10px]">/USDT</span>
                               <button
                                 onClick={e => { e.stopPropagation(); toggleWatchlist(base); }}
@@ -3686,6 +3872,22 @@ export default function ShortScanner() {
                               )}
                               <span className="text-gray-400 text-[10px]">{isOpen?"▲":"▼"}</span>
                             </div>
+                            {/* ── ストラテジーバッジ ── */}
+                            {c.strategyBadges.length > 0 && (
+                              <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                {c.strategyBadges.map(bid => {
+                                  const def = STRATEGY_BADGES[bid];
+                                  const cls = BADGE_CAT_CLS[bid] ?? "bg-gray-500/20 text-gray-400";
+                                  return (
+                                    <span key={bid}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${cls}`}
+                                      title={def?.description}>
+                                      {def?.icon}{def?.label ?? bid}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                             {/* ── バッジ: 折りたたみ/展開 ── */}
                             {(() => {
                               const isBadgeOpen = expandedBadges.has(c.symbol);

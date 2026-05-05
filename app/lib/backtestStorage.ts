@@ -3,9 +3,20 @@
 import type { StrategyTag } from "./strategies/types";
 import type { DangerLevel } from "./strategies/dangerZone";
 import type { CoinNewsContext, LiquidityInfo } from "./shortScorer";
+import type { ConvictionLevel } from "./strategyBadges";
 
 const STORAGE_KEY = "bell:backtest:records";
+const MIGRATION_KEY = "bell:backtest:migration_v3";
 const MAX_RECORDS = 1000;
+
+function runMigration(): void {
+  if (typeof window === "undefined") return;
+  if (localStorage.getItem(MIGRATION_KEY)) return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(MIGRATION_KEY, "1");
+  } catch { /* ignore */ }
+}
 
 export type BacktestStatus =
   | "active"
@@ -65,7 +76,7 @@ export interface BacktestRecord {
   };
 
   // プリセット識別
-  preset: "low_lev" | "new_listing" | "high_lev" | "unknown";
+  preset: "low_lev" | "new_listing" | "high_lev" | "unknown" | "collect" | "production";
 
   // 価格ソース（undefined = レガシー・スキャン結果のみ）
   priceSource?: "scan" | "direct_api";
@@ -102,10 +113,16 @@ export interface BacktestRecord {
   unlockData?: { daysUntil: number | null; percent: number | null; date: string | null };
   newsContext?: CoinNewsContext;
   liquidityInfo?: LiquidityInfo;
+
+  // ★ v3: ストラテジーバッジ
+  strategyBadges?: string[];
+  convictionLevel?: ConvictionLevel;
+  expiryDays?: number;
 }
 
 export function getRecords(): BacktestRecord[] {
   if (typeof window === "undefined") return [];
+  runMigration();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];

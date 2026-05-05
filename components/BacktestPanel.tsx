@@ -8,6 +8,8 @@ import { analyzeBacktestRecords } from "@/app/lib/backtestAnalysis";
 import type { BacktestAnalysis } from "@/app/lib/backtestAnalysis";
 import { getDangerSymbols, removeFromDangerList } from "@/app/lib/symbolHealth";
 import { checkDataIntegrity } from "@/app/lib/dataIntegrity";
+import { STRATEGY_BADGES } from "@/app/lib/strategyBadges";
+import type { StrategyBadgeId } from "@/app/lib/strategyBadges";
 
 // ── Translations ──────────────────────────────────────────────────────────────
 
@@ -347,6 +349,103 @@ function DataIntegritySection({ records, lang }: { records: BacktestRecord[]; la
   );
 }
 
+// ── BadgeStatsSection ─────────────────────────────────────────────────────────
+
+function BadgeStatsSection({ records }: { records: BacktestRecord[] }) {
+  const resolved = useMemo(
+    () => records.filter(r => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit" || r.status === "sl_hit"),
+    [records],
+  );
+  const withBadges = resolved.filter(r => r.strategyBadges && r.strategyBadges.length > 0);
+  if (withBadges.length < 3) return null;
+
+  type Stat = { wins: number; total: number; pnlSum: number };
+  const badgeMap = new Map<string, Stat>();
+  for (const r of withBadges) {
+    for (const bid of r.strategyBadges!) {
+      if (!badgeMap.has(bid)) badgeMap.set(bid, { wins: 0, total: 0, pnlSum: 0 });
+      const s = badgeMap.get(bid)!;
+      if (r.status !== "sl_hit") s.wins++;
+      s.total++;
+      if (r.resolvedPrice != null) s.pnlSum += (r.entryPrice - r.resolvedPrice) / r.entryPrice * 100;
+    }
+  }
+  const sorted = [...badgeMap.entries()].sort((a, b) => b[1].total - a[1].total);
+
+  const convMap: Record<string, { wins: number; total: number }> = {
+    normal: { wins: 0, total: 0 }, high: { wins: 0, total: 0 }, maximum: { wins: 0, total: 0 },
+  };
+  for (const r of withBadges) {
+    const lv = r.convictionLevel ?? "normal";
+    if (lv in convMap) {
+      convMap[lv].total++;
+      if (r.status !== "sl_hit") convMap[lv].wins++;
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-gray-600">🏷️ バッジ別成績</p>
+      {/* Conviction */}
+      <div className="grid grid-cols-3 gap-1.5 text-xs">
+        {(["normal", "high", "maximum"] as const).map(lv => {
+          const s = convMap[lv];
+          if (s.total === 0) return null;
+          const wr = (s.wins / s.total) * 100;
+          const icon  = lv === "maximum" ? "🎯" : lv === "high" ? "🔥" : "▪️";
+          const label = lv === "maximum" ? "最高確信 (3+)" : lv === "high" ? "高確信 (2)" : "通常 (1)";
+          return (
+            <div key={lv} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 border border-gray-100 dark:border-gray-700 text-center">
+              <div className={`text-sm font-black ${wr >= 60 ? "text-green-700" : wr >= 40 ? "text-yellow-600" : "text-red-600"}`}>
+                {wr.toFixed(0)}%
+              </div>
+              <div className="text-[10px] text-gray-500">{icon} {label}</div>
+              <div className="text-[9px] text-gray-400">{s.wins}勝 {s.total - s.wins}負</div>
+            </div>
+          );
+        })}
+      </div>
+      {/* Per-badge table */}
+      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+        <table className="w-full text-xs min-w-[300px]">
+          <thead>
+            <tr className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+              <th className="px-2 py-1.5 text-left">バッジ</th>
+              <th className="px-2 py-1.5 text-center">件数</th>
+              <th className="px-2 py-1.5 text-center">勝率</th>
+              <th className="px-2 py-1.5 text-right">avg PnL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(([bid, s]) => {
+              const def = STRATEGY_BADGES[bid as StrategyBadgeId];
+              if (!def) return null;
+              const wr     = s.total > 0 ? (s.wins / s.total) * 100 : 0;
+              const avgPnl = s.total > 0 ? s.pnlSum / s.total : 0;
+              return (
+                <tr key={bid} className="border-b border-gray-100 dark:border-gray-700 last:border-0">
+                  <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 font-medium">
+                    {def.icon} {def.label}
+                  </td>
+                  <td className="px-2 py-1.5 text-center text-gray-500">{s.total}</td>
+                  <td className="px-2 py-1.5 text-center">
+                    <span className={`font-bold ${wr >= 60 ? "text-green-700" : wr >= 40 ? "text-yellow-600" : "text-red-600"}`}>
+                      {wr.toFixed(0)}%
+                    </span>
+                  </td>
+                  <td className={`px-2 py-1.5 text-right font-mono ${avgPnl >= 0 ? "text-green-600" : "text-red-500"}`}>
+                    {avgPnl >= 0 ? "+" : ""}{avgPnl.toFixed(1)}%
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── BacktestPanel (main export) ───────────────────────────────────────────────
 
 interface BacktestPanelProps {
@@ -374,7 +473,7 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
   const [open,          setOpen]          = useState(true);
   const [showRecords,   setShowRecords]   = useState(false);
   const [showActivePos, setShowActivePos] = useState(false);
-  const [btPresetTab,   setBtPresetTab]   = useState<"all" | "low_lev" | "new_listing" | "v2_only">("all");
+  const [btPresetTab,   setBtPresetTab]   = useState<"all" | "low_lev" | "new_listing" | "v2_only" | "collect" | "production">("all");
   const [btMainTab,     setBtMainTab]     = useState<"stats" | "loss">("stats");
 
   const analysis = useMemo(() => analyzeBacktestRecords(records), [records]);
@@ -441,9 +540,11 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
               </div>
               <div className="flex flex-wrap gap-1">
                 {([
-                  { key: "all",         label: "全体",        count: records.length },
-                  { key: "low_lev",     label: "🐢低レバ",    count: records.filter(r => r.preset === "low_lev").length },
-                  { key: "new_listing", label: "🆕新規上場",  count: records.filter(r => r.preset === "new_listing").length },
+                  { key: "all",         label: "全体",          count: records.length },
+                  { key: "low_lev",     label: "🐢低レバ",      count: records.filter(r => r.preset === "low_lev").length },
+                  { key: "new_listing", label: "🆕新規上場",    count: records.filter(r => r.preset === "new_listing").length },
+                  { key: "production",  label: "📈 本番",       count: records.filter(r => r.preset === "production").length },
+                  { key: "collect",     label: "📊 収集",       count: records.filter(r => r.preset === "collect").length },
                 ] as const).map(tab => (
                   <button key={tab.key} onClick={() => setBtPresetTab(tab.key)}
                     className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
@@ -631,6 +732,9 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                   </div>
                 </div>
               )}
+
+              {/* バッジ別成績 */}
+              <BadgeStatsSection records={tabRecords} />
 
               {/* TP/SL 到達分析 */}
               {displayStats.resolved >= 3 && (

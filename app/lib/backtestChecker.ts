@@ -1,6 +1,7 @@
 "use client";
 
 import type { ShortCandidate } from "./shortScorer";
+import { isExcessivePump } from "./shortScorer";
 import { getRecords, saveRecords } from "./backtestStorage";
 import type { BacktestRecord, BacktestStatus } from "./backtestStorage";
 import { findBestStrategy } from "./strategies";
@@ -135,7 +136,7 @@ export async function checkAndUpdateRecords(candidates: ShortCandidate[]): Promi
 
     // 期限切れチェックを最優先（スキャン外の銘柄でも確実に expired にする）
     const daysSince = (now - record.recordedAt) / (1000 * 60 * 60 * 24);
-    if (daysSince > EXPIRE_DAYS) {
+    if (daysSince > (record.expiryDays ?? EXPIRE_DAYS)) {
       const lastPrice = apiPrices.get(record.symbol) ?? scanPriceMap.get(record.symbol) ?? record.currentPrice ?? record.entryPrice;
       record.status        = "expired";
       record.resolvedAt    = now;
@@ -182,7 +183,7 @@ export function expireOldRecords(): number {
   for (const record of records) {
     if (record.status !== "active" && !isPending(record.status)) continue;
     const daysSince = (now - record.recordedAt) / (1000 * 60 * 60 * 24);
-    if (daysSince > EXPIRE_DAYS) {
+    if (daysSince > (record.expiryDays ?? EXPIRE_DAYS)) {
       record.status        = "expired";
       record.resolvedAt    = now;
       record.resolvedPrice = record.currentPrice ?? record.entryPrice;
@@ -203,12 +204,19 @@ interface ClientScoreEntry {
   oiChangeScore?: number;
 }
 
+interface BadgeEntry {
+  strategyBadges?: string[];
+  convictionLevel?: string;
+  expiryDays?: number;
+}
+
 // Step 2: record new candidates with score >= threshold
 export function recordNewCandidates(
   candidates: ShortCandidate[],
-  preset: "low_lev" | "new_listing" | "high_lev" | "unknown" = "unknown",
+  preset: "low_lev" | "new_listing" | "high_lev" | "unknown" | "collect" | "production" = "unknown",
   clientScores?: Map<string, ClientScoreEntry>,
   marketContext?: MarketContext | null,
+  badgesMap?: Map<string, BadgeEntry>,
 ): BacktestRecord[] {
   const records = getRecords();
   const activeSymbols = new Set(
@@ -216,6 +224,9 @@ export function recordNewCandidates(
   );
   const recentCutoff = Date.now() - 24 * 60 * 60 * 1000;
   const recentSymbols = new Set(records.filter(r => r.recordedAt >= recentCutoff).map(r => r.symbol));
+  const slHitSymbols = new Set(
+    records.filter(r => r.status === "sl_hit" && r.resolvedAt != null && r.resolvedAt >= recentCutoff).map(r => r.symbol),
+  );
   const now = Date.now();
 
   const newRecords: BacktestRecord[] = candidates
@@ -223,6 +234,8 @@ export function recordNewCandidates(
       if (c.tradeSetup === null) return false;
       if (activeSymbols.has(c.symbol)) return false;
       if (recentSymbols.has(c.symbol)) return false;
+      if (slHitSymbols.has(c.symbol)) return false;
+      if (isExcessivePump(c)) return false;
       switch (preset) {
         case "low_lev":
           return c.shortScore >= 10
@@ -294,6 +307,15 @@ export function recordNewCandidates(
         version: SCORING_VERSION,
         newsContext: c.newsContext,
         liquidityInfo: c.liquidityInfo,
+        ...(() => {
+          const b = badgesMap?.get(c.symbol);
+          if (!b || !b.strategyBadges?.length) return {};
+          return {
+            strategyBadges: b.strategyBadges,
+            convictionLevel: b.convictionLevel as import("./strategyBadges").ConvictionLevel | undefined,
+            expiryDays: b.expiryDays,
+          };
+        })(),
       };
     });
 

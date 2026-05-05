@@ -38,6 +38,11 @@ export interface ShortScoreBreakdown {
   rsiScore: number;        // 0-2 (RSI過熱度)
   pocDistanceScore: number; // 0-2 (現在価格がPOCより上方にある距離)
   volTrendScore: number;    // 0-2 (日足出来高の連続減少)
+  upTrendPenalty?: number;  // -3 (トレンドUP時ペナルティ)
+  frPenalty?: number;       // -2 (FR高いショート不利)
+  oiPenalty?: number;       // -1 (OI高いスクイーズリスク)
+  mcFdvPenalty?: number;    // -2 (MC≒FDV: クライアント側適用)
+  riskOffBonus?: number;    // +1 (Risk-OFF環境ボーナス: クライアント側適用)
 }
 
 // ─── Chart Pattern (施策4 + Phase2 Task3: SMC拡張) ───────────────────────────
@@ -405,11 +410,11 @@ export function calcTradeSetup(
       resistanceLevel = Math.min(resistHigh, currentPrice * 1.08);
     }
   }
-  // ATR高ボラ時はSLを拡張 (最大+15%)
+  // ATR高ボラ時はSLを拡張 (最大+12%)
   if (atrData && atrData.regime === "high") {
-    resistanceLevel = Math.min(resistanceLevel * 1.1, currentPrice * 1.15);
+    resistanceLevel = Math.min(resistanceLevel * 1.1, currentPrice * 1.12);
   }
-  const sl = resistanceLevel;
+  const sl = Math.min(resistanceLevel, currentPrice * 1.12);
 
   // ── TP1/2/3: ATRベース (atrDataあり) or パーセントフォールバック ──
   let tp1: number;
@@ -710,9 +715,16 @@ export function calcShortScore(
   const pocDistanceScore = calcPocDistanceScore(pocVsPricePct);
   const volTrendScore = calcVolTrendScore(dailyVols);
 
+  // Trend=UP ペナルティ (-3pt)
+  const upTrendPenalty = trendDirection === "UP" ? 3 : 0;
+  // FR高いショート不利ペナルティ (-2pt)
+  const frPenalty = frScore >= 2 ? 2 : 0;
+  // OI高いスクイーズリスクペナルティ (-1pt)
+  const oiPenalty = oiScore >= 2 ? 1 : 0;
+
   return {
-    score: dropScore + volumeDryScore + frScore + freshnessScore + oiScore + oiChangeScore + trendScore + pumpScore + btcCorrScore + patternScore + rsiScore + pocDistanceScore + volTrendScore,
-    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, oiChangeScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore, pocDistanceScore, volTrendScore },
+    score: Math.max(0, dropScore + volumeDryScore + frScore + freshnessScore + oiScore + oiChangeScore + trendScore + pumpScore + btcCorrScore + patternScore + rsiScore + pocDistanceScore + volTrendScore - upTrendPenalty - frPenalty - oiPenalty),
+    breakdown: { dropScore, volumeDryScore, frScore, freshnessScore, oiScore, oiChangeScore, trendScore, pumpScore, btcCorrScore, patternScore, rsiScore, pocDistanceScore, volTrendScore, upTrendPenalty, frPenalty, oiPenalty },
     oiRatio,
     trendDirection,
     trendMultiTF,
@@ -776,6 +788,14 @@ export function estimateSlippage(
     `🔴 TWAP推奨: ${Math.min(Math.ceil(estimatedSlippagePct / 0.5), 10)}チャンクに分割`;
 
   return { orderSizeUsd, estimatedSlippagePct, impactLevel, twapRecommendation, avgBarVolume };
+}
+
+// 過剰上昇銘柄判定: バックテスト除外 + 別枠表示用
+export function isExcessivePump(c: ShortCandidate): boolean {
+  if (c.priceChange24h >= 100) return true;
+  if (c.priceChange7d >= 200) return true;
+  if (c.priceChange24h >= 50 && Math.abs(c.athDropPct) <= 10) return true;
+  return false;
 }
 
 // フィルタ条件 (新規上場30日スキャン)
