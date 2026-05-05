@@ -2468,7 +2468,7 @@ const DEFAULT_PRESETS: FilterPreset[] = [
     name: "🎯 本番",
     icon: "🎯",
     description: "ATH30%下落+出来高枯渇のスイングショート。低レバ推奨",
-    minDrop: 30, maxVolRatio: 300, minVol24k: 50, maxDays: 9999, minOiK: 30,
+    minDrop: 30, maxVolRatio: 500, minVol24k: 30, maxDays: 9999, minOiK: 0,
     filterSettledOnly: true,
     sortBy: "displayScore",
     summaryFilter: null,
@@ -2477,7 +2477,7 @@ const DEFAULT_PRESETS: FilterPreset[] = [
   {
     name: "presetCollect",
     icon: "📊",
-    minDrop: 10, maxVolRatio: 300, minVol24k: 30, maxDays: 9999, minOiK: 0,
+    minDrop: 30, maxVolRatio: 500, minVol24k: 30, maxDays: 9999, minOiK: 0,
     sortBy: "displayScore",
     summaryFilter: null,
     filterSettledOnly: false,
@@ -3851,8 +3851,8 @@ export default function ShortScanner() {
                           <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-1 flex-wrap">
                               <span className="font-mono font-bold text-gray-800 text-xs md:text-sm">{base}</span>
-                              {c.convictionLevel === "maximum" && <span className="text-xs leading-none" title={`${c.strategyBadges.length}バッジ: 最高確信度`}>🎯</span>}
-                              {c.convictionLevel === "high"    && <span className="text-xs leading-none" title="2バッジ: 高確信度">🔥</span>}
+                              {c.convictionLevel === "maximum" && <span className="text-xs leading-none flex items-center gap-0.5" title={`${c.strategyBadges.length}バッジ: 最高確信度`}>🎯<span className="text-[9px] text-yellow-400 font-bold">×{c.strategyBadges.length}</span></span>}
+                              {c.convictionLevel === "high"    && <span className="text-xs leading-none flex items-center gap-0.5" title="2バッジ: 高確信度">🔥<span className="text-[9px] text-orange-400 font-bold">×2</span></span>}
                               <span className="text-gray-400 text-[10px]">/USDT</span>
                               <button
                                 onClick={e => { e.stopPropagation(); toggleWatchlist(base); }}
