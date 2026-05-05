@@ -1,14 +1,12 @@
 export type StrategyBadgeId =
   | "post_listing_decay"
-  | "volume_death"
-  | "exclusivity_trap"
-  | "fdv_overhang"
-  | "fr_normalization"
+  | "listing_vol_collapse"
+  | "listing_pump_fade"
+  | "listing_bounce_trap"
+  | "listing_ath70"
+  | "btc_crash_amplifier"
   | "dead_cat_bounce"
-  | "sector_collapse"
-  | "btc_divergence"
-  | "leverage_trap"
-  | "asia_dump";
+  | "rsi_reversal";
 
 export type ConvictionLevel = "normal" | "high" | "maximum";
 
@@ -18,78 +16,73 @@ export interface StrategyBadgeDef {
   icon: string;
   description: string;
   expiryDays: number;
+  category: "timing" | "structure" | "momentum";
 }
 
 export const STRATEGY_BADGES: Record<StrategyBadgeId, StrategyBadgeDef> = {
   post_listing_decay: {
     id: "post_listing_decay",
-    label: "上場後崩壊",
+    label: "上場30-60日崩壊",
+    icon: "🕐",
+    description: "上場30-60日経過、FOMO消失で下落トレンド（勝率44%, BTC↓時71%）",
+    expiryDays: 14,
+    category: "timing",
+  },
+  listing_vol_collapse: {
+    id: "listing_vol_collapse",
+    label: "上場後出来高崩壊",
     icon: "📉",
-    description: "上場30-90日+ATH下落30%以上",
+    description: "上場後に出来高が7日平均の30%以下に枯渇（勝率55%, BTC↓時100%）",
     expiryDays: 14,
+    category: "timing",
   },
-  volume_death: {
-    id: "volume_death",
-    label: "出来高死亡",
-    icon: "💀",
-    description: "出来高が通常の15%未満まで枯渇",
-    expiryDays: 10,
+  listing_pump_fade: {
+    id: "listing_pump_fade",
+    label: "上場ポンプ後崩壊",
+    icon: "🎪",
+    description: "上場30日以内ATH到達+現在ATHから-40%下落（勝率42%, BTC↓時78%）",
+    expiryDays: 14,
+    category: "timing",
   },
-  exclusivity_trap: {
-    id: "exclusivity_trap",
-    label: "独占トラップ",
+  listing_bounce_trap: {
+    id: "listing_bounce_trap",
+    label: "上場後バウンストラップ",
     icon: "🪤",
-    description: "Binance/Bybit未上場+出来高枯渇",
+    description: "上場30-60日+ATH-50%下落後に20%反発中（勝率52%）",
     expiryDays: 10,
+    category: "timing",
   },
-  fdv_overhang: {
-    id: "fdv_overhang",
-    label: "FDV圧力",
-    icon: "⚖️",
-    description: "MC/FDV<0.2+上場60日以上",
+  listing_ath70: {
+    id: "listing_ath70",
+    label: "上場30-60日+ATH-70%",
+    icon: "💀",
+    description: "上場30-60日でATHから-70%以上下落（勝率43%, PF 2.23）",
     expiryDays: 14,
+    category: "timing",
   },
-  fr_normalization: {
-    id: "fr_normalization",
-    label: "FR正常化",
-    icon: "📊",
-    description: "高FR継続後の低下開始",
+  btc_crash_amplifier: {
+    id: "btc_crash_amplifier",
+    label: "BTC下落増幅",
+    icon: "📡",
+    description: "BTC下落時にアルトが倍速で下がるパターン（勝率36%, BTC↓時41%）",
     expiryDays: 7,
+    category: "momentum",
   },
   dead_cat_bounce: {
     id: "dead_cat_bounce",
-    label: "デッドキャット",
+    label: "デッドキャットバウンス",
     icon: "🐱",
-    description: "大幅下落後20-40%反発中",
+    description: "-50%暴落後に反発、反発の頂点でショート（勝率35%, BTC↓時42%）",
     expiryDays: 10,
+    category: "structure",
   },
-  sector_collapse: {
-    id: "sector_collapse",
-    label: "セクター崩壊",
-    icon: "🌊",
-    description: "同カテゴリ3銘柄以上が7d-20%超",
+  rsi_reversal: {
+    id: "rsi_reversal",
+    label: "RSI過熱反転",
+    icon: "🌡️",
+    description: "RSI14が70超過、過熱からの反転（勝率34%）",
     expiryDays: 7,
-  },
-  btc_divergence: {
-    id: "btc_divergence",
-    label: "BTC乖離",
-    icon: "🔀",
-    description: "BTC相関0.2未満の独立下落",
-    expiryDays: 7,
-  },
-  leverage_trap: {
-    id: "leverage_trap",
-    label: "レバトラップ",
-    icon: "⚡",
-    description: "OI急増+価格横ばい",
-    expiryDays: 6,
-  },
-  asia_dump: {
-    id: "asia_dump",
-    label: "アジアダンプ",
-    icon: "🌏",
-    description: "直近12hで+15%以上ポンプ後",
-    expiryDays: 6,
+    category: "momentum",
   },
 };
 

@@ -544,16 +544,17 @@ interface ExtendedCandidate extends ShortCandidate {
 }
 
 const BADGE_CAT_CLS: Record<string, string> = {
-  post_listing_decay: "bg-blue-500/20 text-blue-400",
-  fr_normalization:   "bg-blue-500/20 text-blue-400",
-  dead_cat_bounce:    "bg-blue-500/20 text-blue-400",
-  asia_dump:          "bg-blue-500/20 text-blue-400",
-  volume_death:       "bg-amber-500/20 text-amber-400",
-  exclusivity_trap:   "bg-amber-500/20 text-amber-400",
-  fdv_overhang:       "bg-amber-500/20 text-amber-400",
-  sector_collapse:    "bg-amber-500/20 text-amber-400",
-  leverage_trap:      "bg-purple-500/20 text-purple-400",
-  btc_divergence:     "bg-purple-500/20 text-purple-400",
+  // timing
+  post_listing_decay:   "bg-blue-500/20 text-blue-400",
+  listing_vol_collapse: "bg-blue-500/20 text-blue-400",
+  listing_pump_fade:    "bg-blue-500/20 text-blue-400",
+  listing_bounce_trap:  "bg-blue-500/20 text-blue-400",
+  listing_ath70:        "bg-blue-500/20 text-blue-400",
+  // structure
+  dead_cat_bounce:      "bg-amber-500/20 text-amber-400",
+  // momentum
+  btc_crash_amplifier:  "bg-purple-500/20 text-purple-400",
+  rsi_reversal:         "bg-purple-500/20 text-purple-400",
 };
 
 interface ScanResponse {
@@ -2951,6 +2952,8 @@ export default function ShortScanner() {
           clientScoresMap.set(c.symbol, { exclusivityScore, frBonus });
           const { badges, convictionLevel, expiryDays } = detectBadges({
             candidate: c, snapshots: currentSnapshots, listedOnBinance, listedOnBybit,
+            btcChange24h: marketRegime?.btcChange24h,
+            marketPhase: marketRegime?.regime,
           });
           if (badges.length > 0) badgesMap.set(c.symbol, { strategyBadges: badges, convictionLevel, expiryDays });
         }
@@ -3125,6 +3128,8 @@ export default function ShortScanner() {
         cgMarketCap: cgData?.marketCap ?? null,
         cgFdv: cgData?.fdv ?? null,
         sectorCollapseActive: false,
+        btcChange24h: marketRegime?.btcChange24h,
+        marketPhase: marketRegime?.regime,
       });
       return {
         ...c,

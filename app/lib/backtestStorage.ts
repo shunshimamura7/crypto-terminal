@@ -6,7 +6,7 @@ import type { CoinNewsContext, LiquidityInfo } from "./shortScorer";
 import type { ConvictionLevel } from "./strategyBadges";
 
 const STORAGE_KEY = "bell:backtest:records";
-const MIGRATION_KEY = "bell:backtest:migration_v3";
+const MIGRATION_KEY = "bell:backtest:migration_v4";
 const MAX_RECORDS = 1000;
 
 function runMigration(): void {

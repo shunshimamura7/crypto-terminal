@@ -11,6 +11,11 @@ export interface BadgeDetectionContext {
   cgMarketCap?: number | null;
   cgFdv?: number | null;
   sectorCollapseActive?: boolean;
+  // Market context
+  btcChange24h?: number;
+  marketPhase?: string;
+  // Score components (optional — badge is skipped when undefined)
+  rsiScore?: number;
 }
 
 export interface BadgeDetectionResult {
@@ -19,91 +24,61 @@ export interface BadgeDetectionResult {
   expiryDays: number | undefined;
 }
 
-function getFRFromSnapshots(symbol: string, snapshots: ScanSnapshot[], limit = 10): Array<number | null> {
-  return snapshots.slice(-limit).map(s => s.data[symbol]?.fr ?? null);
-}
-
 export function detectBadges(ctx: BadgeDetectionContext): BadgeDetectionResult {
-  const {
-    candidate: c,
-    snapshots = [],
-    listedOnBinance,
-    listedOnBybit,
-    cgMarketCap,
-    cgFdv,
-    sectorCollapseActive,
-  } = ctx;
-
+  const { candidate: c, snapshots = [], btcChange24h, marketPhase, rsiScore } = ctx;
   const badges: StrategyBadgeId[] = [];
 
-  // 1. post_listing_decay: 上場30-90日 + ATH下落30%以上
-  if (c.listedDaysAgo >= 30 && c.listedDaysAgo <= 90 && c.athDropPct <= -30) {
+  // 1. post_listing_decay: 上場30-60日 + ATH-30%以上
+  if (c.listedDaysAgo >= 30 && c.listedDaysAgo <= 60 && c.athDropPct <= -30) {
     badges.push("post_listing_decay");
   }
 
-  // 2. volume_death: vol24h/volAvg7d < 15%
-  if (c.volumeChangeRatio < 0.15) {
-    badges.push("volume_death");
+  // 2. listing_vol_collapse: 上場14-90日 + 出来高が7日平均の30%以下
+  if (c.listedDaysAgo >= 14 && c.listedDaysAgo <= 90 && c.volumeChangeRatio < 0.30) {
+    badges.push("listing_vol_collapse");
   }
 
-  // 3. exclusivity_trap: Binance/Bybit未上場 + volumeChangeRatio < 0.5
-  if (listedOnBinance === false && listedOnBybit === false && c.volumeChangeRatio < 0.5) {
-    badges.push("exclusivity_trap");
+  // 3. listing_pump_fade: 上場30日以内 + ATH-40%以上（上場直後ポンプ後崩壊）
+  if (c.listedDaysAgo <= 30 && c.athDropPct <= -40) {
+    badges.push("listing_pump_fade");
   }
 
-  // 4. fdv_overhang: MC/FDV < 0.2 + 上場60日以上
-  if (
-    cgMarketCap != null && cgFdv != null &&
-    cgFdv > 0 && cgMarketCap / cgFdv < 0.2 &&
-    c.listedDaysAgo >= 60
-  ) {
-    badges.push("fdv_overhang");
-  }
-
-  // 5. fr_normalization: スナップショット3件以上でFRが高水準→低下開始
-  if (snapshots.length >= 3 && c.fundingRate !== null) {
-    const frHistory = getFRFromSnapshots(c.symbol, snapshots, 10);
-    const last3 = frHistory.slice(-3);
-    const allHigh = last3.length >= 3 && last3.every(fr => fr !== null && fr >= 0.0005);
-    if (allHigh && c.fundingRate < 0.0005) {
-      badges.push("fr_normalization");
+  // 4. listing_bounce_trap: 上場30-60日 + ATH-50%以上 + 7日+10%以上反発中
+  {
+    const bounce = c.priceChange7d >= 10 ? c.priceChange7d : c.priceChange24h;
+    if (
+      c.listedDaysAgo >= 30 && c.listedDaysAgo <= 60 &&
+      c.athDropPct <= -50 &&
+      bounce >= 10
+    ) {
+      badges.push("listing_bounce_trap");
     }
   }
 
-  // 6. dead_cat_bounce: ATH下落50%以上 + 7d +20〜+40%反発中
+  // 5. listing_ath70: 上場30-60日 + ATH-70%以上
+  if (c.listedDaysAgo >= 30 && c.listedDaysAgo <= 60 && c.athDropPct <= -70) {
+    badges.push("listing_ath70");
+  }
+
+  // 6. btc_crash_amplifier: BTC相関が高い + Risk-Off or BTC急落中
+  {
+    const riskOff = marketPhase?.toUpperCase() === "RISK_OFF" || (btcChange24h !== undefined && btcChange24h < -2);
+    if (c.btcCorrelation > 0.5 && riskOff) {
+      badges.push("btc_crash_amplifier");
+    }
+  }
+
+  // 7. dead_cat_bounce: ATH-50%以上下落後に20-40%反発中
   if (c.athDropPct <= -50 && c.priceChange7d >= 20 && c.priceChange7d <= 40) {
     badges.push("dead_cat_bounce");
   }
 
-  // 7. sector_collapse: 外部から注入 (同カテゴリ3銘柄以上が7d-20%超)
-  if (sectorCollapseActive === true) {
-    badges.push("sector_collapse");
+  // 8. rsi_reversal: RSIスコアが2以上（contextにない場合スキップ）
+  if (rsiScore !== undefined && rsiScore >= 2) {
+    badges.push("rsi_reversal");
   }
 
-  // 8. btc_divergence: BTC相関 < 0.2
-  if (c.btcCorrelation < 0.2) {
-    badges.push("btc_divergence");
-  }
-
-  // 9. leverage_trap: OI急増 + 価格横ばい (スナップショットで検証 or oiRatioで代替)
-  if (snapshots.length >= 2) {
-    const oldest = snapshots[0].data[c.symbol];
-    if (oldest && oldest.oi > 0) {
-      const oiGrowth = ((c.openInterest - oldest.oi) / oldest.oi) * 100;
-      const priceStable = Math.abs(c.priceChange7d) < 5;
-      if (oiGrowth >= 50 && priceStable) {
-        badges.push("leverage_trap");
-      }
-    }
-  } else if (c.oiRatio > 3 && Math.abs(c.priceChange7d) < 5) {
-    badges.push("leverage_trap");
-  }
-
-  // 10. asia_dump: 直近24hで+15%以上ポンプ (12h priceChangeの代替)
-  if (c.priceChange24h >= 15) {
-    badges.push("asia_dump");
-  }
-
+  // Deduplicate (listing_ath70 is a subset of post_listing_decay — keep both for conviction stacking)
   const convictionLevel = getConvictionLevel(badges.length);
   const expiryDays = badges.length > 0 ? getMaxExpiryDays(badges) : undefined;
 
