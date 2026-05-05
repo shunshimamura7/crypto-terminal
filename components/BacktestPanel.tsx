@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import type { BacktestStats } from "@/app/lib/backtestStats";
 import { calculateStats } from "@/app/lib/backtestStats";
@@ -442,6 +442,218 @@ function BadgeStatsSection({ records }: { records: BacktestRecord[] }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ── HistoricalAnalysisSection ─────────────────────────────────────────────────
+
+interface HRawCandle {
+  time: number; open: number; high: number; low: number; close: number; volume: number;
+}
+interface HCollectResponse {
+  batch: number; totalBatches: number; totalSymbols: number;
+  results: Array<{ symbol: string; listedDaysAgo: number; candles: HRawCandle[] }>;
+}
+interface HSymbol {
+  symbol: string;
+  listedDaysAgo: number;
+  candles: Array<{ time: number; high: number; low: number; close: number; volume: number }>;
+}
+interface HPattern {
+  patternId: string; label: string; category: string;
+  sampleSize: number; winRate: number; avgPnlPct: number; score: number;
+  winRateByBtcTrend: { up: number | null; flat: number | null; down: number | null };
+}
+interface HAnalyzeResult {
+  patterns: HPattern[];
+  summary: { top8: string[]; totalTrades: number; symbolsProcessed: number; processingTimeMs: number };
+}
+
+function HistoricalAnalysisSection() {
+  type HStatus = "idle" | "collecting" | "analyzing" | "done" | "error";
+  const [hStatus,   setHStatus]   = useState<HStatus>("idle");
+  const [hProgress, setHProgress] = useState({ current: 0, total: 0, symbolsCollected: 0 });
+  const [hResult,   setHResult]   = useState<HAnalyzeResult | null>(null);
+  const [hError,    setHError]    = useState("");
+  const runningRef = useRef(false);
+
+  async function runAnalysis() {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    setHStatus("collecting");
+    setHProgress({ current: 0, total: 0, symbolsCollected: 0 });
+    setHResult(null);
+    setHError("");
+
+    try {
+      const res0 = await fetch("/api/historical/collect?batch=0");
+      if (!res0.ok) throw new Error(`collect batch 0 failed: ${res0.status}`);
+      const data0 = await res0.json() as HCollectResponse;
+
+      const totalBatches = data0.totalBatches;
+      const collected: HSymbol[] = [];
+
+      const addBatch = (results: HCollectResponse["results"]) => {
+        for (const r of results) {
+          if (r.candles.length > 0) {
+            collected.push({
+              symbol:       r.symbol,
+              listedDaysAgo: r.listedDaysAgo,
+              candles:      r.candles.map(c => ({ time: c.time, high: c.high, low: c.low, close: c.close, volume: c.volume })),
+            });
+          }
+        }
+      };
+
+      addBatch(data0.results);
+      setHProgress({ current: 1, total: totalBatches, symbolsCollected: collected.length });
+
+      for (let b = 1; b < totalBatches; b++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const res = await fetch(`/api/historical/collect?batch=${b}`);
+        if (!res.ok) throw new Error(`collect batch ${b} failed: ${res.status}`);
+        const data = await res.json() as HCollectResponse;
+        addBatch(data.results);
+        setHProgress({ current: b + 1, total: totalBatches, symbolsCollected: collected.length });
+      }
+
+      // BTC benchmark candles
+      const btcRes  = await fetch("/api/historical/collect?symbol=BTC_USDT");
+      const btcData = await btcRes.json() as { results: Array<{ candles: HRawCandle[] }> };
+      const btcCandles = (btcData.results?.[0]?.candles ?? []).map(c => ({
+        time: c.time, high: c.high, low: c.low, close: c.close, volume: c.volume,
+      }));
+
+      setHStatus("analyzing");
+      const analyzeRes = await fetch("/api/historical/analyze", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ symbols: collected, btcCandles }),
+      });
+      if (!analyzeRes.ok) throw new Error(`analyze failed: ${analyzeRes.status}`);
+      const analyzeData = await analyzeRes.json() as HAnalyzeResult;
+      setHResult(analyzeData);
+      setHStatus("done");
+    } catch (e) {
+      setHError(e instanceof Error ? e.message : String(e));
+      setHStatus("error");
+    } finally {
+      runningRef.current = false;
+    }
+  }
+
+  const isRunning = hStatus === "collecting" || hStatus === "analyzing";
+  const barPct    = hStatus === "analyzing"
+    ? 98
+    : hProgress.total > 0 ? (hProgress.current / hProgress.total) * 100 : 0;
+
+  const calcPF = (wr: number) =>
+    wr >= 1 ? "∞" : wr <= 0 ? "0.00" : ((wr * 10) / ((1 - wr) * 8)).toFixed(2);
+  const fmtTrend = (v: number | null) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+
+  return (
+    <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-1">
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <button
+          onClick={runAnalysis}
+          disabled={isRunning}
+          className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors whitespace-nowrap ${
+            isRunning
+              ? "bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-200 dark:border-gray-600 cursor-not-allowed"
+              : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700 hover:bg-emerald-100"
+          }`}
+        >
+          📊 過去90日パターン分析
+        </button>
+        {hStatus === "done" && hResult && (
+          <span className="text-[10px] text-gray-500">
+            {hResult.summary.symbolsProcessed}銘柄 · {hResult.summary.totalTrades}トレード · {(hResult.summary.processingTimeMs / 1000).toFixed(1)}s
+          </span>
+        )}
+      </div>
+
+      {isRunning && (
+        <div className="mb-3 space-y-1.5">
+          <div className="text-xs text-gray-600 dark:text-gray-400">
+            {hStatus === "collecting"
+              ? `${hProgress.current}/${hProgress.total} バッチ完了 (${hProgress.symbolsCollected}銘柄収集済み)`
+              : "📊 パターン分析中..."}
+          </div>
+          <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+              style={{ width: `${barPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {hStatus === "error" && (
+        <div className="flex items-center gap-2 mb-2 p-2 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
+          <span className="text-xs text-red-600 dark:text-red-400 flex-1 break-all">{hError}</span>
+          <button
+            onClick={runAnalysis}
+            className="text-xs px-2 py-1 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded text-red-600 dark:text-red-400 hover:bg-red-50 whitespace-nowrap"
+          >
+            リトライ
+          </button>
+        </div>
+      )}
+
+      {hStatus === "done" && hResult && (
+        hResult.patterns.length === 0
+          ? <p className="text-xs text-gray-400">有効なパターンが見つかりませんでした（サンプル5件以上なし）</p>
+          : (
+            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+              <table className="w-full text-xs min-w-[640px]">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 text-[10px]">
+                    <th className="px-2 py-1.5 text-center">#</th>
+                    <th className="px-2 py-1.5 text-left">パターン名</th>
+                    <th className="px-2 py-1.5 text-right">勝率</th>
+                    <th className="px-2 py-1.5 text-right">avg Ret</th>
+                    <th className="px-2 py-1.5 text-right">PF</th>
+                    <th className="px-2 py-1.5 text-right">n</th>
+                    <th className="px-2 py-1.5 text-right">BTC↑</th>
+                    <th className="px-2 py-1.5 text-right">BTC→</th>
+                    <th className="px-2 py-1.5 text-right">BTC↓</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hResult.patterns.map((p, idx) => {
+                    const isTop8 = hResult.summary.top8.includes(p.patternId);
+                    return (
+                      <tr
+                        key={p.patternId}
+                        className={`border-b border-gray-100 dark:border-gray-700 last:border-0 ${isTop8 ? "bg-emerald-500/10" : ""}`}
+                      >
+                        <td className="px-2 py-1.5 text-center text-gray-400 font-mono text-[10px]">{idx + 1}</td>
+                        <td className="px-2 py-1.5">
+                          <span className="text-[9px] text-gray-400 font-mono mr-1">{p.patternId}</span>
+                          <span className="font-medium text-gray-700 dark:text-gray-300">{p.label}</span>
+                        </td>
+                        <td className={`px-2 py-1.5 text-right font-bold ${p.winRate >= 0.6 ? "text-green-700 dark:text-green-400" : p.winRate >= 0.4 ? "text-yellow-600" : "text-red-600"}`}>
+                          {(p.winRate * 100).toFixed(1)}%
+                        </td>
+                        <td className={`px-2 py-1.5 text-right font-mono ${p.avgPnlPct >= 0 ? "text-green-600" : "text-red-500"}`}>
+                          {p.avgPnlPct >= 0 ? "+" : ""}{p.avgPnlPct.toFixed(1)}%
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">
+                          {calcPF(p.winRate)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right text-gray-500">{p.sampleSize}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-blue-500 dark:text-blue-400">{fmtTrend(p.winRateByBtcTrend.up)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmtTrend(p.winRateByBtcTrend.flat)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-orange-500 dark:text-orange-400">{fmtTrend(p.winRateByBtcTrend.down)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+      )}
     </div>
   );
 }
@@ -1033,6 +1245,9 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                   </div>
                 );
               })()}
+
+              {/* 過去データ分析 */}
+              <HistoricalAnalysisSection />
 
               {/* Actions */}
               <div className="flex gap-2 pt-1">
