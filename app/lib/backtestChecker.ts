@@ -129,6 +129,9 @@ export async function checkAndUpdateRecords(candidates: ShortCandidate[]): Promi
   // Prefer direct API prices for accuracy; fall back to scan prices
   const apiPrices = await fetchPricesFromAPI(trackableRecords.map(r => r.symbol));
 
+  const frMap = new Map(
+    candidates.filter(c => c.fundingRate != null).map(c => [c.symbol, c.fundingRate!]),
+  );
   let changed = false;
   const now = Date.now();
   for (const record of records) {
@@ -156,6 +159,12 @@ export async function checkAndUpdateRecords(candidates: ShortCandidate[]): Promi
     const pnlPct = ((record.entryPrice - currentPrice) / record.entryPrice) * 100;
     record.currentPrice  = currentPrice;
     record.lastCheckedAt = now;
+    const fr = frMap.get(record.symbol);
+    if (fr != null) {
+      record.frCumulativeCost = (record.frCumulativeCost ?? 0) + Math.abs(fr) * 100;
+      record.frCheckCount = (record.frCheckCount ?? 0) + 1;
+      record.lastFundingRate = fr;
+    }
     record.maxProfit   = Math.max(record.maxProfit   ?? 0, pnlPct);
     record.maxDrawdown = Math.min(record.maxDrawdown ?? 0, pnlPct);
     if (currentPrice <= record.tp1) record.reachedTP1 = true;
@@ -166,6 +175,10 @@ export async function checkAndUpdateRecords(candidates: ShortCandidate[]): Promi
     applyPriceCheck(record, currentPrice, priceSource);
 
     if (record.status !== "active" && !isPending(record.status)) {
+      if (["tp1_hit", "tp2_hit", "tp3_hit", "sl_hit"].includes(record.status) && record.resolvedPrice != null && record.adjustedPnlPct == null) {
+        const rawPnl = ((record.entryPrice - record.resolvedPrice) / record.entryPrice) * 100;
+        record.adjustedPnlPct = rawPnl - (record.frCumulativeCost ?? 0);
+      }
       console.log(`[backtest] ${record.symbol} resolved as ${record.status} (${priceSource})`);
     }
   }
@@ -210,6 +223,13 @@ interface BadgeEntry {
   expiryDays?: number;
 }
 
+function estimateSlippage(vol24h: number): number {
+  if (vol24h < 50_000)   return 5.0;
+  if (vol24h < 200_000)  return 2.0;
+  if (vol24h < 1_000_000) return 0.5;
+  return 0.1;
+}
+
 // Step 2: record new candidates with score >= threshold
 export function recordNewCandidates(
   candidates: ShortCandidate[],
@@ -222,10 +242,13 @@ export function recordNewCandidates(
   const activeSymbols = new Set(
     records.filter(r => r.status === "active" || isPending(r.status)).map(r => r.symbol),
   );
-  const recentCutoff = Date.now() - 24 * 60 * 60 * 1000;
-  const recentSymbols = new Set(records.filter(r => r.recordedAt >= recentCutoff).map(r => r.symbol));
+  const cooldownCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recentSymbols = new Set(records.filter(r => r.recordedAt >= cooldownCutoff).map(r => r.symbol));
+  const recentlyResolved = new Set(
+    records.filter(r => r.resolvedAt != null && r.resolvedAt >= cooldownCutoff).map(r => r.symbol),
+  );
   const slHitSymbols = new Set(
-    records.filter(r => r.status === "sl_hit" && r.resolvedAt != null && r.resolvedAt >= recentCutoff).map(r => r.symbol),
+    records.filter(r => r.status === "sl_hit" && r.resolvedAt != null && r.resolvedAt >= cooldownCutoff).map(r => r.symbol),
   );
   const now = Date.now();
 
@@ -234,6 +257,7 @@ export function recordNewCandidates(
       if (c.tradeSetup === null) return false;
       if (activeSymbols.has(c.symbol)) return false;
       if (recentSymbols.has(c.symbol)) return false;
+      if (recentlyResolved.has(c.symbol)) return false;
       if (slHitSymbols.has(c.symbol)) return false;
       if (isExcessivePump(c)) return false;
       switch (preset) {
@@ -307,6 +331,13 @@ export function recordNewCandidates(
         version: SCORING_VERSION,
         newsContext: c.newsContext,
         liquidityInfo: c.liquidityInfo,
+        estimatedSlippage: estimateSlippage(c.volume24h),
+        entrySpread: c.liquidityInfo?.spread ?? undefined,
+        isNewListing: c.listedDaysAgo <= 30,
+        listedDaysAgo: c.listedDaysAgo,
+        pumpFromListingPct: (c.initialPrice && c.initialPrice > 0 && c.ath14d > 0)
+          ? ((c.ath14d - c.initialPrice) / c.initialPrice) * 100
+          : undefined,
         ...(() => {
           const b = badgesMap?.get(c.symbol);
           if (!b || !b.strategyBadges?.length) return {};
@@ -325,6 +356,53 @@ export function recordNewCandidates(
   }
 
   return newRecords;
+}
+
+// Apply live price + FR updates from /api/backtest-check response
+export function applyApiUpdates(
+  updates: { symbol: string; price: number; fundingRate: number | null }[],
+): boolean {
+  if (updates.length === 0) return false;
+  const records = getRecords();
+  const updateMap = new Map(updates.map(u => [u.symbol, u]));
+  let changed = false;
+  const now = Date.now();
+
+  for (const record of records) {
+    if (record.status !== "active" && !isPending(record.status)) continue;
+    const update = updateMap.get(record.symbol);
+    if (!update) continue;
+
+    const { price, fundingRate } = update;
+    const pnlPct = ((record.entryPrice - price) / record.entryPrice) * 100;
+    record.currentPrice  = price;
+    record.lastCheckedAt = now;
+
+    if (fundingRate != null) {
+      record.frCumulativeCost = (record.frCumulativeCost ?? 0) + Math.abs(fundingRate) * 100;
+      record.frCheckCount     = (record.frCheckCount ?? 0) + 1;
+      record.lastFundingRate  = fundingRate;
+    }
+
+    record.maxProfit   = Math.max(record.maxProfit   ?? 0, pnlPct);
+    record.maxDrawdown = Math.min(record.maxDrawdown ?? 0, pnlPct);
+    if (price <= record.tp1) record.reachedTP1 = true;
+    if (price <= record.tp2) record.reachedTP2 = true;
+    if (price <= record.tp3) record.reachedTP3 = true;
+    changed = true;
+
+    applyPriceCheck(record, price, "direct_api");
+
+    if (record.status !== "active" && !isPending(record.status)) {
+      if (["tp1_hit", "tp2_hit", "tp3_hit", "sl_hit"].includes(record.status) && record.resolvedPrice != null && record.adjustedPnlPct == null) {
+        const rawPnl = ((record.entryPrice - record.resolvedPrice) / record.entryPrice) * 100;
+        record.adjustedPnlPct = rawPnl - (record.frCumulativeCost ?? 0);
+      }
+    }
+  }
+
+  if (changed) saveRecords(records);
+  return changed;
 }
 
 // Step 2b: patch CG-derived scores onto recently recorded backtest records

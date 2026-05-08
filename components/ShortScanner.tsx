@@ -9,7 +9,7 @@ import type { DiffAlert } from "@/app/lib/snapshotDiff";
 import { fetchCoinGeckoData, calcFuturesHeatScore, calcSnsHeatScore, calcMcFdvScore } from "@/app/lib/coinGeckoClient";
 import type { CgMarketData } from "@/app/lib/coinGeckoClient";
 import MarketEnvironmentPanel from "@/components/MarketEnvironmentPanel";
-import { checkAndUpdateRecords, recordNewCandidates, recordNewCandidatesWithStrategy, patchBacktestCgData, expireOldRecords } from "@/app/lib/backtestChecker";
+import { checkAndUpdateRecords, recordNewCandidates, recordNewCandidatesWithStrategy, patchBacktestCgData, expireOldRecords, applyApiUpdates } from "@/app/lib/backtestChecker";
 import type { ExtendedCandidateLike } from "@/app/lib/backtestChecker";
 import { detectBadges } from "@/app/lib/badgeDetector";
 import { STRATEGY_BADGES } from "@/app/lib/strategyBadges";
@@ -48,7 +48,7 @@ const MEXC_REG_URL = MEXC_REF
 // ─── Score thresholds ────────────────────────────────────────────────────────
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 38 : 32;
+const DISPLAY_MAX = HAS_CG ? 43 : 37;
 // CG連携時はmax38ptの約35%=13pt、なし時はmax32ptの約35%=11pt
 const RECOMMEND_THRESHOLD = HAS_CG ? 13 : 11;
 
@@ -289,6 +289,10 @@ const T = {
     tpVirtualStrategy: "💡 仮想戦略: 全TP1利確の場合",
     tpOrderInvertedLabel: "TP順序異常",
     tpExpectancyPerTrade: "期待値 / トレード",
+    nlBonus: "🆕 新規上場ボーナス",
+    nlAge: "上場日数",
+    nlPump: "初動ポンプ",
+    nlDecay: "出来高減衰",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -518,6 +522,10 @@ const T = {
     tpVirtualStrategy: "💡 Virtual: TP1-only Strategy",
     tpOrderInvertedLabel: "TP Order Inverted",
     tpExpectancyPerTrade: "Expectancy / Trade",
+    nlBonus: "🆕 New Listing Bonus",
+    nlAge: "Listing Age",
+    nlPump: "Initial Pump",
+    nlDecay: "Volume Decay",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -541,6 +549,44 @@ interface ExtendedCandidate extends ShortCandidate {
   strategyBadges: StrategyBadgeId[];
   convictionLevel: ConvictionLevel;
   expiryDays: number | undefined;
+  newListingBonus: number;
+  newListingBreakdown: {
+    listingAgeBonus: number;
+    pumpFromListingBonus: number;
+    volumeDecayBonus: number;
+  } | null;
+}
+
+function calcNewListingBonus(c: ShortCandidate): {
+  bonus: number;
+  breakdown: { listingAgeBonus: number; pumpFromListingBonus: number; volumeDecayBonus: number } | null;
+} {
+  if (c.listedDaysAgo > 30) return { bonus: 0, breakdown: null };
+
+  // -1〜+2: エントリー最適タイミング
+  let listingAgeBonus: number;
+  if (c.listedDaysAgo <= 3) listingAgeBonus = -1;
+  else if (c.listedDaysAgo <= 7) listingAgeBonus = 1;
+  else if (c.listedDaysAgo <= 14) listingAgeBonus = 2;
+  else listingAgeBonus = 1;
+
+  // 0〜+2: 初値からどれだけポンプしたか
+  let pumpFromListingBonus = 0;
+  if (c.initialPrice && c.initialPrice > 0 && c.ath14d > 0) {
+    const pumpMultiple = c.ath14d / c.initialPrice;
+    if (pumpMultiple >= 10) pumpFromListingBonus = 2;
+    else if (pumpMultiple >= 5) pumpFromListingBonus = 1;
+  }
+
+  // 0〜+1: 出来高減衰（ピークから80%以上減衰）
+  let volumeDecayBonus = 0;
+  if (c.volumeChangeRatio < 0.2) volumeDecayBonus = 1;
+
+  const bonus = listingAgeBonus + pumpFromListingBonus + volumeDecayBonus;
+  return {
+    bonus,
+    breakdown: { listingAgeBonus, pumpFromListingBonus, volumeDecayBonus },
+  };
 }
 
 const BADGE_CAT_CLS: Record<string, string> = {
@@ -913,6 +959,24 @@ function ScoreDetail({ c, snapshots, alerts, t, lang, watchlistSet, onWatchlistT
             );
           })()}
         </div>
+
+        {/* New Listing Bonus */}
+        {c.newListingBreakdown && (
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <p className="text-[10px] font-semibold text-emerald-700 mb-1">{t.nlBonus}: {c.newListingBonus > 0 ? "+" : ""}{c.newListingBonus}</p>
+            <div className="grid grid-cols-3 gap-2 text-[10px]">
+              <div className={`rounded px-1.5 py-0.5 ${c.newListingBreakdown.listingAgeBonus < 0 ? "bg-red-50 text-red-600" : c.newListingBreakdown.listingAgeBonus > 0 ? "bg-emerald-50 text-emerald-700" : "bg-gray-50 text-gray-500"}`}>
+                {t.nlAge} {c.listedDaysAgo}d: {c.newListingBreakdown.listingAgeBonus > 0 ? "+" : ""}{c.newListingBreakdown.listingAgeBonus}
+              </div>
+              <div className={`rounded px-1.5 py-0.5 ${c.newListingBreakdown.pumpFromListingBonus > 0 ? "bg-emerald-50 text-emerald-700" : "bg-gray-50 text-gray-500"}`}>
+                {t.nlPump}: +{c.newListingBreakdown.pumpFromListingBonus}
+              </div>
+              <div className={`rounded px-1.5 py-0.5 ${c.newListingBreakdown.volumeDecayBonus > 0 ? "bg-emerald-50 text-emerald-700" : "bg-gray-50 text-gray-500"}`}>
+                {t.nlDecay}: +{c.newListingBreakdown.volumeDecayBonus}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Data grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-600 mb-2">
@@ -2794,6 +2858,31 @@ export default function ShortScanner() {
   useEffect(() => { setSnapshots(getSnapshots()); }, []);
   useEffect(() => { setBtRecords(getRecords()); }, []);
 
+  // 10-minute background price + FR update for active/pending backtest records
+  useEffect(() => {
+    const run = async () => {
+      const records = getRecords();
+      const activeSymbols = records
+        .filter(r => r.status === "active" || r.status.startsWith("pending_"))
+        .map(r => r.symbol);
+      if (activeSymbols.length === 0) return;
+      try {
+        const res = await fetch("/api/backtest-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbols: activeSymbols }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return;
+        const { updates } = await res.json();
+        const changed = applyApiUpdates(updates);
+        if (changed) setBtRecords(getRecords());
+      } catch { /* network error — skip */ }
+    };
+    const id = setInterval(run, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   useEffect(() => {
     fetch("/api/market-env")
       .then(r => r.json())
@@ -3118,7 +3207,8 @@ export default function ShortScanner() {
       const mcFdvPenalty = mcFdvScore >= 2 ? 2 : 0;
       // Risk-OFF 環境ボーナス (+1pt)
       const riskOffBonus = marketRegime?.regime === "RISK_OFF" ? 1 : 0;
-      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore + oiChangeScore - mcFdvPenalty + riskOffBonus;
+      const { bonus: newListingBonus, breakdown: newListingBreakdown } = calcNewListingBonus(c);
+      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore + oiChangeScore - mcFdvPenalty + riskOffBonus + newListingBonus;
       const phase = detectPhase(c.fundingRate, null, null, c.priceChange24h);
       const { badges: strategyBadges, convictionLevel, expiryDays } = detectBadges({
         candidate: c,
@@ -3138,6 +3228,7 @@ export default function ShortScanner() {
         oiChangePct, oiChangeScore, mcFdvPenalty, riskOffBonus,
         displayScore, phase,
         strategyBadges, convictionLevel, expiryDays,
+        newListingBonus, newListingBreakdown,
       };
     });
     const sorted = mapped.sort((a, b) => {
@@ -4084,6 +4175,11 @@ export default function ShortScanner() {
                         {/* 上場 */}
                         <td className="px-1 py-1 text-right text-gray-500 text-xs hidden md:table-cell">
                           {c.listedDaysAgo}d
+                          {c.newListingBonus !== 0 && (
+                            <span className={`ml-1 text-[9px] font-bold ${c.newListingBonus > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                              {c.newListingBonus > 0 ? `+${c.newListingBonus}` : c.newListingBonus}
+                            </span>
+                          )}
                         </td>
 
                         {/* BTC相関 */}

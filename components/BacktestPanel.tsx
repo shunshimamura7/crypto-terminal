@@ -93,6 +93,8 @@ function exportBtCSV(records: BacktestRecord[]): void {
     "dropScore","volumeDryScore","frScore","freshnessScore","oiScore","oiChangeScore","trendScore","pumpScore","btcCorrScore","patternScore","rsiScore","exclusivityScore","frBonus","futuresHeatScore","snsHeatScore","mcFdvScore",
     "btcPrice","ethPrice","fearGreed","marketPhase","btcChange24h","categories",
     "unlockDays","unlockPercent","positiveNews","negativeNews","maxSafePosition","spread",
+    "frCumulativeCost","frCheckCount","adjustedPnlPct","estimatedSlippage","entrySpread",
+    "IsNewListing","ListedDaysAgo","PumpFromListingPct",
   ].join(",");
   const rows = records.map(r => {
     const days = Math.floor((Date.now() - r.recordedAt) / 86_400_000);
@@ -119,6 +121,10 @@ function exportBtCSV(records: BacktestRecord[]): void {
       r.unlockData?.daysUntil ?? "", r.unlockData?.percent ?? "",
       r.newsContext?.positiveCount ?? "", r.newsContext?.negativeCount ?? "",
       r.liquidityInfo?.maxSafePosition?.toFixed(0) ?? "", r.liquidityInfo?.spread?.toFixed(4) ?? "",
+      r.frCumulativeCost?.toFixed(4) ?? "", r.frCheckCount ?? "",
+      r.adjustedPnlPct?.toFixed(2) ?? "",
+      r.estimatedSlippage ?? "", r.entrySpread?.toFixed(4) ?? "",
+      r.isNewListing ?? "", r.listedDaysAgo ?? "", r.pumpFromListingPct?.toFixed(1) ?? "",
     ].join(",");
   });
   const blob = new Blob(["﻿" + [hdr, ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -964,6 +970,53 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                 </div>
               )}
 
+              {/* 新規上場 vs 既存銘柄 統計 */}
+              {(displayStats.newListingStats.total > 0 || displayStats.existingStats.total > 0) && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <p className="text-xs font-semibold text-gray-700 mb-2">🆕 新規上場 vs 既存銘柄</p>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-emerald-50 rounded-lg p-2">
+                      <p className="font-semibold text-emerald-700">新規上場 (≤30d)</p>
+                      <p className="text-gray-600">
+                        {displayStats.newListingStats.resolved}件決着 /
+                        勝率 <span className="font-bold text-emerald-700">{displayStats.newListingStats.winRate.toFixed(0)}%</span>
+                        ({displayStats.newListingStats.wins}W {displayStats.newListingStats.losses}L)
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="font-semibold text-gray-700">既存銘柄</p>
+                      <p className="text-gray-600">
+                        {displayStats.existingStats.resolved}件決着 /
+                        勝率 <span className="font-bold text-gray-700">{displayStats.existingStats.winRate.toFixed(0)}%</span>
+                        ({displayStats.existingStats.wins}W {displayStats.existingStats.losses}L)
+                      </p>
+                    </div>
+                  </div>
+
+                  {displayStats.newListingStats.resolved > 0 && (
+                    <div className="mt-2">
+                      <p className="text-[10px] font-semibold text-gray-500 mb-1">上場日数帯別</p>
+                      <div className="grid grid-cols-4 gap-1 text-[10px]">
+                        {(["0-3d", "4-7d", "8-14d", "15-30d"] as const).map(range => {
+                          const s = displayStats.newListingStats.byAge[range];
+                          if (!s) return null;
+                          const total = s.wins + s.losses;
+                          const isOptimal = range === "8-14d";
+                          return (
+                            <div key={range} className={`rounded px-1.5 py-1 text-center ${isOptimal ? "bg-emerald-100 border border-emerald-300" : "bg-gray-100"}`}>
+                              <div className={`font-bold ${isOptimal ? "text-emerald-700" : "text-gray-700"}`}>{range}</div>
+                              <div className="text-gray-600">
+                                {total > 0 ? `${s.winRate.toFixed(0)}% (${s.wins}W/${s.losses}L)` : "—"}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* バッジ別成績 */}
               <BadgeStatsSection records={tabRecords} />
 
@@ -1143,7 +1196,12 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                           const days = Math.floor((Date.now() - r.recordedAt) / 86_400_000);
                           return (
                             <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="px-2 py-1.5 font-mono font-bold text-gray-800">{r.symbol.replace("_USDT","")}</td>
+                              <td className="px-2 py-1.5 font-mono font-bold text-gray-800">
+                                {r.symbol.replace("_USDT","")}
+                                {r.isNewListing && (
+                                  <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200 font-semibold">🆕</span>
+                                )}
+                              </td>
                               <td className="px-2 py-1.5 text-center text-gray-600">{r.score}/{r.scoreMax}</td>
                               <td className="px-2 py-1.5 text-right text-gray-500">{fmtDate(r.recordedAt)}</td>
                               <td className="px-2 py-1.5 text-right font-mono text-gray-700">{fmtPrice(r.entryPrice)}</td>

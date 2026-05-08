@@ -118,6 +118,22 @@ export interface BacktestRecord {
   strategyBadges?: string[];
   convictionLevel?: ConvictionLevel;
   expiryDays?: number;
+
+  // ★ Phase 2: FR累積コスト
+  frCumulativeCost?: number;   // FR累積コスト（%単位、プラス=支払い）
+  frCheckCount?: number;       // FR取得回数
+  adjustedPnlPct?: number;     // FR考慮後PnL%（= rawPnl - frCumulativeCost）
+  lastFundingRate?: number;    // 最後に取得したFR
+
+  // ★ Phase 3: スリッページ推定 / 重複管理
+  estimatedSlippage?: number;  // 推定スリッページ（%）
+  entrySpread?: number;        // エントリー時スプレッド（liquidityInfo.spreadと別途保存）
+  cooldownFrom?: string;       // 冷却期間元レコードID（トレーサビリティ）
+
+  // ★ v2.1: 新規上場関連
+  isNewListing?: boolean;          // 記録時に listedDaysAgo <= 30 だったか
+  listedDaysAgo?: number;          // 記録時の上場経過日数
+  pumpFromListingPct?: number;     // 初値→ATH 上昇率% (initialPrice基準)
 }
 
 export function getRecords(): BacktestRecord[] {

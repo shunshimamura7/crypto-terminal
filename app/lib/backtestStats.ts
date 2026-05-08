@@ -47,6 +47,23 @@ export interface BacktestStats {
   tp1OnlyStrategy: { winRate: number; avgR: number; expectancy: number };
   // TP順序異常件数（TP1 < TP2 = ショートロジック異常、過去バグ可視化用）
   tpOrderInverted: number;
+
+  // 新規上場 vs 既存銘柄 統計
+  newListingStats: {
+    total: number;
+    resolved: number;
+    wins: number;
+    losses: number;
+    winRate: number;
+    byAge: Record<string, { wins: number; losses: number; winRate: number }>;
+  };
+  existingStats: {
+    total: number;
+    resolved: number;
+    wins: number;
+    losses: number;
+    winRate: number;
+  };
 }
 
 const SCORE_RANGES = ["8-9", "10-11", "12-13", "14-15", "16-17", "18-19", "20-21", "22-23"] as const;
@@ -214,6 +231,48 @@ export function calculateStats(
   // TP順序異常（TP1 < TP2 = ショートロジック異常）
   const tpOrderInverted = records.filter(r => r.tp1 < r.tp2).length;
 
+  // ── 新規上場 vs 既存 統計 ──
+  const newListingRecords = records.filter(r => r.isNewListing === true);
+  const existingRecords = records.filter(r => r.isNewListing !== true);
+
+  const nlResolved = newListingRecords.filter(r => r.status !== "active" && r.status !== "expired" && !isPending(r.status));
+  const nlWins = nlResolved.filter(r => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit");
+  const nlLosses = nlResolved.filter(r => r.status === "sl_hit");
+
+  const exResolved = existingRecords.filter(r => r.status !== "active" && r.status !== "expired" && !isPending(r.status));
+  const exWins = exResolved.filter(r => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit");
+  const exLosses = exResolved.filter(r => r.status === "sl_hit");
+
+  const NL_AGE_RANGES = ["0-3d", "4-7d", "8-14d", "15-30d"] as const;
+  const byAge: Record<string, { wins: number; losses: number; winRate: number }> = {};
+  for (const range of NL_AGE_RANGES) {
+    const [lo, hi] = range === "0-3d" ? [0, 3] : range === "4-7d" ? [4, 7] : range === "8-14d" ? [8, 14] : [15, 30];
+    const inRange = nlResolved.filter(r => {
+      const d = r.listedDaysAgo;
+      return d !== undefined && d >= lo && d <= hi;
+    });
+    const w = inRange.filter(r => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit").length;
+    const l = inRange.filter(r => r.status === "sl_hit").length;
+    byAge[range] = { wins: w, losses: l, winRate: (w + l) > 0 ? (w / (w + l)) * 100 : 0 };
+  }
+
+  const newListingStats = {
+    total: newListingRecords.length,
+    resolved: nlResolved.length,
+    wins: nlWins.length,
+    losses: nlLosses.length,
+    winRate: nlResolved.length > 0 ? (nlWins.length / nlResolved.length) * 100 : 0,
+    byAge,
+  };
+
+  const existingStats = {
+    total: existingRecords.length,
+    resolved: exResolved.length,
+    wins: exWins.length,
+    losses: exLosses.length,
+    winRate: exResolved.length > 0 ? (exWins.length / exResolved.length) * 100 : 0,
+  };
+
   return {
     totalRecords: records.length,
     resolved:  resolved.length,
@@ -254,5 +313,7 @@ export function calculateStats(
     tp3MedianPct,
     tp1OnlyStrategy: { winRate: tp1OnlyWinRate, avgR: tp1AvgRIfHit, expectancy: tp1OnlyExpectancy },
     tpOrderInverted,
+    newListingStats,
+    existingStats,
   };
 }
