@@ -249,7 +249,9 @@ const T = {
     autoCountdown: "次回スキャン",
     // 施策6: プリセット
     presetsLabel: "プリセット",
-    presetCollect: "📈 データ収集",
+    presetHighQuality: "厳選",
+    presetNewListing: "新規上場",
+    presetDataCollect: "データ収集",
     presetSave: "+ 保存",
     presetNamePrompt: "プリセット名を入力",
     presetDelConfirm: "このプリセットを削除しますか？",
@@ -483,7 +485,9 @@ const T = {
     autoOff: "OFF",
     autoCountdown: "Next scan",
     presetsLabel: "Presets",
-    presetCollect: "📈 Data Collect",
+    presetHighQuality: "High Quality",
+    presetNewListing: "New Listing",
+    presetDataCollect: "Data Collection",
     presetSave: "+ Save",
     presetNamePrompt: "Enter preset name",
     presetDelConfirm: "Delete this preset?",
@@ -2528,33 +2532,9 @@ interface FilterPreset {
   enableBtRecord?: boolean;
 }
 const DEFAULT_PRESETS: FilterPreset[] = [
-  {
-    name: "🎯 本番",
-    icon: "🎯",
-    description: "ATH30%下落+出来高枯渇のスイングショート。低レバ推奨",
-    minDrop: 30, maxVolRatio: 500, minVol24k: 30, maxDays: 9999, minOiK: 0,
-    filterSettledOnly: true,
-    sortBy: "displayScore",
-    summaryFilter: null,
-    minScore: 12,
-  },
-  {
-    name: "presetCollect",
-    icon: "📊",
-    minDrop: 30, maxVolRatio: 500, minVol24k: 30, maxDays: 9999, minOiK: 0,
-    sortBy: "displayScore",
-    summaryFilter: null,
-    filterSettledOnly: false,
-  },
-  {
-    name: "🆕 新規上場 (30d)",
-    icon: "🆕",
-    description: "上場30日以内のポンプ崩壊狙い。new30モード",
-    minDrop: 10, maxVolRatio: 150, minVol24k: 10, maxDays: 30, minOiK: 0,
-    sortBy: "displayScore",
-    summaryFilter: null,
-    isNew30: true,
-  },
+  { name: "presetHighQuality", icon: "🎯", minDrop: 40,  maxVolRatio: 50,  minVol24k: 200, maxDays: 365,  minOiK: 50 },
+  { name: "presetNewListing",  icon: "🆕", minDrop: 10,  maxVolRatio: 150, minVol24k: 10,  maxDays: 30,   minOiK: 0  },
+  { name: "presetDataCollect", icon: "💾", minDrop: 30,  maxVolRatio: 100, minVol24k: 50,  maxDays: 9999, minOiK: 0  },
 ];
 const CUSTOM_PRESETS_KEY = "shortScanPresets";
 function loadCustomPresets(): FilterPreset[] {
@@ -2564,11 +2544,6 @@ function saveCustomPresets(presets: FilterPreset[]) {
   localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(presets.slice(0, 5)));
 }
 
-const EN_NAMES: Record<string, string> = {
-  "🎯 本番": "🎯 Production",
-  "🆕 新規上場 (30d)": "🆕 New Listing (30d)",
-  "🔥 高レバ (5-10×)": "🔥 High Lev (5-10×)",
-};
 
 function FilterPresets({ t, lang, customPresets, onApply, onSaveCurrent, onDeleteCustom, activePreset }: {
   t: Translations;
@@ -2584,7 +2559,8 @@ function FilterPresets({ t, lang, customPresets, onApply, onSaveCurrent, onDelet
   };
 
   const presetLabel = (p: FilterPreset) => {
-    return lang === "en" ? (EN_NAMES[p.name] ?? p.name) : p.name;
+    const label = (t as Record<string, string>)[p.name] ?? p.name;
+    return `${p.icon} ${label}`;
   };
 
   return (
