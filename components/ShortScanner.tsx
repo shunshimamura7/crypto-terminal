@@ -2534,7 +2534,7 @@ interface FilterPreset {
 const DEFAULT_PRESETS: FilterPreset[] = [
   { name: "presetHighQuality", icon: "🎯", minDrop: 40,  maxVolRatio: 50,  minVol24k: 200, maxDays: 365,  minOiK: 50 },
   { name: "presetNewListing",  icon: "🆕", minDrop: 10,  maxVolRatio: 150, minVol24k: 10,  maxDays: 30,   minOiK: 0  },
-  { name: "presetDataCollect", icon: "💾", minDrop: 30,  maxVolRatio: 100, minVol24k: 50,  maxDays: 9999, minOiK: 0  },
+  { name: "presetDataCollect", icon: "💾", minDrop: 10,  maxVolRatio: 1000, minVol24k: 10,  maxDays: 9999, minOiK: 0  },
 ];
 const CUSTOM_PRESETS_KEY = "shortScanPresets";
 function loadCustomPresets(): FilterPreset[] {
