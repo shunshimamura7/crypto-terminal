@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import ShortScanner from "@/components/ShortScanner";
+import ListingHunter from "@/components/ListingHunter";
 
 const SCORING_ITEMS = [
   { label: "ATH下落",      pts: "3pt", color: "#ef4444" },
@@ -56,6 +57,7 @@ export default function ShortScanPage() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("bell:darkMode") === "true";
   });
+  const [activeTab, setActiveTab] = useState<"scanner" | "hunter">("scanner");
 
   useEffect(() => {
     if (darkMode) {
@@ -114,9 +116,41 @@ export default function ShortScanPage() {
         </div>
       </section>
 
-      {/* Scanner */}
+      {/* Tab switcher */}
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex">
+            <button
+              onClick={() => setActiveTab("scanner")}
+              className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${
+                activeTab === "scanner"
+                  ? "border-indigo-500 text-indigo-700 dark:text-indigo-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              }`}
+            >
+              🔍 スコア型スキャナー
+            </button>
+            <button
+              onClick={() => setActiveTab("hunter")}
+              className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${
+                activeTab === "hunter"
+                  ? "border-emerald-500 text-emerald-700 dark:text-emerald-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              }`}
+            >
+              🎯 22hハンター
+              <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
+                NEW
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
       <section className="max-w-7xl mx-auto px-4 py-6 md:py-8">
-        <ShortScanner />
+        {activeTab === "scanner" && <ShortScanner />}
+        {activeTab === "hunter" && <ListingHunter />}
       </section>
 
       {/* Disclaimer */}
