@@ -48,7 +48,7 @@ const MEXC_REG_URL = MEXC_REF
 // ─── Score thresholds ────────────────────────────────────────────────────────
 const CG_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY ?? "";
 const HAS_CG = CG_API_KEY.length > 0;
-const DISPLAY_MAX = HAS_CG ? 43 : 37;
+const DISPLAY_MAX = HAS_CG ? 45 : 39;
 // CG連携時はmax38ptの約35%=13pt、なし時はmax32ptの約35%=11pt
 const RECOMMEND_THRESHOLD = HAS_CG ? 13 : 11;
 
@@ -295,6 +295,7 @@ const T = {
     nlAge: "上場日数",
     nlPump: "初動ポンプ",
     nlDecay: "出来高減衰",
+    fgBonus: "市場環境ボーナス",
   },
   en: {
     title: "🎯 MEXC Short Scanner",
@@ -530,6 +531,7 @@ const T = {
     nlAge: "Listing Age",
     nlPump: "Initial Pump",
     nlDecay: "Volume Decay",
+    fgBonus: "Market Sentiment Bonus",
   },
 } as const;
 type Translations = typeof T.ja | typeof T.en;
@@ -559,6 +561,7 @@ interface ExtendedCandidate extends ShortCandidate {
     pumpFromListingBonus: number;
     volumeDecayBonus: number;
   } | null;
+  fearGreedBonus: number;
 }
 
 function calcNewListingBonus(c: ShortCandidate): {
@@ -591,6 +594,14 @@ function calcNewListingBonus(c: ShortCandidate): {
     bonus,
     breakdown: { listingAgeBonus, pumpFromListingBonus, volumeDecayBonus },
   };
+}
+
+function calcFearGreedBonus(fng: number | undefined): number {
+  if (fng === undefined) return 0;
+  if (fng >= 75) return 2;
+  if (fng >= 50) return 1;
+  if (fng >= 25) return 0;
+  return -1;
 }
 
 const BADGE_CAT_CLS: Record<string, string> = {
@@ -820,7 +831,7 @@ function LoadingProgress({ t, elapsed }: { t: Translations; elapsed: number }) {
 }
 
 // ─── Score Detail ─────────────────────────────────────────────────────────────
-function ScoreDetail({ c, snapshots, alerts, t, lang, watchlistSet, onWatchlistToggle }: { c: ExtendedCandidate; snapshots: ScanSnapshot[]; alerts: DiffAlert[]; t: Translations; lang: Lang; watchlistSet: Set<string>; onWatchlistToggle: (sym: string) => void }) {
+function ScoreDetail({ c, snapshots, alerts, t, lang, watchlistSet, onWatchlistToggle, fng }: { c: ExtendedCandidate; snapshots: ScanSnapshot[]; alerts: DiffAlert[]; t: Translations; lang: Lang; watchlistSet: Set<string>; onWatchlistToggle: (sym: string) => void; fng?: number | null }) {
   const diff = getDiffSummary(c.symbol, c, snapshots);
   const symAlerts = alerts.filter(a => a.symbol === c.symbol);
   const colSpan = 16;
@@ -981,6 +992,20 @@ function ScoreDetail({ c, snapshots, alerts, t, lang, watchlistSet, onWatchlistT
             </div>
           </div>
         )}
+
+        {/* Fear & Greed Bonus */}
+        {(() => {
+          if (fng == null) return null;
+          const color = c.fearGreedBonus >= 2 ? "text-emerald-700" : c.fearGreedBonus === 1 ? "text-emerald-600" : c.fearGreedBonus < 0 ? "text-red-600" : "text-gray-500";
+          const label = c.fearGreedBonus >= 2 ? "Extreme Greed" : c.fearGreedBonus === 1 ? "Greed" : c.fearGreedBonus < 0 ? "Extreme Fear" : "Fear";
+          return (
+            <div className="mt-2 pt-2 border-t border-gray-100">
+              <p className={`text-[10px] font-semibold ${color}`}>
+                📊 {t.fgBonus}: {c.fearGreedBonus > 0 ? "+" : ""}{c.fearGreedBonus} (F&G: {fng} {label})
+              </p>
+            </div>
+          );
+        })()}
 
         {/* Data grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-600 mb-2">
@@ -1809,7 +1834,7 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
 }
 
 // ─── Mobile Card List ────────────────────────────────────────────────────────
-function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts, t, lang, watchlistSet, onWatchlistToggle, marketBtcChange, slHitSet }: {
+function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts, t, lang, watchlistSet, onWatchlistToggle, marketBtcChange, slHitSet, fng }: {
   candidates: ExtendedCandidate[];
   expandedRows: Set<string>;
   toggleRow: (sym: string) => void;
@@ -1821,6 +1846,7 @@ function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts
   onWatchlistToggle: (sym: string) => void;
   marketBtcChange?: number;
   slHitSet?: Set<string>;
+  fng?: number | null;
 }) {
   if (candidates.length === 0) return null;
   return (
@@ -1914,7 +1940,7 @@ function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts
             )}
 
             {/* 展開: スコア内訳 */}
-            {isOpen && <ScoreDetail c={c} snapshots={snapshots} alerts={alerts} t={t} lang={lang} watchlistSet={watchlistSet} onWatchlistToggle={onWatchlistToggle} />}
+            {isOpen && <ScoreDetail c={c} snapshots={snapshots} alerts={alerts} t={t} lang={lang} watchlistSet={watchlistSet} onWatchlistToggle={onWatchlistToggle} fng={fng} />}
           </div>
         );
       })}
@@ -3184,7 +3210,8 @@ export default function ShortScanner() {
       // Risk-OFF 環境ボーナス (+1pt)
       const riskOffBonus = marketRegime?.regime === "RISK_OFF" ? 1 : 0;
       const { bonus: newListingBonus, breakdown: newListingBreakdown } = calcNewListingBonus(c);
-      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore + oiChangeScore - mcFdvPenalty + riskOffBonus + newListingBonus;
+      const fearGreedBonus = calcFearGreedBonus(marketRegime?.fng ?? undefined);
+      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore + oiChangeScore - mcFdvPenalty + riskOffBonus + newListingBonus + fearGreedBonus;
       const phase = detectPhase(c.fundingRate, null, null, c.priceChange24h);
       const { badges: strategyBadges, convictionLevel, expiryDays } = detectBadges({
         candidate: c,
@@ -3205,6 +3232,7 @@ export default function ShortScanner() {
         displayScore, phase,
         strategyBadges, convictionLevel, expiryDays,
         newListingBonus, newListingBreakdown,
+        fearGreedBonus,
       };
     });
     const sorted = mapped.sort((a, b) => {
@@ -3864,6 +3892,7 @@ export default function ShortScanner() {
                 onWatchlistToggle={toggleWatchlist}
                 marketBtcChange={marketBtcChange}
                 slHitSet={recentSlHitSymbols}
+                fng={marketRegime?.fng}
               />
             </div>
           )}
@@ -4201,7 +4230,7 @@ export default function ShortScanner() {
                           </div>
                         </td>
                       </tr>
-                      {isOpen && <ScoreDetail c={c} snapshots={snapshots} alerts={alerts} t={t} lang={lang} watchlistSet={watchlistSet} onWatchlistToggle={toggleWatchlist} />}
+                      {isOpen && <ScoreDetail c={c} snapshots={snapshots} alerts={alerts} t={t} lang={lang} watchlistSet={watchlistSet} onWatchlistToggle={toggleWatchlist} fng={marketRegime?.fng} />}
                     </React.Fragment>
                   );
                 })}
