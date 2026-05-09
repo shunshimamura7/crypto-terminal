@@ -1,0 +1,3310 @@
+{
+  "fetchedAt": "2026-05-09T10:35:12.597Z",
+  "fetchedAtUnix": 1778322912597,
+  "lookbackDays": 365,
+  "totalContracts": 888,
+  "totalUsdtPairs": 776,
+  "totalRecent": 330,
+  "listings": [
+    {
+      "symbol": "MAXXING_USDT",
+      "baseCoin": "MAXXING",
+      "createTime": 1778317173000,
+      "createTimeISO": "2026-05-09T08:59:33.000Z",
+      "listedDaysAgo": 0,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "GMESTOCK_USDT",
+      "baseCoin": "GMESTOCK",
+      "createTime": 1778233987000,
+      "createTimeISO": "2026-05-08T09:53:07.000Z",
+      "listedDaysAgo": 1,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "DRAM_USDT",
+      "baseCoin": "DRAM",
+      "createTime": 1778233886000,
+      "createTimeISO": "2026-05-08T09:51:26.000Z",
+      "listedDaysAgo": 1,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "SHARE_USDT",
+      "baseCoin": "SHARE",
+      "createTime": 1778214351000,
+      "createTimeISO": "2026-05-08T04:25:51.000Z",
+      "listedDaysAgo": 1,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "KAIO_USDT",
+      "baseCoin": "KAIO",
+      "createTime": 1778065307000,
+      "createTimeISO": "2026-05-06T11:01:47.000Z",
+      "listedDaysAgo": 2,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "USARSTOCK_USDT",
+      "baseCoin": "USARSTOCK",
+      "createTime": 1778059505000,
+      "createTimeISO": "2026-05-06T09:25:05.000Z",
+      "listedDaysAgo": 3,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "UTYA_USDT",
+      "baseCoin": "UTYA",
+      "createTime": 1778055497000,
+      "createTimeISO": "2026-05-06T08:18:17.000Z",
+      "listedDaysAgo": 3,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "LFI_USDT",
+      "baseCoin": "LFI",
+      "createTime": 1778055462000,
+      "createTimeISO": "2026-05-06T08:17:42.000Z",
+      "listedDaysAgo": 3,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "REDO_USDT",
+      "baseCoin": "REDO",
+      "createTime": 1778055396000,
+      "createTimeISO": "2026-05-06T08:16:36.000Z",
+      "listedDaysAgo": 3,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "BILL_USDT",
+      "baseCoin": "BILL",
+      "createTime": 1777879153000,
+      "createTimeISO": "2026-05-04T07:19:13.000Z",
+      "listedDaysAgo": 5,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "SATO_USDT",
+      "baseCoin": "SATO",
+      "createTime": 1777878787000,
+      "createTimeISO": "2026-05-04T07:13:07.000Z",
+      "listedDaysAgo": 5,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "XIONGMAOTOU_USDT",
+      "baseCoin": "XIONGMAOTOU",
+      "createTime": 1777870422000,
+      "createTimeISO": "2026-05-04T04:53:42.000Z",
+      "listedDaysAgo": 5,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "SBUXSTOCK_USDT",
+      "baseCoin": "SBUXSTOCK",
+      "createTime": 1777561097000,
+      "createTimeISO": "2026-04-30T14:58:17.000Z",
+      "listedDaysAgo": 8,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LITESTOCK_USDT",
+      "baseCoin": "LITESTOCK",
+      "createTime": 1777561002000,
+      "createTimeISO": "2026-04-30T14:56:42.000Z",
+      "listedDaysAgo": 8,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AIGENSYN_USDT",
+      "baseCoin": "AIGENSYN",
+      "createTime": 1777465879000,
+      "createTimeISO": "2026-04-29T12:31:19.000Z",
+      "listedDaysAgo": 9,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PHAROS_USDT",
+      "baseCoin": "PHAROS",
+      "createTime": 1777386114000,
+      "createTimeISO": "2026-04-28T14:21:54.000Z",
+      "listedDaysAgo": 10,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SOXX_USDT",
+      "baseCoin": "SOXX",
+      "createTime": 1777357628000,
+      "createTimeISO": "2026-04-28T06:27:08.000Z",
+      "listedDaysAgo": 11,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TXNSTOCK_USDT",
+      "baseCoin": "TXNSTOCK",
+      "createTime": 1777357565000,
+      "createTimeISO": "2026-04-28T06:26:05.000Z",
+      "listedDaysAgo": 11,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NOCK_USDT",
+      "baseCoin": "NOCK",
+      "createTime": 1777282963000,
+      "createTimeISO": "2026-04-27T09:42:43.000Z",
+      "listedDaysAgo": 12,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ASTEROID1_USDT",
+      "baseCoin": "ASTEROID1",
+      "createTime": 1777195259000,
+      "createTimeISO": "2026-04-26T09:20:59.000Z",
+      "listedDaysAgo": 13,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "UPEG_USDT",
+      "baseCoin": "UPEG",
+      "createTime": 1777195204000,
+      "createTimeISO": "2026-04-26T09:20:04.000Z",
+      "listedDaysAgo": 13,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BLEND_USDT",
+      "baseCoin": "BLEND",
+      "createTime": 1777016933000,
+      "createTimeISO": "2026-04-24T07:48:53.000Z",
+      "listedDaysAgo": 15,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "JP225_USDT",
+      "baseCoin": "JP225",
+      "createTime": 1776927340000,
+      "createTimeISO": "2026-04-23T06:55:40.000Z",
+      "listedDaysAgo": 16,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MAGAALIENS_USDT",
+      "baseCoin": "MAGAALIENS",
+      "createTime": 1776853847000,
+      "createTimeISO": "2026-04-22T10:30:47.000Z",
+      "listedDaysAgo": 17,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "FLORK_USDT",
+      "baseCoin": "FLORK",
+      "createTime": 1776838029000,
+      "createTimeISO": "2026-04-22T06:07:09.000Z",
+      "listedDaysAgo": 17,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NAT_USDT",
+      "baseCoin": "NAT",
+      "createTime": 1776777343000,
+      "createTimeISO": "2026-04-21T13:15:43.000Z",
+      "listedDaysAgo": 17,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PEACE_USDT",
+      "baseCoin": "PEACE",
+      "createTime": 1776750824000,
+      "createTimeISO": "2026-04-21T05:53:44.000Z",
+      "listedDaysAgo": 18,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "OPG_USDT",
+      "baseCoin": "OPG",
+      "createTime": 1776696667000,
+      "createTimeISO": "2026-04-20T14:51:07.000Z",
+      "listedDaysAgo": 18,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ASTEROID_USDT",
+      "baseCoin": "ASTEROID",
+      "createTime": 1776432667000,
+      "createTimeISO": "2026-04-17T13:31:07.000Z",
+      "listedDaysAgo": 21,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ALBSTOCK_USDT",
+      "baseCoin": "ALBSTOCK",
+      "createTime": 1776422389000,
+      "createTimeISO": "2026-04-17T10:39:49.000Z",
+      "listedDaysAgo": 21,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ABTSTOCK_USDT",
+      "baseCoin": "ABTSTOCK",
+      "createTime": 1776422332000,
+      "createTimeISO": "2026-04-17T10:38:52.000Z",
+      "listedDaysAgo": 21,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BELIEF_USDT",
+      "baseCoin": "BELIEF",
+      "createTime": 1776401765000,
+      "createTimeISO": "2026-04-17T04:56:05.000Z",
+      "listedDaysAgo": 22,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CHIP_USDT",
+      "baseCoin": "CHIP",
+      "createTime": 1776323151000,
+      "createTimeISO": "2026-04-16T07:05:51.000Z",
+      "listedDaysAgo": 23,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "WFCSTOCK_USDT",
+      "baseCoin": "WFCSTOCK",
+      "createTime": 1776318596000,
+      "createTimeISO": "2026-04-16T05:49:56.000Z",
+      "listedDaysAgo": 23,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ST_USDT",
+      "baseCoin": "ST",
+      "createTime": 1776263568000,
+      "createTimeISO": "2026-04-15T14:32:48.000Z",
+      "listedDaysAgo": 23,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "IONQSTOCK_USDT",
+      "baseCoin": "IONQSTOCK",
+      "createTime": 1776242917000,
+      "createTimeISO": "2026-04-15T08:48:37.000Z",
+      "listedDaysAgo": 24,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ASTSSTOCK_USDT",
+      "baseCoin": "ASTSSTOCK",
+      "createTime": 1776242830000,
+      "createTimeISO": "2026-04-15T08:47:10.000Z",
+      "listedDaysAgo": 24,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "UNC_USDT",
+      "baseCoin": "UNC",
+      "createTime": 1776241945000,
+      "createTimeISO": "2026-04-15T08:32:25.000Z",
+      "listedDaysAgo": 24,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GONGJIAN_USDT",
+      "baseCoin": "GONGJIAN",
+      "createTime": 1776232511000,
+      "createTimeISO": "2026-04-15T05:55:11.000Z",
+      "listedDaysAgo": 24,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GENIUS_USDT",
+      "baseCoin": "GENIUS",
+      "createTime": 1776136723000,
+      "createTimeISO": "2026-04-14T03:18:43.000Z",
+      "listedDaysAgo": 25,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "OPENAI_USDT",
+      "baseCoin": "OPENAI",
+      "createTime": 1776135934000,
+      "createTimeISO": "2026-04-14T03:05:34.000Z",
+      "listedDaysAgo": 25,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ANTHROPIC_USDT",
+      "baseCoin": "ANTHROPIC",
+      "createTime": 1776135866000,
+      "createTimeISO": "2026-04-14T03:04:26.000Z",
+      "listedDaysAgo": 25,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BULL_USDT",
+      "baseCoin": "BULL",
+      "createTime": 1776057108000,
+      "createTimeISO": "2026-04-13T05:11:48.000Z",
+      "listedDaysAgo": 26,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TRIPLET_USDT",
+      "baseCoin": "TRIPLET",
+      "createTime": 1775975507000,
+      "createTimeISO": "2026-04-12T06:31:47.000Z",
+      "listedDaysAgo": 27,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CSTOCK_USDT",
+      "baseCoin": "CSTOCK",
+      "createTime": 1775730989000,
+      "createTimeISO": "2026-04-09T10:36:29.000Z",
+      "listedDaysAgo": 29,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "OFC_USDT",
+      "baseCoin": "OFC",
+      "createTime": 1775716133000,
+      "createTimeISO": "2026-04-09T06:28:53.000Z",
+      "listedDaysAgo": 30,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ADI_USDT",
+      "baseCoin": "ADI",
+      "createTime": 1775282264000,
+      "createTimeISO": "2026-04-04T05:57:44.000Z",
+      "listedDaysAgo": 35,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MEZO_USDT",
+      "baseCoin": "MEZO",
+      "createTime": 1775038050000,
+      "createTimeISO": "2026-04-01T10:07:30.000Z",
+      "listedDaysAgo": 38,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "STXSTOCK_USDT",
+      "baseCoin": "STXSTOCK",
+      "createTime": 1774938382000,
+      "createTimeISO": "2026-03-31T06:26:22.000Z",
+      "listedDaysAgo": 39,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NBISSTOCK_USDT",
+      "baseCoin": "NBISSTOCK",
+      "createTime": 1774938305000,
+      "createTimeISO": "2026-03-31T06:25:05.000Z",
+      "listedDaysAgo": 39,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PGSTOCK_USDT",
+      "baseCoin": "PGSTOCK",
+      "createTime": 1774938155000,
+      "createTimeISO": "2026-03-31T06:22:35.000Z",
+      "listedDaysAgo": 39,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NICKEL_USDT",
+      "baseCoin": "NICKEL",
+      "createTime": 1774875441000,
+      "createTimeISO": "2026-03-30T12:57:21.000Z",
+      "listedDaysAgo": 39,
+      "state": 4,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LEAD_USDT",
+      "baseCoin": "LEAD",
+      "createTime": 1774875339000,
+      "createTimeISO": "2026-03-30T12:55:39.000Z",
+      "listedDaysAgo": 39,
+      "state": 4,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ZINC_USDT",
+      "baseCoin": "ZINC",
+      "createTime": 1774875311000,
+      "createTimeISO": "2026-03-30T12:55:11.000Z",
+      "listedDaysAgo": 39,
+      "state": 4,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ALUMINUM_USDT",
+      "baseCoin": "ALUMINUM",
+      "createTime": 1774874959000,
+      "createTimeISO": "2026-03-30T12:49:19.000Z",
+      "listedDaysAgo": 39,
+      "state": 4,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BASED_USDT",
+      "baseCoin": "BASED",
+      "createTime": 1774842325000,
+      "createTimeISO": "2026-03-30T03:45:25.000Z",
+      "listedDaysAgo": 40,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LINSTOCK_USDT",
+      "baseCoin": "LINSTOCK",
+      "createTime": 1774507426000,
+      "createTimeISO": "2026-03-26T06:43:46.000Z",
+      "listedDaysAgo": 44,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CRWVSTOCK_USDT",
+      "baseCoin": "CRWVSTOCK",
+      "createTime": 1774507413000,
+      "createTimeISO": "2026-03-26T06:43:33.000Z",
+      "listedDaysAgo": 44,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PDDSTOCK_USDT",
+      "baseCoin": "PDDSTOCK",
+      "createTime": 1774507291000,
+      "createTimeISO": "2026-03-26T06:41:31.000Z",
+      "listedDaysAgo": 44,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "RKLBSTOCK_USDT",
+      "baseCoin": "RKLBSTOCK",
+      "createTime": 1774507214000,
+      "createTimeISO": "2026-03-26T06:40:14.000Z",
+      "listedDaysAgo": 44,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PRL_USDT",
+      "baseCoin": "PRL",
+      "createTime": 1774427136000,
+      "createTimeISO": "2026-03-25T08:25:36.000Z",
+      "listedDaysAgo": 45,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "KLACSTOCK_USDT",
+      "baseCoin": "KLACSTOCK",
+      "createTime": 1774330304000,
+      "createTimeISO": "2026-03-24T05:31:44.000Z",
+      "listedDaysAgo": 46,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "COHRSTOCK_USDT",
+      "baseCoin": "COHRSTOCK",
+      "createTime": 1774330219000,
+      "createTimeISO": "2026-03-24T05:30:19.000Z",
+      "listedDaysAgo": 46,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "WDCSTOCK_USDT",
+      "baseCoin": "WDCSTOCK",
+      "createTime": 1774330124000,
+      "createTimeISO": "2026-03-24T05:28:44.000Z",
+      "listedDaysAgo": 46,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GEVSTOCK_USDT",
+      "baseCoin": "GEVSTOCK",
+      "createTime": 1774330012000,
+      "createTimeISO": "2026-03-24T05:26:52.000Z",
+      "listedDaysAgo": 46,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PAYPSTOCK_USDT",
+      "baseCoin": "PAYPSTOCK",
+      "createTime": 1774280221000,
+      "createTimeISO": "2026-03-23T15:37:01.000Z",
+      "listedDaysAgo": 46,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SNDKSTOCK_USDT",
+      "baseCoin": "SNDKSTOCK",
+      "createTime": 1773987722000,
+      "createTimeISO": "2026-03-20T06:22:02.000Z",
+      "listedDaysAgo": 50,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TESTICLE_USDT",
+      "baseCoin": "TESTICLE",
+      "createTime": 1773814820000,
+      "createTimeISO": "2026-03-18T06:20:20.000Z",
+      "listedDaysAgo": 52,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BUTTCOIN_USDT",
+      "baseCoin": "BUTTCOIN",
+      "createTime": 1773814775000,
+      "createTimeISO": "2026-03-18T06:19:35.000Z",
+      "listedDaysAgo": 52,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "EWJ_USDT",
+      "baseCoin": "EWJ",
+      "createTime": 1773739071000,
+      "createTimeISO": "2026-03-17T09:17:51.000Z",
+      "listedDaysAgo": 53,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "EWY_USDT",
+      "baseCoin": "EWY",
+      "createTime": 1773589942000,
+      "createTimeISO": "2026-03-15T15:52:22.000Z",
+      "listedDaysAgo": 54,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "UP_USDT",
+      "baseCoin": "UP",
+      "createTime": 1773387348000,
+      "createTimeISO": "2026-03-13T07:35:48.000Z",
+      "listedDaysAgo": 57,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CHECK_USDT",
+      "baseCoin": "CHECK",
+      "createTime": 1773383910000,
+      "createTimeISO": "2026-03-13T06:38:30.000Z",
+      "listedDaysAgo": 57,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "VRTSTOCK_USDT",
+      "baseCoin": "VRTSTOCK",
+      "createTime": 1773295205000,
+      "createTimeISO": "2026-03-12T06:00:05.000Z",
+      "listedDaysAgo": 58,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "HIMSSTOCK_USDT",
+      "baseCoin": "HIMSSTOCK",
+      "createTime": 1773294654000,
+      "createTimeISO": "2026-03-12T05:50:54.000Z",
+      "listedDaysAgo": 58,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SPACEX_USDT",
+      "baseCoin": "SPACEX",
+      "createTime": 1773040060000,
+      "createTimeISO": "2026-03-09T07:07:40.000Z",
+      "listedDaysAgo": 61,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LONGXIA_USDT",
+      "baseCoin": "LONGXIA",
+      "createTime": 1773038959000,
+      "createTimeISO": "2026-03-09T06:49:19.000Z",
+      "listedDaysAgo": 61,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ABBVSTOCK_USDT",
+      "baseCoin": "ABBVSTOCK",
+      "createTime": 1772796753000,
+      "createTimeISO": "2026-03-06T11:32:33.000Z",
+      "listedDaysAgo": 63,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BBAISTOCK_USDT",
+      "baseCoin": "BBAISTOCK",
+      "createTime": 1772707477000,
+      "createTimeISO": "2026-03-05T10:44:37.000Z",
+      "listedDaysAgo": 64,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ACHRSTOCK_USDT",
+      "baseCoin": "ACHRSTOCK",
+      "createTime": 1772707405000,
+      "createTimeISO": "2026-03-05T10:43:25.000Z",
+      "listedDaysAgo": 64,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "OXYSTOCK_USDT",
+      "baseCoin": "OXYSTOCK",
+      "createTime": 1772707359000,
+      "createTimeISO": "2026-03-05T10:42:39.000Z",
+      "listedDaysAgo": 64,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LMTSTOCK_USDT",
+      "baseCoin": "LMTSTOCK",
+      "createTime": 1772707283000,
+      "createTimeISO": "2026-03-05T10:41:23.000Z",
+      "listedDaysAgo": 64,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ONDSSTOCK_USDT",
+      "baseCoin": "ONDSSTOCK",
+      "createTime": 1772705984000,
+      "createTimeISO": "2026-03-05T10:19:44.000Z",
+      "listedDaysAgo": 65,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "COPSTOCK_USDT",
+      "baseCoin": "COPSTOCK",
+      "createTime": 1772705919000,
+      "createTimeISO": "2026-03-05T10:18:39.000Z",
+      "listedDaysAgo": 65,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "RTXSTOCK_USDT",
+      "baseCoin": "RTXSTOCK",
+      "createTime": 1772705830000,
+      "createTimeISO": "2026-03-05T10:17:10.000Z",
+      "listedDaysAgo": 65,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "IRENSTOCK_USDT",
+      "baseCoin": "IRENSTOCK",
+      "createTime": 1772705589000,
+      "createTimeISO": "2026-03-05T10:13:09.000Z",
+      "listedDaysAgo": 65,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BSB_USDT",
+      "baseCoin": "BSB",
+      "createTime": 1772612482000,
+      "createTimeISO": "2026-03-04T08:21:22.000Z",
+      "listedDaysAgo": 66,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MANTRA_USDT",
+      "baseCoin": "MANTRA",
+      "createTime": 1772610637000,
+      "createTimeISO": "2026-03-04T07:50:37.000Z",
+      "listedDaysAgo": 66,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CVXSTOCK_USDT",
+      "baseCoin": "CVXSTOCK",
+      "createTime": 1772522940000,
+      "createTimeISO": "2026-03-03T07:29:00.000Z",
+      "listedDaysAgo": 67,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TSMSTOCK_USDT",
+      "baseCoin": "TSMSTOCK",
+      "createTime": 1772522835000,
+      "createTimeISO": "2026-03-03T07:27:15.000Z",
+      "listedDaysAgo": 67,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BTW_USDT",
+      "baseCoin": "BTW",
+      "createTime": 1772427612000,
+      "createTimeISO": "2026-03-02T05:00:12.000Z",
+      "listedDaysAgo": 68,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "KAT_USDT",
+      "baseCoin": "KAT",
+      "createTime": 1772427167000,
+      "createTimeISO": "2026-03-02T04:52:47.000Z",
+      "listedDaysAgo": 68,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "INTUSTOCK_USDT",
+      "baseCoin": "INTUSTOCK",
+      "createTime": 1772084348000,
+      "createTimeISO": "2026-02-26T05:39:08.000Z",
+      "listedDaysAgo": 72,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SNOWSTOCK_USDT",
+      "baseCoin": "SNOWSTOCK",
+      "createTime": 1772084303000,
+      "createTimeISO": "2026-02-26T05:38:23.000Z",
+      "listedDaysAgo": 72,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MELISTOCK_USDT",
+      "baseCoin": "MELISTOCK",
+      "createTime": 1772084249000,
+      "createTimeISO": "2026-02-26T05:37:29.000Z",
+      "listedDaysAgo": 72,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ROBO_USDT",
+      "baseCoin": "ROBO",
+      "createTime": 1772025445000,
+      "createTimeISO": "2026-02-25T13:17:25.000Z",
+      "listedDaysAgo": 72,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PANWSTOCK_USDT",
+      "baseCoin": "PANWSTOCK",
+      "createTime": 1771923665000,
+      "createTimeISO": "2026-02-24T09:01:05.000Z",
+      "listedDaysAgo": 74,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PYPLSTOCK_USDT",
+      "baseCoin": "PYPLSTOCK",
+      "createTime": 1771923602000,
+      "createTimeISO": "2026-02-24T09:00:02.000Z",
+      "listedDaysAgo": 74,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CRWDSTOCK_USDT",
+      "baseCoin": "CRWDSTOCK",
+      "createTime": 1771923546000,
+      "createTimeISO": "2026-02-24T08:59:06.000Z",
+      "listedDaysAgo": 74,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "VZSTOCK_USDT",
+      "baseCoin": "VZSTOCK",
+      "createTime": 1770874004000,
+      "createTimeISO": "2026-02-12T05:26:44.000Z",
+      "listedDaysAgo": 86,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "KOSTOCK_USDT",
+      "baseCoin": "KOSTOCK",
+      "createTime": 1770873855000,
+      "createTimeISO": "2026-02-12T05:24:15.000Z",
+      "listedDaysAgo": 86,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "OPN_USDT",
+      "baseCoin": "OPN",
+      "createTime": 1770807588000,
+      "createTimeISO": "2026-02-11T10:59:48.000Z",
+      "listedDaysAgo": 86,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SHOPSTOCK_USDT",
+      "baseCoin": "SHOPSTOCK",
+      "createTime": 1770788569000,
+      "createTimeISO": "2026-02-11T05:42:49.000Z",
+      "listedDaysAgo": 87,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SPOTSTOCK_USDT",
+      "baseCoin": "SPOTSTOCK",
+      "createTime": 1770788546000,
+      "createTimeISO": "2026-02-11T05:42:26.000Z",
+      "listedDaysAgo": 87,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AZTEC_USDT",
+      "baseCoin": "AZTEC",
+      "createTime": 1770787905000,
+      "createTimeISO": "2026-02-11T05:31:45.000Z",
+      "listedDaysAgo": 87,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "HK50_USDT",
+      "baseCoin": "HK50",
+      "createTime": 1770780892000,
+      "createTimeISO": "2026-02-11T03:34:52.000Z",
+      "listedDaysAgo": 87,
+      "state": 4,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ESP_USDT",
+      "baseCoin": "ESP",
+      "createTime": 1770715405000,
+      "createTimeISO": "2026-02-10T09:23:25.000Z",
+      "listedDaysAgo": 88,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "RNBW_USDT",
+      "baseCoin": "RNBW",
+      "createTime": 1770279651000,
+      "createTimeISO": "2026-02-05T08:20:51.000Z",
+      "listedDaysAgo": 93,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SMCISTOCK_USDT",
+      "baseCoin": "SMCISTOCK",
+      "createTime": 1770266378000,
+      "createTimeISO": "2026-02-05T04:39:38.000Z",
+      "listedDaysAgo": 93,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TRIA_USDT",
+      "baseCoin": "TRIA",
+      "createTime": 1770086427000,
+      "createTimeISO": "2026-02-03T02:40:27.000Z",
+      "listedDaysAgo": 95,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "XPD_USDT",
+      "baseCoin": "XPD",
+      "createTime": 1769999780000,
+      "createTimeISO": "2026-02-02T02:36:20.000Z",
+      "listedDaysAgo": 96,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "XPT_USDT",
+      "baseCoin": "XPT",
+      "createTime": 1769999716000,
+      "createTimeISO": "2026-02-02T02:35:16.000Z",
+      "listedDaysAgo": 96,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "INX_USDT",
+      "baseCoin": "INX",
+      "createTime": 1769775508000,
+      "createTimeISO": "2026-01-30T12:18:28.000Z",
+      "listedDaysAgo": 98,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "IBMSTOCK_USDT",
+      "baseCoin": "IBMSTOCK",
+      "createTime": 1769753126000,
+      "createTimeISO": "2026-01-30T06:05:26.000Z",
+      "listedDaysAgo": 99,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NGAS_USDT",
+      "baseCoin": "NGAS",
+      "createTime": 1769743078000,
+      "createTimeISO": "2026-01-30T03:17:58.000Z",
+      "listedDaysAgo": 99,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "UKOIL_USDT",
+      "baseCoin": "UKOIL",
+      "createTime": 1769743000000,
+      "createTimeISO": "2026-01-30T03:16:40.000Z",
+      "listedDaysAgo": 99,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "USOIL_USDT",
+      "baseCoin": "USOIL",
+      "createTime": 1769742974000,
+      "createTimeISO": "2026-01-30T03:16:14.000Z",
+      "listedDaysAgo": 99,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "COPPER_USDT",
+      "baseCoin": "COPPER",
+      "createTime": 1769684930000,
+      "createTimeISO": "2026-01-29T11:08:50.000Z",
+      "listedDaysAgo": 99,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "US30_USDT",
+      "baseCoin": "US30",
+      "createTime": 1769677792000,
+      "createTimeISO": "2026-01-29T09:09:52.000Z",
+      "listedDaysAgo": 100,
+      "state": 4,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NAS100_USDT",
+      "baseCoin": "NAS100",
+      "createTime": 1769677742000,
+      "createTimeISO": "2026-01-29T09:09:02.000Z",
+      "listedDaysAgo": 100,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SPX500_USDT",
+      "baseCoin": "SPX500",
+      "createTime": 1769677562000,
+      "createTimeISO": "2026-01-29T09:06:02.000Z",
+      "listedDaysAgo": 100,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BIRB_USDT",
+      "baseCoin": "BIRB",
+      "createTime": 1769588849000,
+      "createTimeISO": "2026-01-28T08:27:29.000Z",
+      "listedDaysAgo": 101,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PENGUIN_USDT",
+      "baseCoin": "PENGUIN",
+      "createTime": 1769229528000,
+      "createTimeISO": "2026-01-24T04:38:48.000Z",
+      "listedDaysAgo": 105,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SPACE_USDT",
+      "baseCoin": "SPACE",
+      "createTime": 1769085944000,
+      "createTimeISO": "2026-01-22T12:45:44.000Z",
+      "listedDaysAgo": 106,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "FIGHT_USDT",
+      "baseCoin": "FIGHT",
+      "createTime": 1769068564000,
+      "createTimeISO": "2026-01-22T07:56:04.000Z",
+      "listedDaysAgo": 107,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GWEI_USDT",
+      "baseCoin": "GWEI",
+      "createTime": 1768979668000,
+      "createTimeISO": "2026-01-21T07:14:28.000Z",
+      "listedDaysAgo": 108,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SKR_USDT",
+      "baseCoin": "SKR",
+      "createTime": 1768908256000,
+      "createTimeISO": "2026-01-20T11:24:16.000Z",
+      "listedDaysAgo": 108,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ACU_USDT",
+      "baseCoin": "ACU",
+      "createTime": 1768892111000,
+      "createTimeISO": "2026-01-20T06:55:11.000Z",
+      "listedDaysAgo": 109,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ELSA_USDT",
+      "baseCoin": "ELSA",
+      "createTime": 1768808383000,
+      "createTimeISO": "2026-01-19T07:39:43.000Z",
+      "listedDaysAgo": 110,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AMATSTOCK_USDT",
+      "baseCoin": "AMATSTOCK",
+      "createTime": 1768540513000,
+      "createTimeISO": "2026-01-16T05:15:13.000Z",
+      "listedDaysAgo": 113,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GSSTOCK_USDT",
+      "baseCoin": "GSSTOCK",
+      "createTime": 1768540391000,
+      "createTimeISO": "2026-01-16T05:13:11.000Z",
+      "listedDaysAgo": 113,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "FRAX_USDT",
+      "baseCoin": "FRAX",
+      "createTime": 1768467573000,
+      "createTimeISO": "2026-01-15T08:59:33.000Z",
+      "listedDaysAgo": 114,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ROLL_USDT",
+      "baseCoin": "ROLL",
+      "createTime": 1768465075000,
+      "createTimeISO": "2026-01-15T08:17:55.000Z",
+      "listedDaysAgo": 114,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SPORTFUN_USDT",
+      "baseCoin": "SPORTFUN",
+      "createTime": 1768458734000,
+      "createTimeISO": "2026-01-15T06:32:14.000Z",
+      "listedDaysAgo": 114,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BACSTOCK_USDT",
+      "baseCoin": "BACSTOCK",
+      "createTime": 1768367182000,
+      "createTimeISO": "2026-01-14T05:06:22.000Z",
+      "listedDaysAgo": 115,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LRCXSTOCK_USDT",
+      "baseCoin": "LRCXSTOCK",
+      "createTime": 1768367134000,
+      "createTimeISO": "2026-01-14T05:05:34.000Z",
+      "listedDaysAgo": 115,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "XOMSTOCK_USDT",
+      "baseCoin": "XOMSTOCK",
+      "createTime": 1768367056000,
+      "createTimeISO": "2026-01-14T05:04:16.000Z",
+      "listedDaysAgo": 115,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BASTOCK_USDT",
+      "baseCoin": "BASTOCK",
+      "createTime": 1768366965000,
+      "createTimeISO": "2026-01-14T05:02:45.000Z",
+      "listedDaysAgo": 115,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CRMSTOCK_USDT",
+      "baseCoin": "CRMSTOCK",
+      "createTime": 1768366898000,
+      "createTimeISO": "2026-01-14T05:01:38.000Z",
+      "listedDaysAgo": 115,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "FOGO_USDT",
+      "baseCoin": "FOGO",
+      "createTime": 1768057432000,
+      "createTimeISO": "2026-01-10T15:03:52.000Z",
+      "listedDaysAgo": 118,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ZAMA_USDT",
+      "baseCoin": "ZAMA",
+      "createTime": 1767949214000,
+      "createTimeISO": "2026-01-09T09:00:14.000Z",
+      "listedDaysAgo": 120,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "WOTAMALAILE_USDT",
+      "baseCoin": "WOTAMALAILE",
+      "createTime": 1767925060000,
+      "createTimeISO": "2026-01-09T02:17:40.000Z",
+      "listedDaysAgo": 120,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "WHITEWHALE_USDT",
+      "baseCoin": "WHITEWHALE",
+      "createTime": 1767686034000,
+      "createTimeISO": "2026-01-06T07:53:54.000Z",
+      "listedDaysAgo": 123,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BREV_USDT",
+      "baseCoin": "BREV",
+      "createTime": 1767092756000,
+      "createTimeISO": "2025-12-30T11:05:56.000Z",
+      "listedDaysAgo": 129,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "COLLECT_USDT",
+      "baseCoin": "COLLECT",
+      "createTime": 1767004515000,
+      "createTimeISO": "2025-12-29T10:35:15.000Z",
+      "listedDaysAgo": 130,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SILVER_USDT",
+      "baseCoin": "SILVER",
+      "createTime": 1766977977000,
+      "createTimeISO": "2025-12-29T03:12:57.000Z",
+      "listedDaysAgo": 131,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NOWSTOCK_USDT",
+      "baseCoin": "NOWSTOCK",
+      "createTime": 1766471545000,
+      "createTimeISO": "2025-12-23T06:32:25.000Z",
+      "listedDaysAgo": 137,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "COSTSTOCK_USDT",
+      "baseCoin": "COSTSTOCK",
+      "createTime": 1766471511000,
+      "createTimeISO": "2025-12-23T06:31:51.000Z",
+      "listedDaysAgo": 137,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NKESTOCK_USDT",
+      "baseCoin": "NKESTOCK",
+      "createTime": 1766471492000,
+      "createTimeISO": "2025-12-23T06:31:32.000Z",
+      "listedDaysAgo": 137,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "WMTSTOCK_USDT",
+      "baseCoin": "WMTSTOCK",
+      "createTime": 1766471443000,
+      "createTimeISO": "2025-12-23T06:30:43.000Z",
+      "listedDaysAgo": 137,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "JPMSTOCK_USDT",
+      "baseCoin": "JPMSTOCK",
+      "createTime": 1766471429000,
+      "createTimeISO": "2025-12-23T06:30:29.000Z",
+      "listedDaysAgo": 137,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ZKP_USDT",
+      "baseCoin": "ZKP",
+      "createTime": 1766056545000,
+      "createTimeISO": "2025-12-18T11:15:45.000Z",
+      "listedDaysAgo": 141,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MAGMA_USDT",
+      "baseCoin": "MAGMA",
+      "createTime": 1765866551000,
+      "createTimeISO": "2025-12-16T06:29:11.000Z",
+      "listedDaysAgo": 144,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "JDSTOCK_USDT",
+      "baseCoin": "JDSTOCK",
+      "createTime": 1765864150000,
+      "createTimeISO": "2025-12-16T05:49:10.000Z",
+      "listedDaysAgo": 144,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ARMSTOCK_USDT",
+      "baseCoin": "ARMSTOCK",
+      "createTime": 1765864108000,
+      "createTimeISO": "2025-12-16T05:48:28.000Z",
+      "listedDaysAgo": 144,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "RDDTSTOCK_USDT",
+      "baseCoin": "RDDTSTOCK",
+      "createTime": 1765863734000,
+      "createTimeISO": "2025-12-16T05:42:14.000Z",
+      "listedDaysAgo": 144,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "UBERSTOCK_USDT",
+      "baseCoin": "UBERSTOCK",
+      "createTime": 1765863494000,
+      "createTimeISO": "2025-12-16T05:38:14.000Z",
+      "listedDaysAgo": 144,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "RAVE_USDT",
+      "baseCoin": "RAVE",
+      "createTime": 1765522653000,
+      "createTimeISO": "2025-12-12T06:57:33.000Z",
+      "listedDaysAgo": 148,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "US_USDT",
+      "baseCoin": "US",
+      "createTime": 1765449579000,
+      "createTimeISO": "2025-12-11T10:39:39.000Z",
+      "listedDaysAgo": 148,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BTX_USDT",
+      "baseCoin": "BTX",
+      "createTime": 1765448919000,
+      "createTimeISO": "2025-12-11T10:28:39.000Z",
+      "listedDaysAgo": 149,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CYS_USDT",
+      "baseCoin": "CYS",
+      "createTime": 1765437790000,
+      "createTimeISO": "2025-12-11T07:23:10.000Z",
+      "listedDaysAgo": 149,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ACNSTOCK_USDT",
+      "baseCoin": "ACNSTOCK",
+      "createTime": 1765366530000,
+      "createTimeISO": "2025-12-10T11:35:30.000Z",
+      "listedDaysAgo": 149,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GESTOCK_USDT",
+      "baseCoin": "GESTOCK",
+      "createTime": 1765366354000,
+      "createTimeISO": "2025-12-10T11:32:34.000Z",
+      "listedDaysAgo": 149,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MASTOCK_USDT",
+      "baseCoin": "MASTOCK",
+      "createTime": 1765366347000,
+      "createTimeISO": "2025-12-10T11:32:27.000Z",
+      "listedDaysAgo": 149,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PEPSTOCK_USDT",
+      "baseCoin": "PEPSTOCK",
+      "createTime": 1765366228000,
+      "createTimeISO": "2025-12-10T11:30:28.000Z",
+      "listedDaysAgo": 149,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MRVLSTOCK_USDT",
+      "baseCoin": "MRVLSTOCK",
+      "createTime": 1765366176000,
+      "createTimeISO": "2025-12-10T11:29:36.000Z",
+      "listedDaysAgo": 149,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NIGHT_USDT",
+      "baseCoin": "NIGHT",
+      "createTime": 1765269457000,
+      "createTimeISO": "2025-12-09T08:37:37.000Z",
+      "listedDaysAgo": 151,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "WET_USDT",
+      "baseCoin": "WET",
+      "createTime": 1764848764000,
+      "createTimeISO": "2025-12-04T11:46:04.000Z",
+      "listedDaysAgo": 155,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TRAC_USDT",
+      "baseCoin": "TRAC",
+      "createTime": 1764761173000,
+      "createTimeISO": "2025-12-03T11:26:13.000Z",
+      "listedDaysAgo": 156,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "RLS_USDT",
+      "baseCoin": "RLS",
+      "createTime": 1764582500000,
+      "createTimeISO": "2025-12-01T09:48:20.000Z",
+      "listedDaysAgo": 159,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GUA_USDT",
+      "baseCoin": "GUA",
+      "createTime": 1764127879000,
+      "createTimeISO": "2025-11-26T03:31:19.000Z",
+      "listedDaysAgo": 164,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "IRYS_USDT",
+      "baseCoin": "IRYS",
+      "createTime": 1764056470000,
+      "createTimeISO": "2025-11-25T07:41:10.000Z",
+      "listedDaysAgo": 165,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "FUTUSTOCK_USDT",
+      "baseCoin": "FUTUSTOCK",
+      "createTime": 1763987259000,
+      "createTimeISO": "2025-11-24T12:27:39.000Z",
+      "listedDaysAgo": 165,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "UNHSTOCK_USDT",
+      "baseCoin": "UNHSTOCK",
+      "createTime": 1763987097000,
+      "createTimeISO": "2025-11-24T12:24:57.000Z",
+      "listedDaysAgo": 165,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CSCOSTOCK_USDT",
+      "baseCoin": "CSCOSTOCK",
+      "createTime": 1763986825000,
+      "createTimeISO": "2025-11-24T12:20:25.000Z",
+      "listedDaysAgo": 165,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LLYSTOCK_USDT",
+      "baseCoin": "LLYSTOCK",
+      "createTime": 1763986612000,
+      "createTimeISO": "2025-11-24T12:16:52.000Z",
+      "listedDaysAgo": 165,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ASMLSTOCK_USDT",
+      "baseCoin": "ASMLSTOCK",
+      "createTime": 1763986314000,
+      "createTimeISO": "2025-11-24T12:11:54.000Z",
+      "listedDaysAgo": 165,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BUILDONBOB_USDT",
+      "baseCoin": "BUILDONBOB",
+      "createTime": 1763643357000,
+      "createTimeISO": "2025-11-20T12:55:57.000Z",
+      "listedDaysAgo": 169,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GAIB_USDT",
+      "baseCoin": "GAIB",
+      "createTime": 1763441251000,
+      "createTimeISO": "2025-11-18T04:47:31.000Z",
+      "listedDaysAgo": 172,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SENT_USDT",
+      "baseCoin": "SENT",
+      "createTime": 1763129395000,
+      "createTimeISO": "2025-11-14T14:09:55.000Z",
+      "listedDaysAgo": 175,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PIEVERSE_USDT",
+      "baseCoin": "PIEVERSE",
+      "createTime": 1763034684000,
+      "createTimeISO": "2025-11-13T11:51:24.000Z",
+      "listedDaysAgo": 176,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ALLO_USDT",
+      "baseCoin": "ALLO",
+      "createTime": 1762848464000,
+      "createTimeISO": "2025-11-11T08:07:44.000Z",
+      "listedDaysAgo": 179,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AVICI_USDT",
+      "baseCoin": "AVICI",
+      "createTime": 1762829899000,
+      "createTimeISO": "2025-11-11T02:58:19.000Z",
+      "listedDaysAgo": 179,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "JCT_USDT",
+      "baseCoin": "JCT",
+      "createTime": 1762618406000,
+      "createTimeISO": "2025-11-08T16:13:26.000Z",
+      "listedDaysAgo": 181,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ELIZAOS_USDT",
+      "baseCoin": "ELIZAOS",
+      "createTime": 1762482283000,
+      "createTimeISO": "2025-11-07T02:24:43.000Z",
+      "listedDaysAgo": 183,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "STABLE_USDT",
+      "baseCoin": "STABLE",
+      "createTime": 1762437575000,
+      "createTimeISO": "2025-11-06T13:59:35.000Z",
+      "listedDaysAgo": 183,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "FOLKS_USDT",
+      "baseCoin": "FOLKS",
+      "createTime": 1762397850000,
+      "createTimeISO": "2025-11-06T02:57:30.000Z",
+      "listedDaysAgo": 184,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "UAI_USDT",
+      "baseCoin": "UAI",
+      "createTime": 1762397008000,
+      "createTimeISO": "2025-11-06T02:43:28.000Z",
+      "listedDaysAgo": 184,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BDX_USDT",
+      "baseCoin": "BDX",
+      "createTime": 1762251627000,
+      "createTimeISO": "2025-11-04T10:20:27.000Z",
+      "listedDaysAgo": 186,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TRUST_USDT",
+      "baseCoin": "TRUST",
+      "createTime": 1762234288000,
+      "createTimeISO": "2025-11-04T05:31:28.000Z",
+      "listedDaysAgo": 186,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BEAT_USDT",
+      "baseCoin": "BEAT",
+      "createTime": 1761983050000,
+      "createTimeISO": "2025-11-01T07:44:10.000Z",
+      "listedDaysAgo": 189,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CC_USDT",
+      "baseCoin": "CC",
+      "createTime": 1761913851000,
+      "createTimeISO": "2025-10-31T12:30:51.000Z",
+      "listedDaysAgo": 189,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "QQQSTOCK_USDT",
+      "baseCoin": "QQQSTOCK",
+      "createTime": 1761739215000,
+      "createTimeISO": "2025-10-29T12:00:15.000Z",
+      "listedDaysAgo": 191,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "VSTOCK_USDT",
+      "baseCoin": "VSTOCK",
+      "createTime": 1761739144000,
+      "createTimeISO": "2025-10-29T11:59:04.000Z",
+      "listedDaysAgo": 191,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MUSTOCK_USDT",
+      "baseCoin": "MUSTOCK",
+      "createTime": 1761739091000,
+      "createTimeISO": "2025-10-29T11:58:11.000Z",
+      "listedDaysAgo": 191,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "QCOMSTOCK_USDT",
+      "baseCoin": "QCOMSTOCK",
+      "createTime": 1761739047000,
+      "createTimeISO": "2025-10-29T11:57:27.000Z",
+      "listedDaysAgo": 191,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "INTCSTOCK_USDT",
+      "baseCoin": "INTCSTOCK",
+      "createTime": 1761739031000,
+      "createTimeISO": "2025-10-29T11:57:11.000Z",
+      "listedDaysAgo": 191,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "KITE_USDT",
+      "baseCoin": "KITE",
+      "createTime": 1761735500000,
+      "createTimeISO": "2025-10-29T10:58:20.000Z",
+      "listedDaysAgo": 191,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MMT_USDT",
+      "baseCoin": "MMT",
+      "createTime": 1761565274000,
+      "createTimeISO": "2025-10-27T11:41:14.000Z",
+      "listedDaysAgo": 193,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AT_USDT",
+      "baseCoin": "AT",
+      "createTime": 1761292180000,
+      "createTimeISO": "2025-10-24T07:49:40.000Z",
+      "listedDaysAgo": 197,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ON_USDT",
+      "baseCoin": "ON",
+      "createTime": 1761211143000,
+      "createTimeISO": "2025-10-23T09:19:03.000Z",
+      "listedDaysAgo": 198,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "APR_USDT",
+      "baseCoin": "APR",
+      "createTime": 1761204625000,
+      "createTimeISO": "2025-10-23T07:30:25.000Z",
+      "listedDaysAgo": 198,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MEGA_USDT",
+      "baseCoin": "MEGA",
+      "createTime": 1761148716000,
+      "createTimeISO": "2025-10-22T15:58:36.000Z",
+      "listedDaysAgo": 198,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TURTLE_USDT",
+      "baseCoin": "TURTLE",
+      "createTime": 1761115649000,
+      "createTimeISO": "2025-10-22T06:47:29.000Z",
+      "listedDaysAgo": 199,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BLUAI_USDT",
+      "baseCoin": "BLUAI",
+      "createTime": 1760701030000,
+      "createTimeISO": "2025-10-17T11:37:10.000Z",
+      "listedDaysAgo": 203,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ZBT_USDT",
+      "baseCoin": "ZBT",
+      "createTime": 1760602811000,
+      "createTimeISO": "2025-10-16T08:20:11.000Z",
+      "listedDaysAgo": 205,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LAB_USDT",
+      "baseCoin": "LAB",
+      "createTime": 1760456253000,
+      "createTimeISO": "2025-10-14T15:37:33.000Z",
+      "listedDaysAgo": 206,
+      "state": 0,
+      "isNew": false,
+      "isHot": true
+    },
+    {
+      "symbol": "RECALL_USDT",
+      "baseCoin": "RECALL",
+      "createTime": 1760424599000,
+      "createTimeISO": "2025-10-14T06:49:59.000Z",
+      "listedDaysAgo": 207,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ENSO_USDT",
+      "baseCoin": "ENSO",
+      "createTime": 1760410325000,
+      "createTimeISO": "2025-10-14T02:52:05.000Z",
+      "listedDaysAgo": 207,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CLO_USDT",
+      "baseCoin": "CLO",
+      "createTime": 1760337382000,
+      "createTimeISO": "2025-10-13T06:36:22.000Z",
+      "listedDaysAgo": 208,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "HAJIMI_USDT",
+      "baseCoin": "HAJIMI",
+      "createTime": 1760165091000,
+      "createTimeISO": "2025-10-11T06:44:51.000Z",
+      "listedDaysAgo": 210,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "YB_USDT",
+      "baseCoin": "YB",
+      "createTime": 1760107731000,
+      "createTimeISO": "2025-10-10T14:48:51.000Z",
+      "listedDaysAgo": 210,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MET_USDT",
+      "baseCoin": "MET",
+      "createTime": 1760093814000,
+      "createTimeISO": "2025-10-10T10:56:54.000Z",
+      "listedDaysAgo": 210,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MONAD_USDT",
+      "baseCoin": "MONAD",
+      "createTime": 1759900772000,
+      "createTimeISO": "2025-10-08T05:19:32.000Z",
+      "listedDaysAgo": 213,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BIANRENSHENG_USDT",
+      "baseCoin": "BIANRENSHENG",
+      "createTime": 1759812191000,
+      "createTimeISO": "2025-10-07T04:43:11.000Z",
+      "listedDaysAgo": 214,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "KGEN_USDT",
+      "baseCoin": "KGEN",
+      "createTime": 1759675618000,
+      "createTimeISO": "2025-10-05T14:46:58.000Z",
+      "listedDaysAgo": 215,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LYN_USDT",
+      "baseCoin": "LYN",
+      "createTime": 1759639677000,
+      "createTimeISO": "2025-10-05T04:47:57.000Z",
+      "listedDaysAgo": 216,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CYPR_USDT",
+      "baseCoin": "CYPR",
+      "createTime": 1759568246000,
+      "createTimeISO": "2025-10-04T08:57:26.000Z",
+      "listedDaysAgo": 217,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "EVAA_USDT",
+      "baseCoin": "EVAA",
+      "createTime": 1759405310000,
+      "createTimeISO": "2025-10-02T11:41:50.000Z",
+      "listedDaysAgo": 218,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "4_USDT",
+      "baseCoin": "4",
+      "createTime": 1759399294000,
+      "createTimeISO": "2025-10-02T10:01:34.000Z",
+      "listedDaysAgo": 219,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TRUTH_USDT",
+      "baseCoin": "TRUTH",
+      "createTime": 1759239702000,
+      "createTimeISO": "2025-09-30T13:41:42.000Z",
+      "listedDaysAgo": 220,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "2Z_USDT",
+      "baseCoin": "2Z",
+      "createTime": 1759231456000,
+      "createTimeISO": "2025-09-30T11:24:16.000Z",
+      "listedDaysAgo": 220,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NOM_USDT",
+      "baseCoin": "NOM",
+      "createTime": 1759215199000,
+      "createTimeISO": "2025-09-30T06:53:19.000Z",
+      "listedDaysAgo": 221,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "FF_USDT",
+      "baseCoin": "FF",
+      "createTime": 1759036806000,
+      "createTimeISO": "2025-09-28T05:20:06.000Z",
+      "listedDaysAgo": 223,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MIRA_USDT",
+      "baseCoin": "MIRA",
+      "createTime": 1758797607000,
+      "createTimeISO": "2025-09-25T10:53:27.000Z",
+      "listedDaysAgo": 225,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LIGHT_USDT",
+      "baseCoin": "LIGHT",
+      "createTime": 1758793996000,
+      "createTimeISO": "2025-09-25T09:53:16.000Z",
+      "listedDaysAgo": 226,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "HANA_USDT",
+      "baseCoin": "HANA",
+      "createTime": 1758713810000,
+      "createTimeISO": "2025-09-24T11:36:50.000Z",
+      "listedDaysAgo": 226,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "COAI_USDT",
+      "baseCoin": "COAI",
+      "createTime": 1758680858000,
+      "createTimeISO": "2025-09-24T02:27:38.000Z",
+      "listedDaysAgo": 227,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "XAN_USDT",
+      "baseCoin": "XAN",
+      "createTime": 1758548279000,
+      "createTimeISO": "2025-09-22T13:37:59.000Z",
+      "listedDaysAgo": 228,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GIGGLE_USDT",
+      "baseCoin": "GIGGLE",
+      "createTime": 1758529356000,
+      "createTimeISO": "2025-09-22T08:22:36.000Z",
+      "listedDaysAgo": 229,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "RIVER_USDT",
+      "baseCoin": "RIVER",
+      "createTime": 1758529306000,
+      "createTimeISO": "2025-09-22T08:21:46.000Z",
+      "listedDaysAgo": 229,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BLESS_USDT",
+      "baseCoin": "BLESS",
+      "createTime": 1758520139000,
+      "createTimeISO": "2025-09-22T05:48:59.000Z",
+      "listedDaysAgo": 229,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "0G_USDT",
+      "baseCoin": "0G",
+      "createTime": 1758123967000,
+      "createTimeISO": "2025-09-17T15:46:07.000Z",
+      "listedDaysAgo": 233,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ADBESTOCK_USDT",
+      "baseCoin": "ADBESTOCK",
+      "createTime": 1758113666000,
+      "createTimeISO": "2025-09-17T12:54:26.000Z",
+      "listedDaysAgo": 233,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BABASTOCK_USDT",
+      "baseCoin": "BABASTOCK",
+      "createTime": 1758113611000,
+      "createTimeISO": "2025-09-17T12:53:31.000Z",
+      "listedDaysAgo": 233,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AMDSTOCK_USDT",
+      "baseCoin": "AMDSTOCK",
+      "createTime": 1758113286000,
+      "createTimeISO": "2025-09-17T12:48:06.000Z",
+      "listedDaysAgo": 233,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ORCLSTOCK_USDT",
+      "baseCoin": "ORCLSTOCK",
+      "createTime": 1758113110000,
+      "createTimeISO": "2025-09-17T12:45:10.000Z",
+      "listedDaysAgo": 233,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ASTER_USDT",
+      "baseCoin": "ASTER",
+      "createTime": 1758094519000,
+      "createTimeISO": "2025-09-17T07:35:19.000Z",
+      "listedDaysAgo": 234,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AIA_USDT",
+      "baseCoin": "AIA",
+      "createTime": 1758094490000,
+      "createTimeISO": "2025-09-17T07:34:50.000Z",
+      "listedDaysAgo": 234,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "STBL_USDT",
+      "baseCoin": "STBL",
+      "createTime": 1758035810000,
+      "createTimeISO": "2025-09-16T15:16:50.000Z",
+      "listedDaysAgo": 234,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BARD_USDT",
+      "baseCoin": "BARD",
+      "createTime": 1757930187000,
+      "createTimeISO": "2025-09-15T09:56:27.000Z",
+      "listedDaysAgo": 236,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ZKC_USDT",
+      "baseCoin": "ZKC",
+      "createTime": 1757907443000,
+      "createTimeISO": "2025-09-15T03:37:23.000Z",
+      "listedDaysAgo": 236,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MSTRSTOCK_USDT",
+      "baseCoin": "MSTRSTOCK",
+      "createTime": 1757591593000,
+      "createTimeISO": "2025-09-11T11:53:13.000Z",
+      "listedDaysAgo": 239,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NFLXSTOCK_USDT",
+      "baseCoin": "NFLXSTOCK",
+      "createTime": 1757591519000,
+      "createTimeISO": "2025-09-11T11:51:59.000Z",
+      "listedDaysAgo": 239,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PLTRSTOCK_USDT",
+      "baseCoin": "PLTRSTOCK",
+      "createTime": 1757591422000,
+      "createTimeISO": "2025-09-11T11:50:22.000Z",
+      "listedDaysAgo": 239,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MSFTSTOCK_USDT",
+      "baseCoin": "MSFTSTOCK",
+      "createTime": 1757591370000,
+      "createTimeISO": "2025-09-11T11:49:30.000Z",
+      "listedDaysAgo": 239,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AVGOSTOCK_USDT",
+      "baseCoin": "AVGOSTOCK",
+      "createTime": 1757591219000,
+      "createTimeISO": "2025-09-11T11:46:59.000Z",
+      "listedDaysAgo": 239,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "UB_USDT",
+      "baseCoin": "UB",
+      "createTime": 1757511519000,
+      "createTimeISO": "2025-09-10T13:38:39.000Z",
+      "listedDaysAgo": 240,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "HOLO_USDT",
+      "baseCoin": "HOLO",
+      "createTime": 1757489238000,
+      "createTimeISO": "2025-09-10T07:27:18.000Z",
+      "listedDaysAgo": 241,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AVNT_USDT",
+      "baseCoin": "AVNT",
+      "createTime": 1757305672000,
+      "createTimeISO": "2025-09-08T04:27:52.000Z",
+      "listedDaysAgo": 243,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "OPENLEDGER_USDT",
+      "baseCoin": "OPENLEDGER",
+      "createTime": 1757087821000,
+      "createTimeISO": "2025-09-05T15:57:01.000Z",
+      "listedDaysAgo": 245,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "EUL_USDT",
+      "baseCoin": "EUL",
+      "createTime": 1757054103000,
+      "createTimeISO": "2025-09-05T06:35:03.000Z",
+      "listedDaysAgo": 246,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TRADOOR_USDT",
+      "baseCoin": "TRADOOR",
+      "createTime": 1756968116000,
+      "createTimeISO": "2025-09-04T06:41:56.000Z",
+      "listedDaysAgo": 247,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "XPIN_USDT",
+      "baseCoin": "XPIN",
+      "createTime": 1756872952000,
+      "createTimeISO": "2025-09-03T04:15:52.000Z",
+      "listedDaysAgo": 248,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PTB_USDT",
+      "baseCoin": "PTB",
+      "createTime": 1756784963000,
+      "createTimeISO": "2025-09-02T03:49:23.000Z",
+      "listedDaysAgo": 249,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "Q_USDT",
+      "baseCoin": "Q",
+      "createTime": 1756716823000,
+      "createTimeISO": "2025-09-01T08:53:43.000Z",
+      "listedDaysAgo": 250,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LINEA_USDT",
+      "baseCoin": "LINEA",
+      "createTime": 1756716185000,
+      "createTimeISO": "2025-09-01T08:43:05.000Z",
+      "listedDaysAgo": 250,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "USDUC_USDT",
+      "baseCoin": "USDUC",
+      "createTime": 1756629763000,
+      "createTimeISO": "2025-08-31T08:42:43.000Z",
+      "listedDaysAgo": 251,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "HEMI_USDT",
+      "baseCoin": "HEMI",
+      "createTime": 1756390382000,
+      "createTimeISO": "2025-08-28T14:13:02.000Z",
+      "listedDaysAgo": 253,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MITO_USDT",
+      "baseCoin": "MITO",
+      "createTime": 1756267217000,
+      "createTimeISO": "2025-08-27T04:00:17.000Z",
+      "listedDaysAgo": 255,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SOMI_USDT",
+      "baseCoin": "SOMI",
+      "createTime": 1756115453000,
+      "createTimeISO": "2025-08-25T09:50:53.000Z",
+      "listedDaysAgo": 257,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BTR_USDT",
+      "baseCoin": "BTR",
+      "createTime": 1756108719000,
+      "createTimeISO": "2025-08-25T07:58:39.000Z",
+      "listedDaysAgo": 257,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TAKE_USDT",
+      "baseCoin": "TAKE",
+      "createTime": 1756103679000,
+      "createTimeISO": "2025-08-25T06:34:39.000Z",
+      "listedDaysAgo": 257,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "WLFI_USDT",
+      "baseCoin": "WLFI",
+      "createTime": 1755937734000,
+      "createTimeISO": "2025-08-23T08:28:54.000Z",
+      "listedDaysAgo": 259,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "XPL_USDT",
+      "baseCoin": "XPL",
+      "createTime": 1755854534000,
+      "createTimeISO": "2025-08-22T09:22:14.000Z",
+      "listedDaysAgo": 260,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BAS_USDT",
+      "baseCoin": "BAS",
+      "createTime": 1755770439000,
+      "createTimeISO": "2025-08-21T10:00:39.000Z",
+      "listedDaysAgo": 261,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ARIA_USDT",
+      "baseCoin": "ARIA",
+      "createTime": 1755744775000,
+      "createTimeISO": "2025-08-21T02:52:55.000Z",
+      "listedDaysAgo": 261,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SAPIEN_USDT",
+      "baseCoin": "SAPIEN",
+      "createTime": 1755675615000,
+      "createTimeISO": "2025-08-20T07:40:15.000Z",
+      "listedDaysAgo": 262,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AKE_USDT",
+      "baseCoin": "AKE",
+      "createTime": 1755675381000,
+      "createTimeISO": "2025-08-20T07:36:21.000Z",
+      "listedDaysAgo": 262,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SKY_USDT",
+      "baseCoin": "SKY",
+      "createTime": 1755656896000,
+      "createTimeISO": "2025-08-20T02:28:16.000Z",
+      "listedDaysAgo": 262,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AIO_USDT",
+      "baseCoin": "AIO",
+      "createTime": 1755083502000,
+      "createTimeISO": "2025-08-13T11:11:42.000Z",
+      "listedDaysAgo": 268,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BMNRSTOCK_USDT",
+      "baseCoin": "BMNRSTOCK",
+      "createTime": 1755058341000,
+      "createTimeISO": "2025-08-13T04:12:21.000Z",
+      "listedDaysAgo": 269,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "IN_USDT",
+      "baseCoin": "IN",
+      "createTime": 1754476297000,
+      "createTimeISO": "2025-08-06T10:31:37.000Z",
+      "listedDaysAgo": 276,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ALL_USDT",
+      "baseCoin": "ALL",
+      "createTime": 1754459966000,
+      "createTimeISO": "2025-08-06T05:59:26.000Z",
+      "listedDaysAgo": 276,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MAMO_USDT",
+      "baseCoin": "MAMO",
+      "createTime": 1754385763000,
+      "createTimeISO": "2025-08-05T09:22:43.000Z",
+      "listedDaysAgo": 277,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PROVE_USDT",
+      "baseCoin": "PROVE",
+      "createTime": 1754374683000,
+      "createTimeISO": "2025-08-05T06:18:03.000Z",
+      "listedDaysAgo": 277,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TOWNS_USDT",
+      "baseCoin": "TOWNS",
+      "createTime": 1754296804000,
+      "createTimeISO": "2025-08-04T08:40:04.000Z",
+      "listedDaysAgo": 278,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CVNASTOCK_USDT",
+      "baseCoin": "CVNASTOCK",
+      "createTime": 1754046797000,
+      "createTimeISO": "2025-08-01T11:13:17.000Z",
+      "listedDaysAgo": 280,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "FIGSTOCK_USDT",
+      "baseCoin": "FIGSTOCK",
+      "createTime": 1754046411000,
+      "createTimeISO": "2025-08-01T11:06:51.000Z",
+      "listedDaysAgo": 280,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PLAY_USDT",
+      "baseCoin": "PLAY",
+      "createTime": 1753862906000,
+      "createTimeISO": "2025-07-30T08:08:26.000Z",
+      "listedDaysAgo": 283,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NAORIS_USDT",
+      "baseCoin": "NAORIS",
+      "createTime": 1753710197000,
+      "createTimeISO": "2025-07-28T13:43:17.000Z",
+      "listedDaysAgo": 284,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "IKA_USDT",
+      "baseCoin": "IKA",
+      "createTime": 1753706135000,
+      "createTimeISO": "2025-07-28T12:35:35.000Z",
+      "listedDaysAgo": 284,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CRCLSTOCK_USDT",
+      "baseCoin": "CRCLSTOCK",
+      "createTime": 1753701675000,
+      "createTimeISO": "2025-07-28T11:21:15.000Z",
+      "listedDaysAgo": 284,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TREE_USDT",
+      "baseCoin": "TREE",
+      "createTime": 1753696236000,
+      "createTimeISO": "2025-07-28T09:50:36.000Z",
+      "listedDaysAgo": 285,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AMZNSTOCK_USDT",
+      "baseCoin": "AMZNSTOCK",
+      "createTime": 1753443817000,
+      "createTimeISO": "2025-07-25T11:43:37.000Z",
+      "listedDaysAgo": 287,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "GOOGLSTOCK_USDT",
+      "baseCoin": "GOOGLSTOCK",
+      "createTime": 1753443730000,
+      "createTimeISO": "2025-07-25T11:42:10.000Z",
+      "listedDaysAgo": 287,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "METASTOCK_USDT",
+      "baseCoin": "METASTOCK",
+      "createTime": 1753443671000,
+      "createTimeISO": "2025-07-25T11:41:11.000Z",
+      "listedDaysAgo": 287,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MCDSTOCK_USDT",
+      "baseCoin": "MCDSTOCK",
+      "createTime": 1753443617000,
+      "createTimeISO": "2025-07-25T11:40:17.000Z",
+      "listedDaysAgo": 287,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AAPLSTOCK_USDT",
+      "baseCoin": "AAPLSTOCK",
+      "createTime": 1753432062000,
+      "createTimeISO": "2025-07-25T08:27:42.000Z",
+      "listedDaysAgo": 288,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ASP_USDT",
+      "baseCoin": "ASP",
+      "createTime": 1753362109000,
+      "createTimeISO": "2025-07-24T13:01:49.000Z",
+      "listedDaysAgo": 288,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ROBINHOOD_USDT",
+      "baseCoin": "ROBINHOOD",
+      "createTime": 1753282275000,
+      "createTimeISO": "2025-07-23T14:51:15.000Z",
+      "listedDaysAgo": 289,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NVIDIA_USDT",
+      "baseCoin": "NVIDIA",
+      "createTime": 1753281902000,
+      "createTimeISO": "2025-07-23T14:45:02.000Z",
+      "listedDaysAgo": 289,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TESLA_USDT",
+      "baseCoin": "TESLA",
+      "createTime": 1753279074000,
+      "createTimeISO": "2025-07-23T13:57:54.000Z",
+      "listedDaysAgo": 289,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "COINBASE_USDT",
+      "baseCoin": "COINBASE",
+      "createTime": 1753278662000,
+      "createTimeISO": "2025-07-23T13:51:02.000Z",
+      "listedDaysAgo": 289,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "XNY_USDT",
+      "baseCoin": "XNY",
+      "createTime": 1753274766000,
+      "createTimeISO": "2025-07-23T12:46:06.000Z",
+      "listedDaysAgo": 289,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ESPORTS_USDT",
+      "baseCoin": "ESPORTS",
+      "createTime": 1752912127000,
+      "createTimeISO": "2025-07-19T08:02:07.000Z",
+      "listedDaysAgo": 294,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TA_USDT",
+      "baseCoin": "TA",
+      "createTime": 1752821928000,
+      "createTimeISO": "2025-07-18T06:58:48.000Z",
+      "listedDaysAgo": 295,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ERA_USDT",
+      "baseCoin": "ERA",
+      "createTime": 1752664549000,
+      "createTimeISO": "2025-07-16T11:15:49.000Z",
+      "listedDaysAgo": 296,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ES_USDT",
+      "baseCoin": "ES",
+      "createTime": 1752635101000,
+      "createTimeISO": "2025-07-16T03:05:01.000Z",
+      "listedDaysAgo": 297,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "C_USDT",
+      "baseCoin": "C",
+      "createTime": 1752564534000,
+      "createTimeISO": "2025-07-15T07:28:54.000Z",
+      "listedDaysAgo": 298,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TAC_USDT",
+      "baseCoin": "TAC",
+      "createTime": 1752500095000,
+      "createTimeISO": "2025-07-14T13:34:55.000Z",
+      "listedDaysAgo": 298,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MANYU_USDT",
+      "baseCoin": "MANYU",
+      "createTime": 1752156796000,
+      "createTimeISO": "2025-07-10T14:13:16.000Z",
+      "listedDaysAgo": 302,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "VELVET_USDT",
+      "baseCoin": "VELVET",
+      "createTime": 1752131163000,
+      "createTimeISO": "2025-07-10T07:06:03.000Z",
+      "listedDaysAgo": 303,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PUMPFUN_USDT",
+      "baseCoin": "PUMPFUN",
+      "createTime": 1752114584000,
+      "createTimeISO": "2025-07-10T02:29:44.000Z",
+      "listedDaysAgo": 303,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "MORI_USDT",
+      "baseCoin": "MORI",
+      "createTime": 1751954621000,
+      "createTimeISO": "2025-07-08T06:03:41.000Z",
+      "listedDaysAgo": 305,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "CROSS_USDT",
+      "baseCoin": "CROSS",
+      "createTime": 1751615934000,
+      "createTimeISO": "2025-07-04T07:58:54.000Z",
+      "listedDaysAgo": 309,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AIN_USDT",
+      "baseCoin": "AIN",
+      "createTime": 1751608845000,
+      "createTimeISO": "2025-07-04T06:00:45.000Z",
+      "listedDaysAgo": 309,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "ICNT_USDT",
+      "baseCoin": "ICNT",
+      "createTime": 1751514378000,
+      "createTimeISO": "2025-07-03T03:46:18.000Z",
+      "listedDaysAgo": 310,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "M_USDT",
+      "baseCoin": "M",
+      "createTime": 1751448234000,
+      "createTimeISO": "2025-07-02T09:23:54.000Z",
+      "listedDaysAgo": 311,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "H_USDT",
+      "baseCoin": "H",
+      "createTime": 1750667439000,
+      "createTimeISO": "2025-06-23T08:30:39.000Z",
+      "listedDaysAgo": 320,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SAHARA_USDT",
+      "baseCoin": "SAHARA",
+      "createTime": 1750424053000,
+      "createTimeISO": "2025-06-20T12:54:13.000Z",
+      "listedDaysAgo": 322,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NEWT_USDT",
+      "baseCoin": "NEWT",
+      "createTime": 1750339014000,
+      "createTimeISO": "2025-06-19T13:16:54.000Z",
+      "listedDaysAgo": 323,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SPK_USDT",
+      "baseCoin": "SPK",
+      "createTime": 1750133357000,
+      "createTimeISO": "2025-06-17T04:09:17.000Z",
+      "listedDaysAgo": 326,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AURASOL_USDT",
+      "baseCoin": "AURASOL",
+      "createTime": 1749623777000,
+      "createTimeISO": "2025-06-11T06:36:17.000Z",
+      "listedDaysAgo": 332,
+      "state": 0,
+      "isNew": true,
+      "isHot": false
+    },
+    {
+      "symbol": "IDOL_USDT",
+      "baseCoin": "IDOL",
+      "createTime": 1749550457000,
+      "createTimeISO": "2025-06-10T10:14:17.000Z",
+      "listedDaysAgo": 333,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "PUMPBTC_USDT",
+      "baseCoin": "PUMPBTC",
+      "createTime": 1749548192000,
+      "createTimeISO": "2025-06-10T09:36:32.000Z",
+      "listedDaysAgo": 333,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "HOME_USDT",
+      "baseCoin": "HOME",
+      "createTime": 1749452362000,
+      "createTimeISO": "2025-06-09T06:59:22.000Z",
+      "listedDaysAgo": 334,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "TAG_USDT",
+      "baseCoin": "TAG",
+      "createTime": 1749435551000,
+      "createTimeISO": "2025-06-09T02:19:11.000Z",
+      "listedDaysAgo": 334,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "BULLA_USDT",
+      "baseCoin": "BULLA",
+      "createTime": 1749208117000,
+      "createTimeISO": "2025-06-06T11:08:37.000Z",
+      "listedDaysAgo": 336,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "RESOLV_USDT",
+      "baseCoin": "RESOLV",
+      "createTime": 1749035801000,
+      "createTimeISO": "2025-06-04T11:16:41.000Z",
+      "listedDaysAgo": 338,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "LA_USDT",
+      "baseCoin": "LA",
+      "createTime": 1748945231000,
+      "createTimeISO": "2025-06-03T10:07:11.000Z",
+      "listedDaysAgo": 340,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "A_USDT",
+      "baseCoin": "A",
+      "createTime": 1748318736000,
+      "createTimeISO": "2025-05-27T04:05:36.000Z",
+      "listedDaysAgo": 347,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SOPH_USDT",
+      "baseCoin": "SOPH",
+      "createTime": 1748243609000,
+      "createTimeISO": "2025-05-26T07:13:29.000Z",
+      "listedDaysAgo": 348,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "HUMA_USDT",
+      "baseCoin": "HUMA",
+      "createTime": 1748242098000,
+      "createTimeISO": "2025-05-26T06:48:18.000Z",
+      "listedDaysAgo": 348,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "B_USDT",
+      "baseCoin": "B",
+      "createTime": 1747827978000,
+      "createTimeISO": "2025-05-21T11:46:18.000Z",
+      "listedDaysAgo": 352,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AWE_USDT",
+      "baseCoin": "AWE",
+      "createTime": 1747814561000,
+      "createTimeISO": "2025-05-21T08:02:41.000Z",
+      "listedDaysAgo": 353,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "SOONNETWORK_USDT",
+      "baseCoin": "SOONNETWORK",
+      "createTime": 1747728311000,
+      "createTimeISO": "2025-05-20T08:05:11.000Z",
+      "listedDaysAgo": 354,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "AGT_USDT",
+      "baseCoin": "AGT",
+      "createTime": 1747377897000,
+      "createTimeISO": "2025-05-16T06:44:57.000Z",
+      "listedDaysAgo": 358,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "NXPC_USDT",
+      "baseCoin": "NXPC",
+      "createTime": 1747212491000,
+      "createTimeISO": "2025-05-14T08:48:11.000Z",
+      "listedDaysAgo": 360,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    },
+    {
+      "symbol": "USELESS_USDT",
+      "baseCoin": "USELESS",
+      "createTime": 1747028762000,
+      "createTimeISO": "2025-05-12T05:46:02.000Z",
+      "listedDaysAgo": 362,
+      "state": 0,
+      "isNew": false,
+      "isHot": false
+    }
+  ]
+}

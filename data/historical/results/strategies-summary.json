@@ -1,0 +1,127 @@
+{
+  "generatedAt": "2026-05-09T11:24:10.607Z",
+  "totalSymbols": 306,
+  "totalSimulations": 83790,
+  "strategies": [
+    {
+      "strategyId": "S01",
+      "bestParams": {
+        "tpPct": -15,
+        "slPct": 15
+      },
+      "trades": 303,
+      "winRate": 58.9622641509434,
+      "expectancy": 2.68867924528302,
+      "profitFactor": 1.4367816091954027,
+      "totalPnl": 518.8968579167052
+    },
+    {
+      "strategyId": "S02",
+      "bestParams": {
+        "tpPct": -10,
+        "slPct": 12
+      },
+      "trades": 302,
+      "winRate": 59.65665236051502,
+      "expectancy": 1.124463519313303,
+      "profitFactor": 1.232269503546099,
+      "totalPnl": 182.51449206132656
+    },
+    {
+      "strategyId": "S03",
+      "bestParams": {
+        "tpPct": -10,
+        "slPct": 12
+      },
+      "trades": 301,
+      "winRate": 54.58515283842795,
+      "expectancy": 0.008733624454147382,
+      "profitFactor": 1.0016025641025637,
+      "totalPnl": -62.24598767932106
+    },
+    {
+      "strategyId": "S04",
+      "bestParams": {
+        "tpPct": -30,
+        "slPct": 10
+      },
+      "trades": 294,
+      "winRate": 25.247524752475247,
+      "expectancy": 0.09900990099009821,
+      "profitFactor": 1.0132450331125826,
+      "totalPnl": 257.6707226204652
+    },
+    {
+      "strategyId": "S05",
+      "bestParams": {
+        "tpPct": -10,
+        "slPct": 5
+      },
+      "trades": 208,
+      "winRate": 27.31707317073171,
+      "expectancy": -0.9024390243902447,
+      "profitFactor": 0.7516778523489931,
+      "totalPnl": -185.31180619880163
+    },
+    {
+      "strategyId": "S06",
+      "bestParams": {
+        "tpPct": -40,
+        "slPct": 5
+      },
+      "trades": 183,
+      "winRate": 10.16949152542373,
+      "expectancy": -0.42372881355932446,
+      "profitFactor": 0.9056603773584903,
+      "totalPnl": 53.42422261010282
+    },
+    {
+      "strategyId": "S07",
+      "bestParams": {
+        "tpPct": -30,
+        "slPct": 12
+      },
+      "trades": 301,
+      "winRate": 30.73170731707317,
+      "expectancy": 0.9073170731707325,
+      "profitFactor": 1.1091549295774648,
+      "totalPnl": 443.3357057563407
+    },
+    {
+      "strategyId": "S08",
+      "bestParams": {
+        "tpPct": -15,
+        "slPct": 8
+      },
+      "trades": 247,
+      "winRate": 35.2112676056338,
+      "expectancy": 0.09859154929577318,
+      "profitFactor": 1.0190217391304346,
+      "totalPnl": 23.819126356348434
+    },
+    {
+      "strategyId": "S09",
+      "bestParams": {
+        "tpPct": -10,
+        "slPct": 5
+      },
+      "trades": 202,
+      "winRate": 33.50785340314136,
+      "expectancy": 0.026178010471203716,
+      "profitFactor": 1.0078740157480313,
+      "totalPnl": 35.123609331758615
+    },
+    {
+      "strategyId": "S10",
+      "bestParams": {
+        "tpPct": -35,
+        "slPct": 15
+      },
+      "trades": 53,
+      "winRate": 36,
+      "expectancy": 3,
+      "profitFactor": 1.3125000000000002,
+      "totalPnl": 167.68688224791165
+    }
+  ]
+}
