@@ -316,10 +316,10 @@ export default function ListingHunter() {
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
               バックテスト勝率{" "}
-              <strong className="text-emerald-700 dark:text-emerald-400">69.6%</strong> ·
+              <strong className="text-emerald-700 dark:text-emerald-400">68.1%</strong> ·
               期待値{" "}
-              <strong className="text-emerald-700 dark:text-emerald-400">+1.50%</strong>/トレード ·
-              対象 303銘柄
+              <strong className="text-emerald-700 dark:text-emerald-400">+1.06%</strong>/トレード ·
+              対象 214銘柄（STOCK除外）
             </p>
           </div>
 
