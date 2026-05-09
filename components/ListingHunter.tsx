@@ -2,6 +2,13 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import type { ListingHunterCandidate, ListingHunterResponse } from "@/app/api/listing-hunter/route";
+import {
+  getOpenRecords,
+  saveHunterRecord,
+  isAutoRecordEnabled,
+  setAutoRecordEnabled,
+  type HunterRecord,
+} from "@/app/lib/listingHunterRecords";
 
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
 
@@ -48,7 +55,15 @@ function CategoryBadge({ category }: { category: ListingHunterCandidate["categor
   );
 }
 
-function CandidateCard({ c }: { c: ListingHunterCandidate }) {
+function CandidateCard({
+  c,
+  isRecorded,
+  onRecord,
+}: {
+  c: ListingHunterCandidate;
+  isRecorded?: boolean;
+  onRecord?: (c: ListingHunterCandidate) => void;
+}) {
   const isMain = c.category === "entry-window";
 
   const warningIcons: string[] = [];
@@ -92,14 +107,29 @@ function CandidateCard({ c }: { c: ListingHunterCandidate }) {
             )}
           </div>
         </div>
-        <a
-          href={mexcUrl(c.symbol)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg transition-colors whitespace-nowrap"
-        >
-          MEXC ↗
-        </a>
+        <div className="flex items-center gap-2">
+          {onRecord && (
+            <button
+              onClick={() => onRecord(c)}
+              disabled={isRecorded}
+              className={`text-xs px-2 py-1 rounded-lg border font-semibold transition-colors ${
+                isRecorded
+                  ? "bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                  : "bg-white dark:bg-gray-800 border-emerald-400 dark:border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+              }`}
+            >
+              {isRecorded ? "✓ 記録済み" : "📝 記録"}
+            </button>
+          )}
+          <a
+            href={mexcUrl(c.symbol)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg transition-colors whitespace-nowrap"
+          >
+            MEXC ↗
+          </a>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-3 text-sm">
@@ -158,6 +188,18 @@ export default function ListingHunter() {
   const [error, setError] = useState("");
   const [autoRefresh, setAutoRefresh] = useState<number>(0);
 
+  // 記録機構の状態
+  const [recordedSymbols, setRecordedSymbols] = useState<Set<string>>(new Set());
+  const [autoRecord, setAutoRecord] = useState(false);
+  const [toast, setToast] = useState("");
+
+  // マウント時に既存のopenレコードを読み込む
+  useEffect(() => {
+    const openRecords = getOpenRecords();
+    setRecordedSymbols(new Set(openRecords.map(r => r.symbol)));
+    setAutoRecord(isAutoRecordEnabled());
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -184,6 +226,72 @@ export default function ListingHunter() {
     return () => clearInterval(id);
   }, [autoRefresh, fetchData]);
 
+  // 全件自動記録: entry-window / sub-window の新規検出銘柄を自動保存
+  useEffect(() => {
+    if (!data || !autoRecord) return;
+    const openSymbols = new Set(getOpenRecords().map(r => r.symbol));
+    const newCandidates = data.candidates.filter(
+      c =>
+        (c.category === "entry-window" || c.category === "sub-window") &&
+        !openSymbols.has(c.symbol),
+    );
+    if (newCandidates.length === 0) return;
+
+    const now = new Date();
+    for (const c of newCandidates) {
+      const entryAt = now.toISOString();
+      const deadline = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+      const record: HunterRecord = {
+        id: `${c.symbol}-${entryAt}`,
+        symbol: c.symbol,
+        entryAt,
+        entryPrice: c.currentPrice,
+        listingAt: c.listedAt,
+        hoursSinceListing: c.hoursSinceListing,
+        tpPrice: c.tradeSetup.tpPrice,
+        slPrice: c.tradeSetup.slPrice,
+        deadline,
+        status: "open",
+        priceHistory: [],
+        recordedManually: false,
+        version: "hunter22h-v1",
+      };
+      saveHunterRecord(record);
+    }
+    setRecordedSymbols(new Set(getOpenRecords().map(r => r.symbol)));
+  }, [data, autoRecord]);
+
+  const handleRecord = useCallback((c: ListingHunterCandidate) => {
+    const now = new Date();
+    const entryAt = now.toISOString();
+    const deadline = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const record: HunterRecord = {
+      id: `${c.symbol}-${entryAt}`,
+      symbol: c.symbol,
+      entryAt,
+      entryPrice: c.currentPrice,
+      listingAt: c.listedAt,
+      hoursSinceListing: c.hoursSinceListing,
+      tpPrice: c.tradeSetup.tpPrice,
+      slPrice: c.tradeSetup.slPrice,
+      deadline,
+      status: "open",
+      priceHistory: [],
+      recordedManually: true,
+      version: "hunter22h-v1",
+    };
+    saveHunterRecord(record);
+    setRecordedSymbols(prev => new Set([...prev, c.symbol]));
+    setToast(`記録しました: ${c.baseCoin}`);
+    setTimeout(() => setToast(""), 3000);
+  }, []);
+
+  const handleAutoRecordToggle = useCallback(() => {
+    const next = !autoRecord;
+    setAutoRecord(next);
+    setAutoRecordEnabled(next);
+  }, [autoRecord]);
+
   const entryWindow = data?.candidates.filter(c => c.category === "entry-window") ?? [];
   const subWindow   = data?.candidates.filter(c => c.category === "sub-window")   ?? [];
   const approaching = data?.candidates.filter(c => c.category === "approaching")  ?? [];
@@ -191,6 +299,13 @@ export default function ListingHunter() {
 
   return (
     <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-50 animate-in fade-in">
+          {toast}
+        </div>
+      )}
+
       {/* Header */}
       <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 p-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -208,28 +323,46 @@ export default function ListingHunter() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-500 dark:text-gray-400">自動更新:</span>
-            {([0, 1, 5] as const).map(m => (
+          <div className="flex flex-col gap-2 items-end text-xs">
+            {/* 全件自動記録トグル */}
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 dark:text-gray-400">⚙️ 全件自動記録:</span>
               <button
-                key={m}
-                onClick={() => setAutoRefresh(m)}
-                className={`px-2.5 py-1 rounded-lg border transition-colors ${
-                  autoRefresh === m
+                onClick={handleAutoRecordToggle}
+                className={`px-2.5 py-1 rounded-lg border font-bold transition-colors ${
+                  autoRecord
                     ? "bg-emerald-500 text-white border-emerald-500"
-                    : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300"
                 }`}
               >
-                {m === 0 ? "OFF" : `${m}分`}
+                {autoRecord ? "ON" : "OFF"}
               </button>
-            ))}
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              className="ml-2 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold disabled:opacity-50 transition-colors"
-            >
-              {loading ? "⏳" : "🔄 更新"}
-            </button>
+            </div>
+
+            {/* 自動更新 + 更新ボタン */}
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 dark:text-gray-400">自動更新:</span>
+              {([0, 1, 5] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setAutoRefresh(m)}
+                  className={`px-2.5 py-1 rounded-lg border transition-colors ${
+                    autoRefresh === m
+                      ? "bg-emerald-500 text-white border-emerald-500"
+                      : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {m === 0 ? "OFF" : `${m}分`}
+                </button>
+              ))}
+              <button
+                onClick={fetchData}
+                disabled={loading}
+                className="ml-2 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold disabled:opacity-50 transition-colors"
+              >
+                {loading ? "⏳" : "🔄 更新"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -279,7 +412,14 @@ export default function ListingHunter() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {entryWindow.map(c => <CandidateCard key={c.symbol} c={c} />)}
+            {entryWindow.map(c => (
+              <CandidateCard
+                key={c.symbol}
+                c={c}
+                isRecorded={recordedSymbols.has(c.symbol)}
+                onRecord={handleRecord}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -293,7 +433,14 @@ export default function ListingHunter() {
             <span className="text-xs font-normal text-gray-400 dark:text-gray-500">勝率65.8%、まだ有効</span>
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {subWindow.map(c => <CandidateCard key={c.symbol} c={c} />)}
+            {subWindow.map(c => (
+              <CandidateCard
+                key={c.symbol}
+                c={c}
+                isRecorded={recordedSymbols.has(c.symbol)}
+                onRecord={handleRecord}
+              />
+            ))}
           </div>
         </section>
       )}
@@ -306,7 +453,14 @@ export default function ListingHunter() {
             もうすぐエントリー（{approaching.length}件）
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {approaching.map(c => <CandidateCard key={c.symbol} c={c} />)}
+            {approaching.map(c => (
+              <CandidateCard
+                key={c.symbol}
+                c={c}
+                isRecorded={recordedSymbols.has(c.symbol)}
+                onRecord={handleRecord}
+              />
+            ))}
           </div>
         </section>
       )}
@@ -319,7 +473,14 @@ export default function ListingHunter() {
               ⏰ 期限切れ ({expired.length}件) — 32h超え、見送り推奨
             </summary>
             <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {expired.map(c => <CandidateCard key={c.symbol} c={c} />)}
+              {expired.map(c => (
+                <CandidateCard
+                  key={c.symbol}
+                  c={c}
+                  isRecorded={recordedSymbols.has(c.symbol)}
+                  onRecord={handleRecord}
+                />
+              ))}
             </div>
           </details>
         </section>

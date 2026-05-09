@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import ShortScanner from "@/components/ShortScanner";
 import ListingHunter from "@/components/ListingHunter";
+import HunterRecords from "@/components/HunterRecords";
 
 const SCORING_ITEMS = [
   { label: "ATH下落",      pts: "3pt", color: "#ef4444" },
@@ -57,7 +58,6 @@ export default function ShortScanPage() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("bell:darkMode") === "true";
   });
-  const [activeTab, setActiveTab] = useState<"scanner" | "hunter">("scanner");
 
   useEffect(() => {
     if (darkMode) {
@@ -111,47 +111,44 @@ export default function ShortScanPage() {
               </div>
               <ScoringBar />
             </div>
-
           </div>
         </div>
       </section>
 
-      {/* Tab switcher */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex">
-            <button
-              onClick={() => setActiveTab("scanner")}
-              className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${
-                activeTab === "scanner"
-                  ? "border-indigo-500 text-indigo-700 dark:text-indigo-400"
-                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              }`}
-            >
-              🔍 スコア型スキャナー
-            </button>
-            <button
-              onClick={() => setActiveTab("hunter")}
-              className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${
-                activeTab === "hunter"
-                  ? "border-emerald-500 text-emerald-700 dark:text-emerald-400"
-                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              }`}
-            >
-              🎯 22hハンター
-              <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
-                NEW
-              </span>
-            </button>
-          </div>
+      {/* アンカーナビ */}
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 flex gap-1">
+          <a
+            href="#hunter"
+            className="py-3 px-4 text-sm font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors rounded-t"
+          >
+            🎯 22hハンター
+          </a>
+          <a
+            href="#scanner"
+            className="py-3 px-4 text-sm font-bold text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors rounded-t"
+          >
+            📊 スコア型スキャナー
+          </a>
         </div>
       </div>
 
-      {/* Content */}
-      <section className="max-w-7xl mx-auto px-4 py-6 md:py-8">
-        {activeTab === "scanner" && <ShortScanner />}
-        {activeTab === "hunter" && <ListingHunter />}
-      </section>
+      {/* Content — 両スキャンが独立して並列実行 */}
+      <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8">
+
+        {/* 上: 22hハンター（緊急性高い・新機能）*/}
+        <section id="hunter">
+          <ListingHunter />
+          <HunterRecords />
+        </section>
+
+        <hr className="border-slate-200 dark:border-slate-700" />
+
+        {/* 下: スコア型スキャナー（既存・主力）*/}
+        <section id="scanner">
+          <ShortScanner />
+        </section>
+      </div>
 
       {/* Disclaimer */}
       <footer className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
