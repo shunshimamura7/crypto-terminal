@@ -22,6 +22,7 @@ import BitgetLongFinder from "./BitgetLongFinder";
 import HolderAnalysis from "./HolderAnalysis";
 import TechnicalAnalysis from "./TechnicalAnalysis";
 import DerivativesPanel from "./DerivativesPanel";
+import UpgradeSection from "./UpgradeSection";
 
 // ─────────────────────────────────────────────
 // Types
@@ -1076,6 +1077,10 @@ export default function CryptoSearch() {
                   <div className="text-xs text-[var(--text-secondary)] mb-2 font-medium">公式リンク</div>
                   <LinkBadges links={result.links} />
                 </div>
+              )}
+
+              {result.coin && (
+                <UpgradeSection symbol={result.coin.symbol} />
               )}
 
               {result.coin ? <CoinCard coin={result.coin} dexLink={result.links?.dexscreener} scoreData={scoreData} />
