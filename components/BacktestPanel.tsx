@@ -710,7 +710,7 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
   const [open,          setOpen]          = useState(true);
   const [showRecords,   setShowRecords]   = useState(false);
   const [showActivePos, setShowActivePos] = useState(false);
-  const [btPresetTab,   setBtPresetTab]   = useState<"all" | "low_lev" | "new_listing" | "v2_only" | "collect" | "production">("all");
+  const [btPresetTab,   setBtPresetTab]   = useState<"all" | "low_lev" | "new_listing" | "v2_only" | "collect" | "production" | "precursor">("all");
   const [btMainTab,     setBtMainTab]     = useState<"stats" | "loss">("stats");
 
   const analysis = useMemo(() => analyzeBacktestRecords(records), [records]);
@@ -721,13 +721,16 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
     r.version === "v2.0" && ["tp1_hit", "tp2_hit", "tp3_hit", "sl_hit"].includes(r.status)
   ).length;
 
-  const tabRecords = btPresetTab === "all"      ? records
-    : btPresetTab === "v2_only" ? records.filter(r => r.version === "v2.0")
+  const tabRecords = btPresetTab === "all"        ? records
+    : btPresetTab === "v2_only"   ? records.filter(r => r.version === "v2.0")
+    : btPresetTab === "precursor" ? records.filter(r => r.strategy === "PRECURSOR")
     : records.filter(r => r.preset === btPresetTab);
 
   const tabStats = useMemo(
     () => btPresetTab === "v2_only"
       ? calculateStats(records.filter(r => r.version === "v2.0"), "all")
+      : btPresetTab === "precursor"
+      ? calculateStats(records.filter(r => r.strategy === "PRECURSOR"), "all")
       : calculateStats(records, btPresetTab === "all" ? "all" : btPresetTab),
     [records, btPresetTab],
   );
@@ -782,6 +785,7 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                   { key: "new_listing", label: "🆕新規上場",    count: records.filter(r => r.preset === "new_listing").length },
                   { key: "production",  label: "📈 本番",       count: records.filter(r => r.preset === "production").length },
                   { key: "collect",     label: "📊 収集",       count: records.filter(r => r.preset === "collect").length },
+                  { key: "precursor",  label: "🔮 前兆",       count: records.filter(r => r.strategy === "PRECURSOR").length },
                 ] as const).map(tab => (
                   <button key={tab.key} onClick={() => setBtPresetTab(tab.key)}
                     className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${

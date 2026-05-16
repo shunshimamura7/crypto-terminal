@@ -39,6 +39,8 @@ import { evaluateHunterPatterns } from "@/app/lib/hunterScorer";
 import { saveHunterRecord, getHunterRecords } from "@/app/lib/hunterStorage";
 import type { HunterPattern } from "@/app/lib/types/hunter";
 import type { HunterRecord } from "@/app/lib/listingHunterRecords";
+import type { PrecursorSignal } from "@/app/lib/precursorScanner";
+import type { PrecursorScanResponse } from "@/app/api/precursor-scan/route";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -2665,6 +2667,136 @@ function ShortcutHelpModal({ t, onClose }: { t: Translations; onClose: () => voi
   );
 }
 
+// ─── PrecursorPanel ───────────────────────────────────────────────────────────
+
+interface PrecursorPanelProps {
+  signals: PrecursorSignal[];
+  loading: boolean;
+  error: string;
+  fetchedAt: number | null;
+  onScan: () => void;
+  onRecord: (signal: PrecursorSignal) => void;
+}
+
+function PrecursorPanel({ signals, loading, error, fetchedAt, onScan, onRecord }: PrecursorPanelProps) {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-purple-800 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+      >
+        <span>
+          🔮 前兆スキャン
+          {signals.length > 0 && (
+            <span className="ml-2 text-xs font-normal text-purple-600">
+              {signals.length}件検出
+            </span>
+          )}
+        </span>
+        <span className="text-gray-400 text-xs">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 pt-2 space-y-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={onScan}
+              disabled={loading}
+              className="text-xs px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-50 transition-colors"
+            >
+              {loading ? "⏳ スキャン中（最大60秒）…" : "🔍 前兆スキャン実行"}
+            </button>
+            {fetchedAt && (
+              <span className="text-[11px] text-gray-400">
+                取得: {new Date(fetchedAt).toLocaleTimeString("ja-JP")}
+              </span>
+            )}
+          </div>
+
+          {error && (
+            <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 rounded p-2">
+              ❌ {error}
+            </div>
+          )}
+
+          {!loading && signals.length === 0 && fetchedAt && (
+            <div className="text-xs text-gray-400 text-center py-4">
+              前兆シグナル（スコア≥4）が見つかりませんでした
+            </div>
+          )}
+
+          {signals.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700 text-left text-gray-500">
+                    <th className="py-1.5 pr-2 font-semibold">銘柄</th>
+                    <th className="py-1.5 pr-2 text-center font-semibold">スコア</th>
+                    <th className="py-1.5 pr-2 font-semibold">シグナル</th>
+                    <th className="py-1.5 pr-2 text-right font-semibold">FR</th>
+                    <th className="py-1.5 pr-2 text-right font-semibold">TP(-5%)</th>
+                    <th className="py-1.5 pr-2 text-right font-semibold">SL(+8%)</th>
+                    <th className="py-1.5 font-semibold"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {signals.map(s => {
+                    const base = s.symbol.replace(/_USDT$/, "");
+                    return (
+                      <tr key={s.symbol} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="py-1.5 pr-2 font-bold text-gray-800 dark:text-gray-100">{base}</td>
+                        <td className="py-1.5 pr-2 text-center">
+                          <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${
+                            s.precursorScore >= 6 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                            : s.precursorScore >= 5 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
+                            : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"
+                          }`}>
+                            {s.precursorScore}/7
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <div className="flex flex-wrap gap-0.5">
+                            {s.signals.volDecline4h   && <span className="px-1 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded text-[10px]">出来高↓4h</span>}
+                            {s.signals.lowerHighs4h   && <span className="px-1 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded text-[10px]">高値↓4h</span>}
+                            {s.signals.volDryDaily    && <span className="px-1 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded text-[10px]">出来高枯渇</span>}
+                            {s.signals.lowerHighsDaily && <span className="px-1 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded text-[10px]">高値↓日足</span>}
+                            {s.signals.frLongTrap     && <span className="px-1 py-0.5 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded text-[10px]">FRトラップ</span>}
+                          </div>
+                        </td>
+                        <td className="py-1.5 pr-2 text-right font-mono">
+                          <span className={s.fr > 0 ? "text-orange-600" : "text-blue-500"}>
+                            {(s.fr * 100).toFixed(4)}%
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-2 text-right font-mono text-emerald-600">
+                          ${s.suggestedTP.toPrecision(4)}
+                        </td>
+                        <td className="py-1.5 pr-2 text-right font-mono text-red-500">
+                          ${s.suggestedSL.toPrecision(4)}
+                        </td>
+                        <td className="py-1.5">
+                          <button
+                            onClick={() => onRecord(s)}
+                            className="text-[11px] px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold transition-colors whitespace-nowrap"
+                          >
+                            BT記録
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ShortScanner() {
   const [data,         setData]         = useState<ScanResponse | null>(null);
@@ -2848,6 +2980,10 @@ export default function ShortScanner() {
 
   // 22hハンター
   const [hunterRecords, setHunterRecords] = useState<HunterRecord[]>([]);
+  const [precursorSignals, setPrecursorSignals] = useState<PrecursorSignal[]>([]);
+  const [precursorLoading, setPrecursorLoading] = useState(false);
+  const [precursorError, setPrecursorError] = useState("");
+  const [precursorFetchedAt, setPrecursorFetchedAt] = useState<number | null>(null);
   const [hunterModalCandidate, setHunterModalCandidate] = useState<{
     symbol: string;
     matchedPatterns: HunterPattern[];
@@ -4379,6 +4515,62 @@ export default function ShortScanner() {
       <HunterPanel
         records={hunterRecords}
         onRecordsChange={() => setHunterRecords(getHunterRecords())}
+      />
+
+      {/* 前兆スキャンパネル */}
+      <PrecursorPanel
+        signals={precursorSignals}
+        loading={precursorLoading}
+        error={precursorError}
+        fetchedAt={precursorFetchedAt}
+        onScan={async () => {
+          setPrecursorLoading(true);
+          setPrecursorError("");
+          try {
+            const res = await fetch("/api/precursor-scan", {
+              signal: AbortSignal.timeout(65_000),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data: PrecursorScanResponse = await res.json();
+            setPrecursorSignals(data.results);
+            setPrecursorFetchedAt(data.fetchedAt);
+          } catch (e) {
+            setPrecursorError(e instanceof Error ? e.message : String(e));
+          } finally {
+            setPrecursorLoading(false);
+          }
+        }}
+        onRecord={(signal) => {
+          const id = `precursor-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const rr = (signal.currentPrice - signal.suggestedTP) / (signal.suggestedSL - signal.currentPrice);
+          const record: BacktestRecord = {
+            id,
+            symbol: signal.symbol,
+            score: signal.precursorScore,
+            scoreMax: 7,
+            recordedAt: signal.detectedAt,
+            entryPrice: signal.currentPrice,
+            sl: signal.suggestedSL,
+            tp1: signal.suggestedTP,
+            tp2: signal.currentPrice * 0.92,
+            tp3: signal.currentPrice * 0.88,
+            rrRatio: rr > 0 ? rr : 0,
+            trendDirection: "short",
+            status: "active",
+            resolvedAt: null,
+            resolvedPrice: null,
+            maxDrawdown: null,
+            maxProfit: null,
+            currentPrice: null,
+            lastCheckedAt: null,
+            preset: "production",
+            strategy: "PRECURSOR",
+            version: "v2.0",
+          };
+          const all = getRecords();
+          saveRecords([...all, record]);
+          setBtRecords(getRecords());
+        }}
       />
 
       {/* Symbol Health Panel */}

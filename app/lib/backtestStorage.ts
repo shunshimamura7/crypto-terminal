@@ -134,6 +134,9 @@ export interface BacktestRecord {
   isNewListing?: boolean;          // 記録時に listedDaysAgo <= 30 だったか
   listedDaysAgo?: number;          // 記録時の上場経過日数
   pumpFromListingPct?: number;     // 初値→ATH 上昇率% (initialPrice基準)
+
+  // ★ PRECURSOR: 前兆スキャン
+  strategy?: "PRECURSOR";         // 前兆スキャンで記録したレコード
 }
 
 export function getRecords(): BacktestRecord[] {
