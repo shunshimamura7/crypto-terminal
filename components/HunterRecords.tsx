@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -16,7 +16,9 @@ import {
   type HunterRecordStatus,
   MAX_PRICE_HISTORY,
 } from "@/app/lib/listingHunterRecords";
+import { getPatternStats, getHourBucketStats } from "@/app/lib/hunterStorage";
 import type { CheckResponse } from "@/app/api/listing-hunter/check-records/route";
+import type { BacktestRecord } from "@/app/lib/backtestStorage";
 
 const BACKTEST_WIN_RATE = 69.6;
 
@@ -188,11 +190,92 @@ function exportCsv(records: HunterRecord[]): void {
   URL.revokeObjectURL(url);
 }
 
+function exportAllRecordsCSV(): void {
+  const btRecords: BacktestRecord[] = JSON.parse(
+    localStorage.getItem("bell:backtest:records") ?? "[]",
+  );
+
+  if (btRecords.length === 0) {
+    alert("エクスポートするデータがありません");
+    return;
+  }
+
+  const rows = btRecords.map(r => ({
+    symbol: r.symbol,
+    entryDate: new Date(r.recordedAt).toISOString(),
+    score: r.score ?? "",
+    scoreMax: r.scoreMax ?? "",
+    status: r.status ?? "",
+    entryPrice: r.entryPrice ?? "",
+    resolvedPrice: r.resolvedPrice ?? "",
+    sl: r.sl ?? "",
+    tp1: r.tp1 ?? "",
+    tp2: r.tp2 ?? "",
+    tp3: r.tp3 ?? "",
+    adjustedPnlPct: r.adjustedPnlPct ?? "",
+    slReason: r.slReason ?? "",
+    version: r.version ?? "v1",
+    preset: r.preset ?? "",
+    strategyTag: r.strategyTag ?? "",
+    confidence: r.confidence ?? "",
+    dangerLevel: r.dangerLevel ?? "",
+    marketPhase: r.marketContext?.marketPhase ?? "",
+    btcPrice: r.marketContext?.btcPrice ?? "",
+    fearGreed: r.marketContext?.fearGreed ?? "",
+    strategyBadges: r.strategyBadges?.join(";") ?? "",
+    convictionLevel: r.convictionLevel ?? "",
+    frCumulativeCost: r.frCumulativeCost ?? "",
+    estimatedSlippage: r.estimatedSlippage ?? "",
+    dropScore: r.scoreBreakdown?.dropScore ?? "",
+    volumeDryScore: r.scoreBreakdown?.volumeDryScore ?? "",
+    frScore: r.scoreBreakdown?.frScore ?? "",
+    freshnessScore: r.scoreBreakdown?.freshnessScore ?? "",
+    oiScore: r.scoreBreakdown?.oiScore ?? "",
+    oiChangeScore: r.scoreBreakdown?.oiChangeScore ?? "",
+    trendScore: r.scoreBreakdown?.trendScore ?? "",
+    pumpScore: r.scoreBreakdown?.pumpScore ?? "",
+    btcCorrScore: r.scoreBreakdown?.btcCorrScore ?? "",
+    patternScore: r.scoreBreakdown?.patternScore ?? "",
+    rsiScore: r.scoreBreakdown?.rsiScore ?? "",
+    pocDistanceScore: r.scoreBreakdown?.pocDistanceScore ?? "",
+    volTrendScore: r.scoreBreakdown?.volTrendScore ?? "",
+    exclusivityScore: r.scoreBreakdown?.exclusivityScore ?? "",
+    frBonus: r.scoreBreakdown?.frBonus ?? "",
+    futuresHeatScore: r.scoreBreakdown?.futuresHeatScore ?? "",
+    snsHeatScore: r.scoreBreakdown?.snsHeatScore ?? "",
+    mcFdvScore: r.scoreBreakdown?.mcFdvScore ?? "",
+  }));
+
+  const header = Object.keys(rows[0]).join(",");
+  const body = rows
+    .map(r =>
+      Object.values(r)
+        .map(v => (String(v).includes(",") ? `"${v}"` : v))
+        .join(","),
+    )
+    .join("\n");
+  const csv = "﻿" + header + "\n" + body;
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `bell_all_records_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function HunterRecords() {
   const [records, setRecords] = useState<HunterRecord[]>([]);
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState("");
   const [lastChecked, setLastChecked] = useState("");
+  const [statsOpen, setStatsOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("bell:ui:hunter_stats_open") === "true";
+  });
+  const patternStats = useMemo(() => getPatternStats(records), [records]);
+  const hourStats    = useMemo(() => getHourBucketStats(records), [records]);
 
   const loadRecords = useCallback(() => {
     setRecords(getHunterRecords());
@@ -321,6 +404,12 @@ export default function HunterRecords() {
             >
               📥 CSV
             </button>
+            <button
+              onClick={exportAllRecordsCSV}
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+            >
+              📦 全記録エクスポート
+            </button>
           </div>
         </div>
 
@@ -383,6 +472,101 @@ export default function HunterRecords() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 詳細統計アコーディオン */}
+      {records.length > 0 && (
+        <div className="border-t border-gray-100 dark:border-gray-800">
+          <button
+            onClick={() => {
+              const next = !statsOpen;
+              setStatsOpen(next);
+              localStorage.setItem("bell:ui:hunter_stats_open", String(next));
+            }}
+            className="w-full px-5 py-3 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+          >
+            <span className="font-semibold text-xs">📊 詳細統計（決着理由別・経過時間別）</span>
+            <span className="text-xs text-gray-400">{statsOpen ? "▲ 閉じる" : "▼ 開く"}</span>
+          </button>
+
+          {statsOpen && (
+            <div className="px-5 pb-5 space-y-4">
+              {/* 決着理由別統計 */}
+              <div>
+                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">決着理由別統計</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs min-w-[400px]">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700 text-left text-gray-500 dark:text-gray-400">
+                        <th className="py-1 pr-2">決着理由</th>
+                        <th className="py-1 pr-2 text-right">件数</th>
+                        <th className="py-1 pr-2 text-right">勝</th>
+                        <th className="py-1 pr-2 text-right">負</th>
+                        <th className="py-1 pr-2 text-right">勝率</th>
+                        <th className="py-1 text-right">平均PnL%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {patternStats.map(ps => (
+                        <tr key={ps.pattern} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                          <td className="py-1 pr-2 font-medium text-amber-600 dark:text-amber-400">{ps.name}</td>
+                          <td className="py-1 pr-2 text-right">{ps.total}</td>
+                          <td className="py-1 pr-2 text-right text-emerald-600 dark:text-emerald-400">{ps.wins}</td>
+                          <td className="py-1 pr-2 text-right text-red-500 dark:text-red-400">{ps.losses}</td>
+                          <td className="py-1 pr-2 text-right">
+                            {ps.total > 0 ? `${ps.winRate.toFixed(0)}%` : "—"}
+                          </td>
+                          <td className="py-1 text-right">
+                            {ps.total > 0 ? (
+                              <span className={ps.avgRR >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}>
+                                {ps.avgRR >= 0 ? "+" : ""}{ps.avgRR.toFixed(2)}%
+                              </span>
+                            ) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 先物上場後経過時間別勝率 */}
+              <div>
+                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">先物上場後経過時間別勝率</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs min-w-[300px]">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700 text-left text-gray-500 dark:text-gray-400">
+                        <th className="py-1 pr-2">経過時間</th>
+                        <th className="py-1 pr-2 text-right">件数</th>
+                        <th className="py-1 text-right">勝率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hourStats.map(hs => (
+                        <tr key={hs.label} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                          <td className="py-1 pr-2 font-medium text-gray-700 dark:text-gray-300">{hs.label}</td>
+                          <td className="py-1 pr-2 text-right">{hs.total}</td>
+                          <td className="py-1 text-right">
+                            {hs.total > 0 ? (
+                              <span className={
+                                hs.winRate >= 60 ? "text-emerald-600 dark:text-emerald-400 font-medium" :
+                                hs.winRate >= 40 ? "text-yellow-600 dark:text-yellow-400" :
+                                "text-red-500 dark:text-red-400"
+                              }>
+                                {hs.winRate.toFixed(0)}%
+                              </span>
+                            ) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

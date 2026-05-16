@@ -34,9 +34,9 @@ import type { SymbolHealth, DangerSymbol } from "@/app/lib/symbolHealth";
 import BacktestPanel from "@/components/BacktestPanel";
 import PnlSimulator from "@/components/PnlSimulator";
 import TradeSetupCard from "@/components/TradeSetupCard";
-import HunterPanel, { HunterModal } from "@/components/HunterPanel";
+import { HunterModal } from "@/components/HunterPanel";
 import { evaluateHunterPatterns } from "@/app/lib/hunterScorer";
-import { saveHunterRecord, getHunterRecords } from "@/app/lib/hunterStorage";
+import { saveHunterRecord } from "@/app/lib/hunterStorage";
 import type { HunterPattern } from "@/app/lib/types/hunter";
 import type { HunterRecord } from "@/app/lib/listingHunterRecords";
 
@@ -2846,8 +2846,7 @@ export default function ShortScanner() {
   const [btRecords, setBtRecords] = useState<BacktestRecord[]>([]);
   const btStats = useMemo(() => calculateStats(btRecords), [btRecords]);
 
-  // 22hハンター
-  const [hunterRecords, setHunterRecords] = useState<HunterRecord[]>([]);
+  // 22hハンター記録モーダル
   const [hunterModalCandidate, setHunterModalCandidate] = useState<{
     symbol: string;
     matchedPatterns: HunterPattern[];
@@ -2884,7 +2883,6 @@ export default function ShortScanner() {
 
   useEffect(() => { setSnapshots(getSnapshots()); }, []);
   useEffect(() => { setBtRecords(getRecords()); }, []);
-  useEffect(() => { setHunterRecords(getHunterRecords()); }, []);
 
   // 10-minute background price + FR update for active/pending backtest records
   useEffect(() => {
@@ -4375,12 +4373,6 @@ export default function ShortScanner() {
         onReset={() => { clearRecords(); setBtRecords([]); }}
       />
 
-      {/* 22hハンターPanel */}
-      <HunterPanel
-        records={hunterRecords}
-        onRecordsChange={() => setHunterRecords(getHunterRecords())}
-      />
-
       {/* Symbol Health Panel */}
       {showHealthPanel && (
         <SymbolHealthPanel
@@ -4418,7 +4410,6 @@ export default function ShortScanner() {
               version: "hunter22h-v1",
             };
             saveHunterRecord(record);
-            setHunterRecords(getHunterRecords());
           }}
           onClose={() => setHunterModalCandidate(null)}
         />
