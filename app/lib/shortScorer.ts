@@ -226,6 +226,10 @@ export interface ShortCandidate {
   // ─── optional enrichment (Phase B / Stage 3.5) ───────────────────────────
   newsContext?: CoinNewsContext;
   liquidityInfo?: LiquidityInfo;
+  // ─── 22hハンター用フィールド ──────────────────────────────────────────────
+  futuresListedAt?: string;    // MEXC先物上場UTC ISO文字列
+  hoursFromFutures?: number;   // 先物上場からの経過時間（h）
+  closes1h?: number[];         // 直近1h足close配列（P2判定用）
 }
 
 // ─── Liquidation Zone (施策5) ─────────────────────────────────────────────────

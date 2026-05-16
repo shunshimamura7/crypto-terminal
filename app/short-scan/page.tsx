@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import ShortScanner from "@/components/ShortScanner";
 import ListingHunter from "@/components/ListingHunter";
 import HunterRecords from "@/components/HunterRecords";
+import Strategy36hScanner from "@/components/Strategy36hScanner";
 
 const SCORING_ITEMS = [
   { label: "ATH下落",      pts: "3pt", color: "#ef4444" },
@@ -125,6 +126,12 @@ export default function ShortScanPage() {
             🎯 22hハンター
           </a>
           <a
+            href="#strategy36h"
+            className="py-3 px-4 text-sm font-bold text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-colors rounded-t"
+          >
+            📈 36hロング
+          </a>
+          <a
             href="#scanner"
             className="py-3 px-4 text-sm font-bold text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors rounded-t"
           >
@@ -140,6 +147,13 @@ export default function ShortScanPage() {
         <section id="hunter">
           <ListingHunter />
           <HunterRecords />
+        </section>
+
+        <hr className="border-slate-200 dark:border-slate-700" />
+
+        {/* 36hロング戦略スキャナー */}
+        <section id="strategy36h">
+          <Strategy36hScanner />
         </section>
 
         <hr className="border-slate-200 dark:border-slate-700" />

@@ -34,6 +34,10 @@ import type { SymbolHealth, DangerSymbol } from "@/app/lib/symbolHealth";
 import BacktestPanel from "@/components/BacktestPanel";
 import PnlSimulator from "@/components/PnlSimulator";
 import TradeSetupCard from "@/components/TradeSetupCard";
+import HunterPanel, { HunterModal } from "@/components/HunterPanel";
+import { evaluateHunterPatterns } from "@/app/lib/hunterScorer";
+import { saveHunterRecord, getHunterRecords } from "@/app/lib/hunterStorage";
+import type { HunterRecord, HunterPattern } from "@/app/lib/types/hunter";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -2841,6 +2845,26 @@ export default function ShortScanner() {
   const [btRecords, setBtRecords] = useState<BacktestRecord[]>([]);
   const btStats = useMemo(() => calculateStats(btRecords), [btRecords]);
 
+  // 22hハンター
+  const [hunterRecords, setHunterRecords] = useState<HunterRecord[]>([]);
+  const [hunterModalCandidate, setHunterModalCandidate] = useState<{
+    symbol: string;
+    matchedPatterns: HunterPattern[];
+    primaryPattern: HunterPattern | null;
+    currentPrice: number;
+    athPrice: number;
+    athDropPct: number;
+    volumeRatio: number;
+    frAtEntry: number;
+    priceChange24h: number;
+    sl: number;
+    tp1: number;
+    tp2: number;
+    rrRatio: number;
+    futuresListedAt: string;
+    hoursFromFutures: number;
+  } | null>(null);
+
   // Market context for DangerZone + Phase3 Regime
   const [marketBtcChange, setMarketBtcChange] = useState<number>(0);
   const [marketFearGreed, setMarketFearGreed] = useState<number | null>(null);
@@ -2859,6 +2883,7 @@ export default function ShortScanner() {
 
   useEffect(() => { setSnapshots(getSnapshots()); }, []);
   useEffect(() => { setBtRecords(getRecords()); }, []);
+  useEffect(() => { setHunterRecords(getHunterRecords()); }, []);
 
   // 10-minute background price + FR update for active/pending backtest records
   useEffect(() => {
@@ -3935,6 +3960,7 @@ export default function ShortScanner() {
                   const p24 = c.priceChange24h, p7 = c.priceChange7d;
                   const isSelected = idx === selectedIdx;
                   const shortRec = getShortRecommendation(c, marketBtcChange, recentSlHitSymbols);
+                  const hoursFromListing = c.hoursFromFutures ?? (c.listedDaysAgo * 24);
                   return (
                     <React.Fragment key={c.symbol}>
                       <tr id={`row-${c.symbol}`}
@@ -3989,6 +4015,26 @@ export default function ShortScanner() {
                                 })}
                               </div>
                             )}
+                            {/* ── 時間帯戦略バッジ ── */}
+                            {(hoursFromListing >= 33 && hoursFromListing < 39) || (hoursFromListing >= 22 && hoursFromListing < 26) || (hoursFromListing >= 3 && hoursFromListing < 7) ? (
+                              <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                {hoursFromListing >= 33 && hoursFromListing < 39 && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 border border-green-300">
+                                    🎯 A1/A2/A3
+                                  </span>
+                                )}
+                                {hoursFromListing >= 22 && hoursFromListing < 26 && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300">
+                                    📊 A5
+                                  </span>
+                                )}
+                                {hoursFromListing >= 3 && hoursFromListing < 7 && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">
+                                    ⚡ A4
+                                  </span>
+                                )}
+                              </div>
+                            ) : null}
                             {/* ── バッジ: 折りたたみ/展開 ── */}
                             {(() => {
                               const isBadgeOpen = expandedBadges.has(c.symbol);
@@ -4083,6 +4129,13 @@ export default function ShortScanner() {
                                   )}
                                   {/* FR監視トグル */}
                                   <FRWatchToggle symbol={base} />
+                                  {/* 旧22hハンター廃止警告 */}
+                                  {hoursFromListing >= 20 && hoursFromListing < 26 && (
+                                    <div className="bg-yellow-50 border border-yellow-400 rounded px-3 py-2 mt-1 text-xs">
+                                      <span className="text-yellow-800 font-semibold">⚠️ 旧22hハンター（廃止）の時間帯</span>
+                                      <span className="text-yellow-700 ml-2">期待値 -0.74%（検証済み）→ A5戦略を使用してください</span>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })()}
@@ -4229,6 +4282,39 @@ export default function ShortScanner() {
                             </a>
                           </div>
                         </td>
+
+                        {/* 22hハンター🎯ボタン（新規上場72h以内） */}
+                        <td className="px-1 py-1 text-center">
+                          {(typeof c.hoursFromFutures === "number" && c.hoursFromFutures <= 72) || c.listedDaysAgo <= 3 ? (
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                const result = evaluateHunterPatterns(c);
+                                setHunterModalCandidate({
+                                  symbol: c.symbol,
+                                  matchedPatterns: result.matchedPatterns,
+                                  primaryPattern: result.primaryPattern,
+                                  currentPrice: c.currentPrice,
+                                  athPrice: c.ath14d,
+                                  athDropPct: c.athDropPct,
+                                  volumeRatio: c.volumeChangeRatio,
+                                  frAtEntry: c.fundingRate ?? 0,
+                                  priceChange24h: c.priceChange24h,
+                                  sl:      c.tradeSetup?.sl   ?? c.currentPrice * 1.08,
+                                  tp1:     c.tradeSetup?.tp1  ?? c.currentPrice * 0.95,
+                                  tp2:     c.tradeSetup?.tp2  ?? c.currentPrice * 0.90,
+                                  rrRatio: c.tradeSetup?.rrTp2 ?? c.tradeSetup?.rrRatio ?? 1.5,
+                                  futuresListedAt: c.futuresListedAt ?? new Date().toISOString(),
+                                  hoursFromFutures: c.hoursFromFutures ?? (c.listedDaysAgo * 24),
+                                });
+                              }}
+                              className="text-base hover:scale-110 transition-transform"
+                              title="22hハンターに記録"
+                            >
+                              🎯
+                            </button>
+                          ) : null}
+                        </td>
                       </tr>
                       {isOpen && <ScoreDetail c={c} snapshots={snapshots} alerts={alerts} t={t} lang={lang} watchlistSet={watchlistSet} onWatchlistToggle={toggleWatchlist} fng={marketRegime?.fng} />}
                     </React.Fragment>
@@ -4288,6 +4374,12 @@ export default function ShortScanner() {
         onReset={() => { clearRecords(); setBtRecords([]); }}
       />
 
+      {/* 22hハンターPanel */}
+      <HunterPanel
+        records={hunterRecords}
+        onRecordsChange={() => setHunterRecords(getHunterRecords())}
+      />
+
       {/* Symbol Health Panel */}
       {showHealthPanel && (
         <SymbolHealthPanel
@@ -4301,6 +4393,32 @@ export default function ShortScanner() {
 
       {/* Keyboard shortcut help (施策3) */}
       {showShortcutHelp && <ShortcutHelpModal t={t} onClose={() => setShowShortcutHelp(false)} />}
+
+      {/* 22hハンター記録モーダル */}
+      {hunterModalCandidate && (
+        <HunterModal
+          {...hunterModalCandidate}
+          onSave={async (partial) => {
+            const ctx = await getCurrentMarketContext();
+            const record: HunterRecord = {
+              id: `hunter-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              recordedAt: new Date().toISOString(),
+              spotListedAt: null,
+              hoursFromSpot: null,
+              status: "active",
+              marketContext: ctx ? {
+                btcPrice: ctx.btcPrice,
+                fearGreed: ctx.fearGreed,
+                marketPhase: ctx.marketPhase,
+              } : undefined,
+              ...partial,
+            };
+            saveHunterRecord(record);
+            setHunterRecords(getHunterRecords());
+          }}
+          onClose={() => setHunterModalCandidate(null)}
+        />
+      )}
     </div>
   );
 }

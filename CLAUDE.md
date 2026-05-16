@@ -32,11 +32,13 @@ Next.js 16 (App Router) + TypeScript + Vercel Hobby Plan。
 - レートリミット: インメモリMap（再デプロイでリセット）
 
 ## ショートスキャナー スコアリング（Phase 3後）
-- サーバーサイド最大: 23pt
-  - dropScore(3) + volumeDry(3) + FR(2) + freshness(2) + OI(2) + oiChange(2) + trend(3) + pump(2) + btcCorr(1) + pattern(3)
-- クライアント追加（CoinGecko連携時）: 最大+11pt = 合計34pt
-  - exclusivity(2) + frConsecutive(1) + futuresHeat(2) + snsHeat(1) + mcFdv(3) + oiChangeClient(2)
-- バックテスト scoreMax: 23
+- サーバーサイド最大: 27pt
+  - dropScore(3) + volumeDry(3) + FR(2) + freshness(2) + OI(2) + trend(3) + pump(2) + btcCorr(1) + pattern(3) + rsi(2) + pocDistance(2) + volTrend(2)
+  - ※ oiChangeScore はサーバー側では常時0（null渡し）
+- クライアント追加: DISPLAY_MAX = 45pt（CG連携時）/ 39pt（CG連携なし）[ShortScanner.tsx:55]
+  - exclusivity(2) + frConsecutive(1) + futuresHeat(2) + snsHeat(1) + mcFdv(3) + oiChangeClient(2) + riskOffBonus(最大+1) + newListingBonus(最大+5) + fearGreedBonus(最大+2) - mcFdvPenalty(最大-2)
+  - RECOMMEND_THRESHOLD: displayScore >= 13（CG連携時）/ >= 11（CG連携なし）[ShortScanner.tsx:57]
+- バックテスト scoreMax: 27 [backtestChecker.ts:311]
 
 ## 外部API
 - MEXC Futures: 公開API（認証不要）

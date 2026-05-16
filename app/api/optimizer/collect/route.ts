@@ -18,11 +18,29 @@ const EXCLUDED_BASE = new Set([
   "NVDA", "TSLA", "AAPL", "META", "GOOGL", "AMZN", "MSFT", "NFLX", "AMD", "COIN", "MSTR",
 ]);
 
+// 非crypto除外キーワード（株式/コモディティ/指数）
+const EXCLUDE_KEYWORDS = [
+  // 株式トークン
+  "ANTHROPIC", "OPENAI", "SPACEX", "TRUMP", "MUSK",
+  "NVIDIA", "TSLA", "AAPL", "GOOGL", "MSFT", "META",
+  "AMZN", "NFLX", "UBER", "COIN", "HOOD",
+  // コモディティ
+  "USOIL", "XAUT", "ALUMINUM", "SILVER", "COPPER",
+  "NATGAS", "WHEAT", "CORN", "OIL", "CRUDE",
+  // 指数
+  "SPX500", "SPX", "US30", "HK50", "JP225", "NAS100",
+  "NIFTY", "DAX", "FTSE", "CAC40", "ASX200", "VIX",
+  // FX系
+  "EURUSD", "GBPUSD", "USDJPY",
+];
+
 function isExcluded(symbol: string): boolean {
   const base = symbol.replace(/_USDT$/i, "").toUpperCase();
   if (EXCLUDED_BASE.has(base)) return true;
   // e.g. AAPLSTOCK_USDT, NFLXSTOCK_USDT
   if (/STOCK$/i.test(base)) return true;
+  // キーワードフィルタ（非crypto除外）
+  if (EXCLUDE_KEYWORDS.some(kw => base.includes(kw))) return true;
   return false;
 }
 

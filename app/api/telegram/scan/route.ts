@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const SCORE_THRESHOLD = 13;
+const SCORE_THRESHOLD = 12;
 const NOTIFY_COOLDOWN = 8 * 60 * 60 * 1000; // 8時間
 const _notifiedCache = new Map<string, number>(); // symbol → last notified timestamp
 const MAX_NOTIFY = 5;
@@ -16,6 +16,14 @@ type Candidate = {
   tradeSetup?: { sl: number; tp1: number; rrRatio: number } | null;
   oiRatio: number; openInterest: number; priceChange24h: number;
 };
+
+function mexcUrl(symbol: string): string {
+  const base = symbol.replace("_USDT", "");
+  const ref = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE;
+  return ref
+    ? `https://www.mexc.com/futures/${base}_USDT?inviteCode=${ref}`
+    : `https://www.mexc.com/futures/${base}_USDT`;
+}
 
 async function sendTg(token: string, chatId: string, text: string): Promise<boolean> {
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -97,7 +105,8 @@ export async function GET(req: NextRequest) {
           `   📉 Vol:${c.volumeChangeRatio.toFixed(2)}× | TF:${c.trendDirection}` +
           (regime   ? `\n   🌡️ ${regime}` : "") +
           (patterns ? `\n   📐 ${patterns}` : "") +
-          (rr       ? `\n   ⚔️ ${rr}` : "")
+          (rr       ? `\n   ⚔️ ${rr}` : "") +
+          `\n   🔗 ${mexcUrl(c.symbol)}`
         ).trimEnd();
       });
 

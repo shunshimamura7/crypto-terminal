@@ -17,8 +17,6 @@ import { saveAnalysis } from "@/app/lib/analysisHistory";
 import AnalysisHistoryPanel from "./AnalysisHistoryPanel";
 import { addToWatchlist, isInWatchlist } from "@/app/lib/watchlist";
 import RankAlert from "./RankAlert";
-import ShortScanner from "./ShortScanner";
-import BitgetLongFinder from "./BitgetLongFinder";
 import HolderAnalysis from "./HolderAnalysis";
 import TechnicalAnalysis from "./TechnicalAnalysis";
 import DerivativesPanel from "./DerivativesPanel";
@@ -629,7 +627,7 @@ function SkeletonCard({ lines = 4 }: { lines?: number }) {
 // ─────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────
-type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "shortscan" | "bitgetlong" | "holders" | "technical";
+type Tab = "chat" | "sector" | "batch" | "watchlist" | "history" | "portfolio" | "holders" | "technical";
 interface TabEntry { id: string; label: string }
 const TAB_CONFIG: TabEntry[] = [
   { id: "chat",        label: "💬 個別分析" },
@@ -638,8 +636,6 @@ const TAB_CONFIG: TabEntry[] = [
   { id: "watchlist",   label: "⭐ ウォッチリスト" },
   { id: "history",     label: "📈 履歴" },
   { id: "portfolio",   label: "💼 ポートフォリオ" },
-  { id: "shortscan",   label: "🎯 Short Scanner" },
-  { id: "bitgetlong",  label: "⚡ Bitget Long" },
   { id: "holders",     label: "👥 ホルダー分析" },
   { id: "technical",   label: "📐 テクニカル分析" },
 ];
@@ -991,8 +987,6 @@ export default function CryptoSearch() {
         {activeTab === "watchlist" && <WatchList onBatchAnalyze={handleBatchFromWatchlist} onAnalyze={handleAnalyzeFromWidget} />}
         {activeTab === "history"   && <HistoryView />}
         {activeTab === "portfolio" && <PortfolioTabContent onGoToBatch={() => setActiveTab("batch")} />}
-        {activeTab === "shortscan"   && <ShortScanner />}
-        {activeTab === "bitgetlong"  && <BitgetLongFinder />}
         {activeTab === "holders"     && <HolderAnalysis />}
         {activeTab === "technical"   && <TechnicalAnalysis />}
 

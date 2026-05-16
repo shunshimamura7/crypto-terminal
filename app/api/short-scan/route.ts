@@ -165,6 +165,7 @@ interface CandidateMeta {
   listedDaysAgo: number;
   vol24hEst: number;
   riseFallRate: number;  // 24h price change ratio from ticker (for Stage 1 sort)
+  createTime: number;   // ms epoch (0 = unknown)
 }
 
 async function analyzeCandidate(
@@ -180,7 +181,7 @@ async function analyzeCandidate(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   prefetchedKline4h?: any,  // Phase Aで取得済みの4h klineデータ
 ): Promise<ShortCandidate | null> {
-  const { symbol, listedDaysAgo } = meta;
+  const { symbol, listedDaysAgo, createTime } = meta;
 
   const price = parseFloat(ticker.lastPrice || ticker.indexPrice || "0");
   if (!price) return null;
@@ -216,6 +217,11 @@ async function analyzeCandidate(
       if (n > 0) closes1h.push(n);
     }
   }
+
+  // 22hハンター: 先物上場タイムスタンプ
+  const nowMs = nowSec * 1000;
+  const futuresListedAt = createTime > 0 ? new Date(createTime).toISOString() : undefined;
+  const hoursFromFutures = createTime > 0 ? (nowMs - createTime) / 3_600_000 : undefined;
 
   // ATH: max high from 4h klines
   let ath14d = price;
@@ -445,6 +451,9 @@ async function analyzeCandidate(
     scoreBreakdown: breakdown,
     priceDeviation,
     liquidityInfo: liquidityRes.status === "fulfilled" && liquidityRes.value != null ? liquidityRes.value : undefined,
+    futuresListedAt,
+    hoursFromFutures,
+    closes1h: closes1h.length > 0 ? closes1h : undefined,
   };
 }
 
@@ -565,7 +574,7 @@ export async function GET(req: NextRequest) {
     if (qMaxDays < 9999 && listedDaysAgo > qMaxDays) continue;
 
     const riseFallRate = parseFloat((t as { riseFallRate?: string }).riseFallRate || "0");
-    candidates.push({ symbol: sym, listedDaysAgo, vol24hEst, riseFallRate });
+    candidates.push({ symbol: sym, listedDaysAgo, vol24hEst, riseFallRate, createTime: ct });
   }
 
   const stage1Passed = candidates.length;
