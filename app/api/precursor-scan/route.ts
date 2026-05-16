@@ -30,7 +30,7 @@ export async function GET(): Promise<Response> {
   }
 
   try {
-    const tickers = await fetchTopTickers(200);
+    const tickers = await fetchTopTickers(50);
     if (tickers.length === 0) {
       return NextResponse.json({ error: "MEXC ticker fetch failed" }, { status: 502 });
     }
