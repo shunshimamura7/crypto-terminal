@@ -4,6 +4,7 @@ import ShortScanner from "@/components/ShortScanner";
 import ListingHunter from "@/components/ListingHunter";
 import HunterRecords from "@/components/HunterRecords";
 import Strategy36hScanner from "@/components/Strategy36hScanner";
+import PrecursorScanner from "@/components/PrecursorScanner";
 
 const SCORING_ITEMS = [
   { label: "ATH下落",      pts: "3pt", color: "#ef4444" },
@@ -137,6 +138,12 @@ export default function ShortScanPage() {
           >
             📊 スコア型スキャナー
           </a>
+          <a
+            href="#precursor"
+            className="py-3 px-4 text-sm font-bold text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-colors rounded-t"
+          >
+            🔮 前兆スキャン
+          </a>
         </div>
       </div>
 
@@ -161,6 +168,13 @@ export default function ShortScanPage() {
         {/* 下: スコア型スキャナー（既存・主力）*/}
         <section id="scanner">
           <ShortScanner />
+        </section>
+
+        <hr className="border-slate-200 dark:border-slate-700" />
+
+        {/* 前兆スキャン */}
+        <section id="precursor">
+          <PrecursorScanner />
         </section>
       </div>
 
