@@ -37,7 +37,8 @@ import TradeSetupCard from "@/components/TradeSetupCard";
 import HunterPanel, { HunterModal } from "@/components/HunterPanel";
 import { evaluateHunterPatterns } from "@/app/lib/hunterScorer";
 import { saveHunterRecord, getHunterRecords } from "@/app/lib/hunterStorage";
-import type { HunterRecord, HunterPattern } from "@/app/lib/types/hunter";
+import type { HunterPattern } from "@/app/lib/types/hunter";
+import type { HunterRecord } from "@/app/lib/listingHunterRecords";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -4399,19 +4400,22 @@ export default function ShortScanner() {
         <HunterModal
           {...hunterModalCandidate}
           onSave={async (partial) => {
-            const ctx = await getCurrentMarketContext();
+            await getCurrentMarketContext().catch(() => null);
+            const now = new Date().toISOString();
             const record: HunterRecord = {
               id: `hunter-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              recordedAt: new Date().toISOString(),
-              spotListedAt: null,
-              hoursFromSpot: null,
-              status: "active",
-              marketContext: ctx ? {
-                btcPrice: ctx.btcPrice,
-                fearGreed: ctx.fearGreed,
-                marketPhase: ctx.marketPhase,
-              } : undefined,
-              ...partial,
+              symbol: partial.symbol,
+              entryAt: now,
+              entryPrice: partial.entryPrice,
+              listingAt: partial.futuresListedAt,
+              hoursSinceListing: partial.hoursFromFutures,
+              tpPrice: partial.tp1,
+              slPrice: partial.sl,
+              deadline: new Date(Date.now() + 22 * 60 * 60 * 1000).toISOString(),
+              status: "open",
+              priceHistory: [],
+              recordedManually: true,
+              version: "hunter22h-v1",
             };
             saveHunterRecord(record);
             setHunterRecords(getHunterRecords());

@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import type { HunterRecord, HunterPattern } from "@/app/lib/types/hunter";
+import type { HunterRecord as OldHunterRecord, HunterPattern } from "@/app/lib/types/hunter";
 import { HUNTER_PATTERN_META } from "@/app/lib/types/hunter";
+import type { HunterRecord } from "@/app/lib/listingHunterRecords";
 import {
   getHunterStats,
   getPatternStats,
@@ -23,17 +24,13 @@ function fmtDate(iso: string): string {
 
 function statusBadge(status: HunterRecord["status"]) {
   const map: Record<string, string> = {
-    active:      "bg-yellow-100 text-yellow-800",
-    tp1_hit:     "bg-green-100 text-green-700",
-    tp2_hit:     "bg-emerald-100 text-emerald-700",
-    sl_hit:      "bg-red-100 text-red-700",
-    expired:     "bg-gray-100 text-gray-500",
-    pending_tp1: "bg-blue-100 text-blue-700",
-    pending_sl:  "bg-orange-100 text-orange-700",
+    open:    "bg-yellow-100 text-yellow-800",
+    win:     "bg-emerald-100 text-emerald-700",
+    loss:    "bg-red-100 text-red-700",
+    timeout: "bg-gray-100 text-gray-500",
   };
   const label: Record<string, string> = {
-    active: "稼働中", tp1_hit: "TP1達成", tp2_hit: "TP2達成",
-    sl_hit: "SL", expired: "期限切れ", pending_tp1: "TP1待ち", pending_sl: "SL待ち",
+    open: "OPEN", win: "WIN", loss: "LOSS", timeout: "TIMEOUT",
   };
   return (
     <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${map[status] ?? "bg-gray-100 text-gray-500"}`}>
@@ -78,9 +75,9 @@ export default function HunterPanel({ records, onRecordsChange }: HunterPanelPro
           {records.length > 0 && (
             <span className="ml-2 text-xs font-normal text-amber-600">
               {records.length}件 / 勝率 {stats.winRate.toFixed(0)}%
-              {records.filter(r => r.status === "active").length > 0 && (
+              {records.filter(r => r.status === "open").length > 0 && (
                 <span className="ml-2 text-yellow-600">
-                  ⏳{records.filter(r => r.status === "active").length}件
+                  ⏳{records.filter(r => r.status === "open").length}件
                 </span>
               )}
             </span>
@@ -98,7 +95,7 @@ export default function HunterPanel({ records, onRecordsChange }: HunterPanelPro
               { label: "総記録数",  value: stats.total },
               { label: "決着数",   value: stats.resolved },
               { label: "勝率",     value: `${stats.winRate.toFixed(1)}%` },
-              { label: "期待値(R)", value: stats.expectedValue.toFixed(2) },
+              { label: "期待値(%)", value: stats.expectedValue.toFixed(2) },
               { label: "PF",       value: isFinite(stats.profitFactor) ? stats.profitFactor.toFixed(2) : "∞" },
             ].map(item => (
               <div key={item.label} className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 text-center">
@@ -120,15 +117,14 @@ export default function HunterPanel({ records, onRecordsChange }: HunterPanelPro
                     <th className="py-1 pr-2 text-right">勝</th>
                     <th className="py-1 pr-2 text-right">負</th>
                     <th className="py-1 pr-2 text-right">勝率</th>
-                    <th className="py-1 text-right">平均R:R</th>
+                    <th className="py-1 text-right">平均PnL%</th>
                   </tr>
                 </thead>
                 <tbody>
                   {patternStats.map(ps => (
                     <tr key={ps.pattern} className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="py-1 pr-2 font-medium">
-                        <span className="text-amber-600">{ps.pattern}</span>
-                        <span className="ml-1 text-gray-500">{ps.name}</span>
+                      <td className="py-1 pr-2 font-medium text-amber-600">
+                        {ps.name}
                       </td>
                       <td className="py-1 pr-2 text-right">{ps.total}</td>
                       <td className="py-1 pr-2 text-right text-green-600">{ps.wins}</td>
@@ -196,11 +192,11 @@ export default function HunterPanel({ records, onRecordsChange }: HunterPanelPro
                   <thead>
                     <tr className="border-b border-gray-200 text-left text-gray-500">
                       <th className="py-1 pr-2">銘柄</th>
-                      <th className="py-1 pr-2">パターン</th>
-                      <th className="py-1 pr-2 text-right">経過h</th>
+                      <th className="py-1 pr-2">決着理由</th>
+                      <th className="py-1 pr-2 text-right">上場後h</th>
                       <th className="py-1 pr-2">ステータス</th>
                       <th className="py-1 pr-2">決着日時</th>
-                      <th className="py-1 pr-2 text-right">R:R</th>
+                      <th className="py-1 pr-2 text-right">PnL%</th>
                       <th className="py-1"></th>
                     </tr>
                   </thead>
@@ -210,16 +206,20 @@ export default function HunterPanel({ records, onRecordsChange }: HunterPanelPro
                         <td className="py-1 pr-2 font-medium">
                           {r.symbol.replace("_USDT", "")}
                         </td>
-                        <td className="py-1 pr-2">
-                          <span className="text-amber-600 font-medium">{r.patternTriggered}</span>
-                          <span className="ml-1 text-gray-400">{HUNTER_PATTERN_META[r.patternTriggered].name}</span>
+                        <td className="py-1 pr-2 text-amber-600 font-medium">
+                          {r.closeReason === "tp_hit" ? "TP到達"
+                            : r.closeReason === "sl_hit" ? "SL到達"
+                            : r.closeReason === "timeout" ? "タイムアウト"
+                            : "—"}
                         </td>
-                        <td className="py-1 pr-2 text-right">{r.hoursFromFutures.toFixed(1)}</td>
+                        <td className="py-1 pr-2 text-right">{r.hoursSinceListing.toFixed(1)}</td>
                         <td className="py-1 pr-2">{statusBadge(r.status)}</td>
                         <td className="py-1 pr-2 text-gray-400">
-                          {r.resolvedAt ? fmtDate(r.resolvedAt) : "—"}
+                          {r.closedAt ? fmtDate(r.closedAt) : "—"}
                         </td>
-                        <td className="py-1 pr-2 text-right">{r.rrRatio.toFixed(2)}</td>
+                        <td className="py-1 pr-2 text-right">
+                          {r.finalPnlPct !== undefined ? `${r.finalPnlPct >= 0 ? "+" : ""}${r.finalPnlPct.toFixed(2)}%` : "—"}
+                        </td>
                         <td className="py-1">
                           <button
                             onClick={() => handleDelete(r.id)}
@@ -265,7 +265,7 @@ interface HunterModalProps {
   rrRatio: number;
   futuresListedAt: string;
   hoursFromFutures: number;
-  onSave: (record: Omit<HunterRecord, "id" | "recordedAt" | "spotListedAt" | "hoursFromSpot" | "status" | "marketContext">) => void;
+  onSave: (record: Omit<OldHunterRecord, "id" | "recordedAt" | "spotListedAt" | "hoursFromSpot" | "status" | "marketContext">) => void;
   onClose: () => void;
 }
 
