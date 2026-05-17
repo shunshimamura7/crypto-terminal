@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, forwardRef, useImperativeHandle } from "react";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import type { BacktestStats } from "@/app/lib/backtestStats";
 import { calculateStats } from "@/app/lib/backtestStats";
@@ -10,6 +10,7 @@ import { getDangerSymbols, removeFromDangerList } from "@/app/lib/symbolHealth";
 import { checkDataIntegrity } from "@/app/lib/dataIntegrity";
 import { STRATEGY_BADGES } from "@/app/lib/strategyBadges";
 import type { StrategyBadgeId } from "@/app/lib/strategyBadges";
+import { checkAndUpdateHunterRecords, exportHunterCSV } from "@/app/lib/hunterStorage";
 
 // ── Translations ──────────────────────────────────────────────────────────────
 
@@ -481,7 +482,12 @@ interface HAnalyzeResult {
   summary: { top8: string[]; totalTrades: number; symbolsProcessed: number; processingTimeMs: number };
 }
 
-function HistoricalAnalysisSection() {
+interface HistoricalAnalysisHandle {
+  run: () => Promise<void>;
+}
+
+const HistoricalAnalysisSection = forwardRef<HistoricalAnalysisHandle, object>(
+  function HistoricalAnalysisSection(_, ref) {
   type HStatus = "idle" | "collecting" | "analyzing" | "done" | "error";
   const [hStatus,   setHStatus]   = useState<HStatus>("idle");
   const [hProgress, setHProgress] = useState({ current: 0, total: 0, symbolsCollected: 0 });
@@ -565,6 +571,8 @@ function HistoricalAnalysisSection() {
     }
   }
 
+  useImperativeHandle(ref, () => ({ run: runAnalysis }));
+
   const isRunning = hStatus === "collecting" || hStatus === "analyzing";
   const barPct    = hStatus === "analyzing"
     ? 98
@@ -574,26 +582,17 @@ function HistoricalAnalysisSection() {
   const fmtPF    = (v: number) => v >= 99 ? "∞" : v.toFixed(2);
   const fmtDrop  = (v: number) => `${(v * 100).toFixed(1)}%`;
 
+  if (hStatus === "idle") return null;
+
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-1">
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        <button
-          onClick={runAnalysis}
-          disabled={isRunning}
-          className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors whitespace-nowrap ${
-            isRunning
-              ? "bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-200 dark:border-gray-600 cursor-not-allowed"
-              : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700 hover:bg-emerald-100"
-          }`}
-        >
-          📊 過去90日パターン分析
-        </button>
-        {hStatus === "done" && hResult && (
+      {hStatus === "done" && hResult && (
+        <div className="mb-2">
           <span className="text-[10px] text-gray-500">
-            {hResult.summary.symbolsProcessed}銘柄 · {hResult.summary.totalTrades}トレード · {(hResult.summary.processingTimeMs / 1000).toFixed(1)}s
+            📊 {hResult.summary.symbolsProcessed}銘柄 · {hResult.summary.totalTrades}トレード · {(hResult.summary.processingTimeMs / 1000).toFixed(1)}s
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {isRunning && (
         <div className="mb-3 space-y-1.5">
@@ -681,7 +680,7 @@ function HistoricalAnalysisSection() {
       )}
     </div>
   );
-}
+});
 
 // ── BacktestPanel (main export) ───────────────────────────────────────────────
 
@@ -712,6 +711,23 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
   const [showActivePos, setShowActivePos] = useState(false);
   const [btPresetTab,   setBtPresetTab]   = useState<"all" | "low_lev" | "new_listing" | "v2_only" | "collect" | "production" | "precursor">("all");
   const [btMainTab,     setBtMainTab]     = useState<"stats" | "loss">("stats");
+  const [bulkStatus,    setBulkStatus]    = useState<"idle" | "running" | "done">("idle");
+  const analysisRef = useRef<HistoricalAnalysisHandle>(null);
+
+  async function handleBulkExport() {
+    if (bulkStatus === "running") return;
+    setBulkStatus("running");
+    try {
+      await checkAndUpdateHunterRecords();
+      window.dispatchEvent(new Event("hunterRecordsUpdated"));
+      if (analysisRef.current) await analysisRef.current.run();
+      exportBtCSV(records);
+      exportHunterCSV();
+    } finally {
+      setBulkStatus("done");
+      setTimeout(() => setBulkStatus("idle"), 2000);
+    }
+  }
 
   const analysis = useMemo(() => analyzeBacktestRecords(records), [records]);
 
@@ -1327,14 +1343,26 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                 );
               })()}
 
-              {/* 過去データ分析 */}
-              <HistoricalAnalysisSection />
+              {/* 過去データ分析（結果表示のみ・トリガーは集計ボタン経由） */}
+              <HistoricalAnalysisSection ref={analysisRef} />
 
               {/* Actions */}
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => exportBtCSV(records)}
-                  className="px-3 py-1.5 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors">
-                  {t.btCsvExport}
+              <div className="flex gap-2 pt-1 flex-wrap">
+                <button
+                  onClick={handleBulkExport}
+                  disabled={bulkStatus === "running"}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border font-semibold transition-colors whitespace-nowrap ${
+                    bulkStatus === "running"
+                      ? "bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-200 dark:border-gray-600 cursor-not-allowed"
+                      : bulkStatus === "done"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                  }`}
+                >
+                  {bulkStatus === "running" && (
+                    <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  )}
+                  {bulkStatus === "running" ? "処理中..." : bulkStatus === "done" ? "✅ 完了" : "📊 集計 & エクスポート"}
                 </button>
                 <button onClick={handleReset}
                   className="px-3 py-1.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">

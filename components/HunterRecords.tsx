@@ -344,11 +344,15 @@ export default function HunterRecords() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ListingHunterが記録を更新したときのstorage eventで再読み込み
+  // 他タブのlocalStorage変更 / BacktestPanel一括処理後のカスタムイベントで再読み込み
   useEffect(() => {
     const handler = () => loadRecords();
     window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
+    window.addEventListener("hunterRecordsUpdated", handler);
+    return () => {
+      window.removeEventListener("storage", handler);
+      window.removeEventListener("hunterRecordsUpdated", handler);
+    };
   }, [loadRecords]);
 
   if (records.length === 0 && !checking) {
@@ -391,25 +395,6 @@ export default function HunterRecords() {
                 最終チェック: {new Date(lastChecked).toLocaleTimeString("ja-JP")}
               </span>
             )}
-            <button
-              onClick={checkOpenRecords}
-              disabled={checking}
-              className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold disabled:opacity-50 transition-colors"
-            >
-              {checking ? "⏳ チェック中…" : "🔍 決着チェック更新"}
-            </button>
-            <button
-              onClick={() => exportCsv(records)}
-              className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              📥 CSV
-            </button>
-            <button
-              onClick={exportAllRecordsCSV}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-colors"
-            >
-              📦 全記録エクスポート
-            </button>
           </div>
         </div>
 
