@@ -201,9 +201,7 @@ export function buildDangerListFromRecords(records: BacktestRecord[]): void {
     if (r.status !== "sl_hit") continue;
     const entry = slMap.get(r.symbol) ?? { count: 0, totalLossPct: 0 };
     entry.count++;
-    if (r.resolvedPrice) {
-      entry.totalLossPct += ((r.resolvedPrice - r.entryPrice) / r.entryPrice) * 100;
-    }
+    entry.totalLossPct += ((r.sl - r.entryPrice) / r.entryPrice) * 100;
     slMap.set(r.symbol, entry);
   }
 

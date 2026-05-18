@@ -122,11 +122,11 @@ export function calculateStats(
   let worstTrade: { symbol: string; loss:   number } | null = null;
 
   for (const r of wins) {
-    const profit = r.resolvedPrice ? ((r.entryPrice - r.resolvedPrice) / r.entryPrice) * 100 : 0;
+    const profit = ((r.entryPrice - canonicalExitPrice(r)) / r.entryPrice) * 100;
     if (!bestTrade || profit > bestTrade.profit) bestTrade = { symbol: r.symbol, profit };
   }
   for (const r of losses) {
-    const loss = r.resolvedPrice ? ((r.resolvedPrice - r.entryPrice) / r.entryPrice) * 100 : 0;
+    const loss = ((canonicalExitPrice(r) - r.entryPrice) / r.entryPrice) * 100;
     if (!worstTrade || loss > worstTrade.loss) worstTrade = { symbol: r.symbol, loss };
   }
 
@@ -154,8 +154,7 @@ export function calculateStats(
   let totalProfit = 0;
   let totalLoss   = 0;
   for (const r of resolved) {
-    if (!r.resolvedPrice) continue;
-    const pnlPct = ((r.entryPrice - r.resolvedPrice) / r.entryPrice) * 100;
+    const pnlPct = ((r.entryPrice - canonicalExitPrice(r)) / r.entryPrice) * 100;
     if (pnlPct > 0) totalProfit += pnlPct;
     else totalLoss += Math.abs(pnlPct);
   }

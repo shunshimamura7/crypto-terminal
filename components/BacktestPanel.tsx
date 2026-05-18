@@ -374,7 +374,8 @@ function BadgeStatsSection({ records }: { records: BacktestRecord[] }) {
       const s = badgeMap.get(bid)!;
       if (r.status !== "sl_hit") s.wins++;
       s.total++;
-      if (r.resolvedPrice != null) s.pnlSum += (r.entryPrice - r.resolvedPrice) / r.entryPrice * 100;
+      const exitPx = r.status === "tp1_hit" ? r.tp1 : r.status === "tp2_hit" ? r.tp2 : r.status === "tp3_hit" ? r.tp3 : r.status === "sl_hit" ? r.sl : (r.resolvedPrice ?? r.entryPrice);
+      s.pnlSum += (r.entryPrice - exitPx) / r.entryPrice * 100;
     }
   }
   const sorted = [...badgeMap.entries()].sort((a, b) => b[1].total - a[1].total);
@@ -1212,8 +1213,9 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                       <tbody>
                         {sorted.map(r => {
                           const { label, cls, tip } = statusLabel(r.status, t);
-                          const resolvedPnl = r.resolvedPrice != null
-                            ? ((r.entryPrice - r.resolvedPrice) / r.entryPrice * 100) : null;
+                          const resolvedExitPx = r.status === "tp1_hit" ? r.tp1 : r.status === "tp2_hit" ? r.tp2 : r.status === "tp3_hit" ? r.tp3 : r.status === "sl_hit" ? r.sl : r.resolvedPrice;
+                          const resolvedPnl = resolvedExitPx != null
+                            ? ((r.entryPrice - resolvedExitPx) / r.entryPrice * 100) : null;
                           const currentPnl = r.currentPrice != null
                             ? ((r.entryPrice - r.currentPrice) / r.entryPrice * 100) : null;
                           const pnl = resolvedPnl ?? currentPnl;

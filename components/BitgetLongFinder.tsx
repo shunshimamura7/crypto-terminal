@@ -499,9 +499,13 @@ function BitgetBacktestPanel({
 
                 let cumR = 0;
                 const equityData = resolvedRecs.map(r => {
-                  const profit = (r.resolvedPrice ?? r.entryPrice) - r.entryPrice; // ロング: 上が利益
+                  const exitPrice = r.status === "tp1_hit" ? r.tp1
+                                  : r.status === "tp2_hit" ? r.tp2
+                                  : r.status === "tp3_hit" ? r.tp3
+                                  : r.status === "sl_hit"  ? r.sl
+                                  : (r.resolvedPrice ?? r.entryPrice);
                   const risk   = r.entryPrice - r.sl;
-                  const realR  = risk > 0 ? profit / risk : 0;
+                  const realR  = risk > 0 ? (exitPrice - r.entryPrice) / risk : 0;
                   cumR += realR;
                   return { name: r.symbol.replace("USDT",""), r: parseFloat(cumR.toFixed(2)) };
                 });
@@ -548,7 +552,12 @@ function BitgetBacktestPanel({
                   const returns: number[] = [];
 
                   for (const r of resolvedRecs) {
-                    const profit = (r.resolvedPrice ?? r.entryPrice) - r.entryPrice;
+                    const exitPrice = r.status === "tp1_hit" ? r.tp1
+                                    : r.status === "tp2_hit" ? r.tp2
+                                    : r.status === "tp3_hit" ? r.tp3
+                                    : r.status === "sl_hit"  ? r.sl
+                                    : (r.resolvedPrice ?? r.entryPrice);
+                    const profit = exitPrice - r.entryPrice;
                     const risk   = r.entryPrice - r.sl;
                     const realR  = risk > 0 ? profit / risk : 0;
                     const pnl    = realR * simPos;

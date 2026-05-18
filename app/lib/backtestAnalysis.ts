@@ -63,10 +63,14 @@ export function calcVerifiedStats(records: BacktestRecord[]): VerifiedStats {
   let totalGain = 0, totalLoss = 0;
   let sumRR = 0;
   for (const r of verified) {
-    if (!r.resolvedPrice) continue;
-    const pnlPct = ((r.entryPrice - r.resolvedPrice) / r.entryPrice) * 100;
+    const exitPrice = r.status === "tp1_hit" ? r.tp1
+                    : r.status === "tp2_hit" ? r.tp2
+                    : r.status === "tp3_hit" ? r.tp3
+                    : r.status === "sl_hit"  ? r.sl
+                    : (r.resolvedPrice ?? r.entryPrice);
+    const pnlPct = ((r.entryPrice - exitPrice) / r.entryPrice) * 100;
     const risk   = r.sl - r.entryPrice;
-    const rr     = risk > 0 ? (r.entryPrice - r.resolvedPrice) / risk : 0;
+    const rr     = risk > 0 ? (r.entryPrice - exitPrice) / risk : 0;
     sumRR += rr;
     if (pnlPct > 0) totalGain += pnlPct;
     else totalLoss += Math.abs(pnlPct);
@@ -130,10 +134,7 @@ export function calcPhaseLossPatterns(records: BacktestRecord[]): PhaseLossPatte
     const winRate = recs.length > 0 ? (wins.length / recs.length) * 100 : 0;
 
     const avgLossPct = losses.length > 0
-      ? losses.reduce((sum, r) => {
-          if (!r.resolvedPrice) return sum;
-          return sum + ((r.resolvedPrice - r.entryPrice) / r.entryPrice) * 100;
-        }, 0) / losses.length
+      ? losses.reduce((sum, r) => sum + ((r.sl - r.entryPrice) / r.entryPrice) * 100, 0) / losses.length
       : 0;
 
     return { phase: key, label, wins: wins.length, losses: losses.length, winRate, avgLossPct };

@@ -51,8 +51,13 @@ function EquityCurve({ records }: { records: BacktestRecord[] }) {
   const points: { equity: number; status: string }[] = [{ equity: 100, status: "start" }];
   let equity = 100;
   for (const r of resolved) {
-    if (r.resolvedPrice && r.entryPrice) {
-      const pnl = ((r.entryPrice - r.resolvedPrice) / r.entryPrice) * 100;
+    const exitPrice = r.status === "tp1_hit" ? r.tp1
+                    : r.status === "tp2_hit" ? r.tp2
+                    : r.status === "tp3_hit" ? r.tp3
+                    : r.status === "sl_hit"  ? r.sl
+                    : (r.resolvedPrice ?? r.entryPrice);
+    if (r.entryPrice) {
+      const pnl = ((r.entryPrice - exitPrice) / r.entryPrice) * 100;
       equity = equity * (1 + pnl / 100);
     }
     points.push({ equity, status: r.status });
@@ -705,9 +710,14 @@ export default function LabPage() {
                   </thead>
                   <tbody>
                     {resolvedRecords.map((r) => {
+                      const labExitPrice = r.status === "tp1_hit" ? r.tp1
+                                         : r.status === "tp2_hit" ? r.tp2
+                                         : r.status === "tp3_hit" ? r.tp3
+                                         : r.status === "sl_hit"  ? r.sl
+                                         : r.resolvedPrice;
                       const pnl =
-                        r.resolvedPrice && r.entryPrice
-                          ? ((r.entryPrice - r.resolvedPrice) / r.entryPrice) * 100
+                        labExitPrice != null && r.entryPrice
+                          ? ((r.entryPrice - labExitPrice) / r.entryPrice) * 100
                           : null;
                       return (
                         <tr

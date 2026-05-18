@@ -149,7 +149,12 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     let eq = cfg.initialCapital;
     const rets: number[] = [];
     for (const r of resolved) {
-      const profit = r.entryPrice - (r.resolvedPrice ?? r.entryPrice);
+      const exitPrice = r.status === "tp1_hit" ? r.tp1
+                      : r.status === "tp2_hit" ? r.tp2
+                      : r.status === "tp3_hit" ? r.tp3
+                      : r.status === "sl_hit"  ? r.sl
+                      : (r.resolvedPrice ?? r.entryPrice);
+      const profit = r.entryPrice - exitPrice;
       const risk   = r.sl - r.entryPrice;
       if (risk <= 0) continue;
       const realR = profit / risk;

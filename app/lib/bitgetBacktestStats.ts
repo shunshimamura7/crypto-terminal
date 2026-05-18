@@ -32,11 +32,20 @@ export function calculateStats(records: BitgetBacktestRecord[]): BitgetBacktestS
 
   const winRate = resolved.length > 0 ? (wins.length / resolved.length) * 100 : 0;
 
+  function canonicalExitPrice(r: BitgetBacktestRecord): number {
+    switch (r.status) {
+      case "tp1_hit": return r.tp1;
+      case "tp2_hit": return r.tp2;
+      case "tp3_hit": return r.tp3;
+      case "sl_hit":  return r.sl;
+      default:        return r.resolvedPrice ?? r.entryPrice;
+    }
+  }
+
   function realizedR(r: BitgetBacktestRecord): number {
-    if (!r.resolvedPrice) return 0;
-    const profit = r.resolvedPrice - r.entryPrice; // ロングなので上がれば利益
-    const risk   = r.entryPrice - r.sl;
-    return risk > 0 ? profit / risk : 0;
+    const risk = r.entryPrice - r.sl;
+    if (risk <= 0) return 0;
+    return (canonicalExitPrice(r) - r.entryPrice) / risk;
   }
 
   const realizedRRs = resolved.map(realizedR);
@@ -57,11 +66,11 @@ export function calculateStats(records: BitgetBacktestRecord[]): BitgetBacktestS
   let worstTrade: { symbol: string; loss:   number } | null = null;
 
   for (const r of wins) {
-    const profit = r.resolvedPrice ? ((r.resolvedPrice - r.entryPrice) / r.entryPrice) * 100 : 0;
+    const profit = ((canonicalExitPrice(r) - r.entryPrice) / r.entryPrice) * 100;
     if (!bestTrade || profit > bestTrade.profit) bestTrade = { symbol: r.symbol, profit };
   }
   for (const r of losses) {
-    const loss = r.resolvedPrice ? ((r.entryPrice - r.resolvedPrice) / r.entryPrice) * 100 : 0;
+    const loss = ((r.entryPrice - canonicalExitPrice(r)) / r.entryPrice) * 100;
     if (!worstTrade || loss > worstTrade.loss) worstTrade = { symbol: r.symbol, loss };
   }
 
