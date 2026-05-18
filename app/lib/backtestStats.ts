@@ -87,11 +87,20 @@ export function calculateStats(
 
   const winRate = resolved.length > 0 ? (wins.length / resolved.length) * 100 : 0;
 
+  function canonicalExitPrice(r: BacktestRecord): number {
+    switch (r.status) {
+      case "tp1_hit": return r.tp1;
+      case "tp2_hit": return r.tp2;
+      case "tp3_hit": return r.tp3;
+      case "sl_hit":  return r.sl;
+      default:        return r.resolvedPrice ?? r.entryPrice;
+    }
+  }
+
   function realizedR(r: BacktestRecord): number {
-    if (!r.resolvedPrice) return 0;
-    const profit = r.entryPrice - r.resolvedPrice; // ショートなので下がれば利益
-    const risk   = r.sl - r.entryPrice;
-    return risk > 0 ? profit / risk : 0;
+    const risk = r.sl - r.entryPrice;
+    if (risk <= 0) return 0;
+    return (r.entryPrice - canonicalExitPrice(r)) / risk;
   }
 
   const realizedRRs = resolved.map(realizedR);

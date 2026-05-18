@@ -1091,9 +1091,13 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                   .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
                 let cumR = 0;
                 const equityData = resolved.map(r => {
-                  const profit = r.entryPrice - (r.resolvedPrice ?? r.entryPrice);
-                  const risk   = r.sl - r.entryPrice;
-                  const realR  = risk > 0 ? profit / risk : 0;
+                  const exitPrice = r.status === "tp1_hit" ? r.tp1
+                                  : r.status === "tp2_hit" ? r.tp2
+                                  : r.status === "tp3_hit" ? r.tp3
+                                  : r.status === "sl_hit"  ? r.sl
+                                  : (r.resolvedPrice ?? r.entryPrice);
+                  const risk  = r.sl - r.entryPrice;
+                  const realR = risk > 0 ? (r.entryPrice - exitPrice) / risk : 0;
                   cumR += realR;
                   return { name: r.symbol.replace("_USDT",""), r: parseFloat(cumR.toFixed(2)) };
                 });
