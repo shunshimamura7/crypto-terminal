@@ -713,6 +713,7 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
   const [btPresetTab,   setBtPresetTab]   = useState<"all" | "low_lev" | "new_listing" | "v2_only" | "collect" | "production" | "precursor">("all");
   const [btMainTab,     setBtMainTab]     = useState<"stats" | "loss">("stats");
   const [bulkStatus,    setBulkStatus]    = useState<"idle" | "running" | "done">("idle");
+  const [exportDoneMsg, setExportDoneMsg] = useState<string>("✅ 完了");
   const analysisRef = useRef<HistoricalAnalysisHandle>(null);
 
   async function handleBulkExport() {
@@ -724,6 +725,52 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
       if (analysisRef.current) await analysisRef.current.run();
       exportBtCSV(records);
       exportHunterCSV();
+
+      // 前兆スキャン専用CSVエクスポート
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const allBtRecords: any[] = JSON.parse(
+        localStorage.getItem("bell:backtest:records") ?? "[]"
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const precursorRecords = allBtRecords.filter((r: any) => r.strategy === "PRECURSOR");
+
+      if (precursorRecords.length > 0) {
+        const precursorHeaders = [
+          "symbol","score","signals","fr","entryPrice","tp","sl",
+          "recordedAt","status","resolvedAt","pnl"
+        ];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const precursorRows = precursorRecords.map((r: any) => [
+          r.symbol ?? "",
+          r.score ?? "",
+          Array.isArray(r.signals) ? r.signals.join("|") : (r.signals ?? ""),
+          r.fr ?? "",
+          r.entryPrice ?? "",
+          r.tpPrice ?? r.tp ?? "",
+          r.slPrice ?? r.sl ?? "",
+          r.scannedAt ?? r.recordedAt ?? "",
+          r.result ?? r.status ?? "active",
+          r.resolvedAt ?? "",
+          r.pnl ?? ""
+        ].join(","));
+
+        const precursorCsv = [precursorHeaders.join(","), ...precursorRows].join("\n");
+        const precursorBlob = new Blob(
+          ["﻿" + precursorCsv],
+          { type: "text/csv;charset=utf-8;" }
+        );
+        const precursorUrl = URL.createObjectURL(precursorBlob);
+        const precursorA = document.createElement("a");
+        precursorA.href = precursorUrl;
+        precursorA.download = `bell_precursor_${new Date().toISOString().slice(0, 10)}.csv`;
+        precursorA.click();
+        URL.revokeObjectURL(precursorUrl);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const btCount = allBtRecords.filter((r: any) => r.strategy !== "PRECURSOR").length;
+      const precursorCount = precursorRecords.length;
+      setExportDoneMsg(`✅ 完了（BT: ${btCount}件 / 前兆: ${precursorCount}件）`);
     } finally {
       setBulkStatus("done");
       setTimeout(() => setBulkStatus("idle"), 2000);
@@ -1368,7 +1415,7 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                   {bulkStatus === "running" && (
                     <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
                   )}
-                  {bulkStatus === "running" ? "処理中..." : bulkStatus === "done" ? "✅ 完了" : "📊 集計 & エクスポート"}
+                  {bulkStatus === "running" ? "処理中..." : bulkStatus === "done" ? exportDoneMsg : "📊 集計 & エクスポート"}
                 </button>
                 <button onClick={handleReset}
                   className="px-3 py-1.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
