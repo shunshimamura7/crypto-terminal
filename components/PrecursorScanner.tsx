@@ -73,6 +73,9 @@ export default function PrecursorScanner() {
               preset: "production",
               strategy: "PRECURSOR",
               version: "v2.0",
+              signals: s.signals,
+              fr: s.fr,
+              tpPrice: s.suggestedTP,
             };
           });
         if (newRecords.length > 0) {
@@ -151,6 +154,9 @@ export default function PrecursorScanner() {
       preset: "production",
       strategy: "PRECURSOR",
       version: "v2.0",
+      signals: signal.signals,
+      fr: signal.fr,
+      tpPrice: signal.suggestedTP,
     };
     saveRecords([...getRecords(), record]);
     setRecorded(prev => new Set([...prev, signal.symbol]));
