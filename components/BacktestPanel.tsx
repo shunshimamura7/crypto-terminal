@@ -743,7 +743,13 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
         const precursorRows = precursorRecords.map((r: any) => [
           r.symbol ?? "",
           r.score ?? "",
-          Array.isArray(r.signals) ? r.signals.join("|") : (r.signals ?? ""),
+          r.signals
+            ? Array.isArray(r.signals)
+              ? r.signals.join("|")
+              : typeof r.signals === "object"
+                ? Object.keys(r.signals).filter(k => (r.signals as any)[k] === true).join("|")
+                : String(r.signals)
+            : "",
           r.fr ?? "",
           r.entryPrice ?? "",
           r.tpPrice ?? r.tp ?? "",
