@@ -141,6 +141,7 @@ const STRATEGY_META: Record<string, { icon: string; name: string; color: string 
   A_PUMP_EXHAUSTION: { icon: "🔴", name: "A: ポンプ疲弊", color: "bg-red-50 text-red-700 border-red-200" },
   B_CASCADE_SETUP:   { icon: "🟠", name: "B: カスケード",  color: "bg-orange-50 text-orange-700 border-orange-200" },
   C_STALE_DRIFT:     { icon: "🔵", name: "C: ステイル",    color: "bg-blue-50 text-blue-700 border-blue-200" },
+  PRECURSOR:         { icon: "🔮", name: "前兆スキャン",    color: "bg-purple-50 text-purple-700 border-purple-200" },
   NONE:              { icon: "⚪", name: "未分類",          color: "bg-gray-50 text-gray-500 border-gray-200" },
 };
 
@@ -272,12 +273,19 @@ export default function LabPage() {
     [filtered],
   );
 
+  const precursorCount = useMemo(
+    () => filtered.filter((r) => r.strategy === "PRECURSOR").length,
+    [filtered],
+  );
+
   const strategyBreakdown = useMemo(() => {
-    const keys: Array<StrategyTag | "NONE"> = [
-      "A_PUMP_EXHAUSTION", "B_CASCADE_SETUP", "C_STALE_DRIFT", "NONE",
+    const keys: Array<StrategyTag | "NONE" | "PRECURSOR"> = [
+      "A_PUMP_EXHAUSTION", "B_CASCADE_SETUP", "C_STALE_DRIFT", "PRECURSOR", "NONE",
     ];
     return keys.map((tag) => {
-      const inTag   = filtered.filter((r) => (r.strategyTag ?? "NONE") === tag);
+      const inTag = tag === "PRECURSOR"
+        ? filtered.filter((r) => r.strategy === "PRECURSOR")
+        : filtered.filter((r) => r.strategy !== "PRECURSOR" && (r.strategyTag ?? "NONE") === tag);
       const settled = inTag.filter((r) => r.status !== "active");
       const wins    = settled.filter((r) => ["tp1_hit", "tp2_hit", "tp3_hit"].includes(r.status));
       return {
@@ -326,6 +334,11 @@ export default function LabPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">BELL Lab</h1>
             <p className="text-sm text-gray-500 mt-0.5">ショートシグナル 自動バックテスト結果</p>
+            {precursorCount > 0 && (
+              <span className="inline-block mt-1 px-2 py-0.5 rounded-full border border-purple-200 bg-purple-50 text-purple-700 text-xs font-medium">
+                🔮 前兆スキャン: {precursorCount}件含む
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-gray-400">
@@ -559,7 +572,7 @@ export default function LabPage() {
         {/* Strategy Cards */}
         <div>
           <h2 className="text-sm font-semibold text-gray-700 mb-3">🧠 戦略別パフォーマンス</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {strategyBreakdown.map(({ tag, total, active, settled, wins, winRate }) => {
               const meta = STRATEGY_META[tag] ?? STRATEGY_META.NONE;
               return (

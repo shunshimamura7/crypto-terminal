@@ -11,6 +11,7 @@ import { checkDataIntegrity } from "@/app/lib/dataIntegrity";
 import { STRATEGY_BADGES } from "@/app/lib/strategyBadges";
 import type { StrategyBadgeId } from "@/app/lib/strategyBadges";
 import { checkAndUpdateHunterRecords, exportHunterCSV } from "@/app/lib/hunterStorage";
+import { checkAndUpdateRecords, expireOldRecords } from "@/app/lib/backtestChecker";
 
 // ── Translations ──────────────────────────────────────────────────────────────
 
@@ -720,6 +721,13 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
     if (bulkStatus === "running") return;
     setBulkStatus("running");
     try {
+      // BT側のactiveレコードも判定する（candidatesが空でも期限切れチェックは走る）
+      try {
+        await checkAndUpdateRecords([]);
+        expireOldRecords();
+      } catch (e) {
+        console.error("BT auto-update failed:", e);
+      }
       await checkAndUpdateHunterRecords();
       window.dispatchEvent(new Event("hunterRecordsUpdated"));
       if (analysisRef.current) await analysisRef.current.run();
