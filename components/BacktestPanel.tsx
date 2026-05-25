@@ -724,7 +724,16 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
       window.dispatchEvent(new Event("hunterRecordsUpdated"));
       if (analysisRef.current) await analysisRef.current.run();
       exportBtCSV(records);
-      exportHunterCSV();
+      const hunterCsv = exportHunterCSV();
+      if (hunterCsv) {
+        const hBlob = new Blob([hunterCsv], { type: "text/csv;charset=utf-8;" });
+        const hUrl = URL.createObjectURL(hBlob);
+        const hA = document.createElement("a");
+        hA.href = hUrl;
+        hA.download = `bell-hunter-${new Date().toISOString().slice(0, 10)}.csv`;
+        hA.click();
+        URL.revokeObjectURL(hUrl);
+      }
 
       // 前兆スキャン専用CSVエクスポート
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
