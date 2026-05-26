@@ -191,7 +191,7 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
 
   // ── Derived values ────────────────────────────────────────────────────────
   const pnlJpy      = result.finalEquity - capital;
-  const maxDDJpy    = result.maxDrawdown / 100 * capital;
+  const maxDDJpy    = result.maxDDJpy ?? result.maxDrawdown / 100 * capital;
   const highLevRisk = posSizePct * 0.08 * leverage;
 
   // ── Period label ──────────────────────────────────────────────────────────
