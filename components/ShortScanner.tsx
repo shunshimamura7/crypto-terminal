@@ -2770,10 +2770,17 @@ export default function ShortScanner() {
   const ITEMS_PER_PAGE = 15;
 
   // Auto-refresh interval (施策5)
-  const [autoIntervalMin, setAutoIntervalMin] = useState<0|5|10|30|60>(() => {
+  const [autoIntervalMin, setAutoIntervalMin] = useState<0|1|5>(() => {
     if (typeof window === "undefined") return 0;
-    return (Number(localStorage.getItem("shortScanInterval") ?? "0") as 0|5|10|30|60);
+    const stored = Number(localStorage.getItem("shortScanInterval") ?? "0");
+    return ([0, 1, 5].includes(stored) ? stored : 0) as 0|1|5;
   });
+  const [autoRecord, setAutoRecord] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("scannerAutoRecord") === "on";
+  });
+  const autoRecordRef = useRef(autoRecord);
+  useEffect(() => { autoRecordRef.current = autoRecord; }, [autoRecord]);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showAutoMenu, setShowAutoMenu] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
@@ -3080,6 +3087,28 @@ export default function ShortScanner() {
         buildDangerListFromRecords(newRecords);
         setBtRecords(newRecords);
         if (recorded > 0) addToast(`📊 ${recorded}${t.toastBtRecord}`, "info");
+
+        // Auto-record recommended candidates (自動記録)
+        if (autoRecordRef.current) {
+          const now = Date.now();
+          const cutoff = now - 86_400_000;
+          const recentSymbols = new Set(
+            newRecords.filter(r => (r.recordedAt ?? 0) >= cutoff).map(r => r.symbol)
+          );
+          const regime = marketRegimeRef.current;
+          const regimeBonus = regime?.regime === "RISK_OFF" ? 1 : 0;
+          const fgBonus = calcFearGreedBonus(regime?.fng ?? undefined);
+          const toAutoRecord = json.candidates.filter(c => {
+            if (recentSymbols.has(c.symbol)) return false;
+            const { exclusivityScore = 0, frBonus = 0 } = clientScoresMap.get(c.symbol) ?? {};
+            const { bonus: nlBonus } = calcNewListingBonus(c);
+            const ds = c.shortScore + exclusivityScore + frBonus + regimeBonus + nlBonus + fgBonus;
+            return ds >= RECOMMEND_THRESHOLD && (c.fundingRate === null || c.fundingRate >= 0);
+          });
+          if (toAutoRecord.length > 0) {
+            addToast(`🎯 ${toAutoRecord.length}${t.toastBtRecord}`, "info");
+          }
+        }
       } catch (e) {
         console.error("[backtest]", e);
       }
@@ -3173,10 +3202,17 @@ export default function ShortScanner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoIntervalMin]);
 
-  function setAutoInterval(min: 0|5|10|30|60) {
+  function setAutoInterval(min: 0|1|5) {
     localStorage.setItem("shortScanInterval", String(min));
     setAutoIntervalMin(min);
     setShowAutoMenu(false);
+  }
+  function toggleAutoRecord() {
+    setAutoRecord(v => {
+      const next = !v;
+      localStorage.setItem("scannerAutoRecord", next ? "on" : "off");
+      return next;
+    });
   }
 
 
@@ -3192,6 +3228,8 @@ export default function ShortScanner() {
     }
     return { fng: marketFearGreed, btcChange24h: marketBtcChange, regime, scoreAdjust };
   }, [marketBtcChange, marketFearGreed]);
+  const marketRegimeRef = useRef<typeof marketRegime>(null);
+  useEffect(() => { marketRegimeRef.current = marketRegime; }, [marketRegime]);
 
   const strongThreshold = regimeFilterOn && marketRegime ? RECOMMEND_THRESHOLD + marketRegime.scoreAdjust : RECOMMEND_THRESHOLD;
 
@@ -3573,7 +3611,7 @@ export default function ShortScanner() {
               </button>
               {showAutoMenu && (
                 <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px]">
-                  {([0,5,10,30,60] as const).map(m => (
+                  {([0,1,5] as const).map(m => (
                     <button key={m} onClick={() => setAutoInterval(m)}
                       className={`w-full text-left px-3 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-colors ${autoIntervalMin === m ? "text-indigo-600 font-bold" : "text-gray-600 dark:text-gray-300"}`}>
                       {m === 0 ? t.autoOff : `${m}分ごと`}
@@ -3591,6 +3629,10 @@ export default function ShortScanner() {
               </button>
               {showSettingsMenu && (
                 <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[170px]">
+                  <button onClick={toggleAutoRecord}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${autoRecord ? "text-green-700 dark:text-green-400 font-semibold" : "text-gray-600 dark:text-gray-300"}`}>
+                    {autoRecord ? "🎯 自動記録: ON" : "🎯 自動記録: OFF"}
+                  </button>
                   <button onClick={toggleSound}
                     className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
                     {soundEnabled ? t.soundOn : t.soundOff}
