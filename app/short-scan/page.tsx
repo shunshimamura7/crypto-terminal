@@ -1,8 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import ShortScanner from "@/components/ShortScanner";
-import ListingHunter from "@/components/ListingHunter";
-import HunterRecords from "@/components/HunterRecords";
 import Strategy36hScanner from "@/components/Strategy36hScanner";
 import PrecursorScanner from "@/components/PrecursorScanner";
 
@@ -121,12 +119,6 @@ export default function ShortScanPage() {
       <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 flex gap-1">
           <a
-            href="#hunter"
-            className="py-3 px-4 text-sm font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors rounded-t"
-          >
-            🎯 22hハンター
-          </a>
-          <a
             href="#strategy36h"
             className="py-3 px-4 text-sm font-bold text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-colors rounded-t"
           >
@@ -149,14 +141,6 @@ export default function ShortScanPage() {
 
       {/* Content — 両スキャンが独立して並列実行 */}
       <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8">
-
-        {/* 上: 22hハンター（緊急性高い・新機能）*/}
-        <section id="hunter">
-          <ListingHunter />
-          <HunterRecords />
-        </section>
-
-        <hr className="border-slate-200 dark:border-slate-700" />
 
         {/* 36hロング戦略スキャナー */}
         <section id="strategy36h">
