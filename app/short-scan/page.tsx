@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import ShortScanner from "@/components/ShortScanner";
-import Strategy36hScanner from "@/components/Strategy36hScanner";
 import PrecursorScanner from "@/components/PrecursorScanner";
 
 const SCORING_ITEMS = [
@@ -119,12 +118,6 @@ export default function ShortScanPage() {
       <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 flex gap-1">
           <a
-            href="#strategy36h"
-            className="py-3 px-4 text-sm font-bold text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-colors rounded-t"
-          >
-            📈 36hロング
-          </a>
-          <a
             href="#scanner"
             className="py-3 px-4 text-sm font-bold text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors rounded-t"
           >
@@ -141,13 +134,6 @@ export default function ShortScanPage() {
 
       {/* Content — 両スキャンが独立して並列実行 */}
       <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8">
-
-        {/* 36hロング戦略スキャナー */}
-        <section id="strategy36h">
-          <Strategy36hScanner />
-        </section>
-
-        <hr className="border-slate-200 dark:border-slate-700" />
 
         {/* 下: スコア型スキャナー（既存・主力）*/}
         <section id="scanner">
