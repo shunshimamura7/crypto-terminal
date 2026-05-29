@@ -2779,8 +2779,6 @@ export default function ShortScanner() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("scannerAutoRecord") === "on";
   });
-  const autoRecordRef = useRef(autoRecord);
-  useEffect(() => { autoRecordRef.current = autoRecord; }, [autoRecord]);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showAutoMenu, setShowAutoMenu] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
@@ -3087,28 +3085,6 @@ export default function ShortScanner() {
         buildDangerListFromRecords(newRecords);
         setBtRecords(newRecords);
         if (recorded > 0) addToast(`📊 ${recorded}${t.toastBtRecord}`, "info");
-
-        // Auto-record recommended candidates (自動記録)
-        if (autoRecordRef.current) {
-          const now = Date.now();
-          const cutoff = now - 86_400_000;
-          const recentSymbols = new Set(
-            newRecords.filter(r => (r.recordedAt ?? 0) >= cutoff).map(r => r.symbol)
-          );
-          const regime = marketRegimeRef.current;
-          const regimeBonus = regime?.regime === "RISK_OFF" ? 1 : 0;
-          const fgBonus = calcFearGreedBonus(regime?.fng ?? undefined);
-          const toAutoRecord = json.candidates.filter(c => {
-            if (recentSymbols.has(c.symbol)) return false;
-            const { exclusivityScore = 0, frBonus = 0 } = clientScoresMap.get(c.symbol) ?? {};
-            const { bonus: nlBonus } = calcNewListingBonus(c);
-            const ds = c.shortScore + exclusivityScore + frBonus + regimeBonus + nlBonus + fgBonus;
-            return ds >= RECOMMEND_THRESHOLD && (c.fundingRate === null || c.fundingRate >= 0);
-          });
-          if (toAutoRecord.length > 0) {
-            addToast(`🎯 ${toAutoRecord.length}${t.toastBtRecord}`, "info");
-          }
-        }
       } catch (e) {
         console.error("[backtest]", e);
       }
