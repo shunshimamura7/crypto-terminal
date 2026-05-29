@@ -32,7 +32,11 @@ export function simulateBacktest(
   const { initialCapital } = config;
 
   const resolved = [...records]
-    .filter(r => r.resolvedAt != null && r.resolvedPrice != null && r.status !== "active")
+    .filter(r =>
+      r.resolvedAt != null &&
+      r.resolvedPrice != null &&
+      (r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit" || r.status === "sl_hit"),
+    )
     .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
 
   let equity = initialCapital;

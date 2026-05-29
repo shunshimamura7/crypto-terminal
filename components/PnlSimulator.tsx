@@ -143,7 +143,11 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
   const sharpe = useMemo(() => {
     const cfg = currentConfig;
     const resolved = [...targetRecords]
-      .filter(r => r.resolvedAt != null && r.resolvedPrice != null && r.status !== "active")
+      .filter(r =>
+        r.resolvedAt != null &&
+        r.resolvedPrice != null &&
+        (r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit" || r.status === "sl_hit"),
+      )
       .sort((a, b) => (a.resolvedAt ?? 0) - (b.resolvedAt ?? 0));
     if (resolved.length < 3) return null;
     let eq = cfg.initialCapital;
