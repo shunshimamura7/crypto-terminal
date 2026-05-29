@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import { simulateBacktest } from "@/app/lib/backtestSimulator";
-import type { SimulationConfig } from "@/app/lib/backtestSimulator";
+import type { SimulationConfig, TpLevel } from "@/app/lib/backtestSimulator";
 
 interface ScanCandidate {
   symbol: string;
@@ -69,12 +69,13 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate,   setCustomEndDate]   = useState("");
   const [advancedOpen,    setAdvancedOpen]    = useState(false);
+  const [tpLevel,         setTpLevel]         = useState<TpLevel>(() => loadSetting("tpLevel", "tp1"));
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ capital, riskPct, leverage, calcMode, posSizePct }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ capital, riskPct, leverage, calcMode, posSizePct, tpLevel }));
     } catch { /* ignore */ }
-  }, [capital, riskPct, leverage, calcMode, posSizePct]);
+  }, [capital, riskPct, leverage, calcMode, posSizePct, tpLevel]);
 
   const ja = lang === "ja";
   const presets = ja ? JA_PRESETS : EN_PRESETS;
@@ -128,7 +129,8 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     leverage,
     usdJpy:          145,
     mode:            calcMode,
-  }), [capital, riskPct, posSizePct, leverage, calcMode]);
+    tpLevel,
+  }), [capital, riskPct, posSizePct, leverage, calcMode, tpLevel]);
 
   const targetRecords = useMemo(() => {
     const periodFiltered = filterByPeriod(records);
@@ -153,10 +155,11 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     let eq = cfg.initialCapital;
     const rets: number[] = [];
     for (const r of resolved) {
-      const exitPrice = r.status === "tp1_hit" ? r.tp1
-                      : r.status === "tp2_hit" ? r.tp2
-                      : r.status === "tp3_hit" ? r.tp3
-                      : r.status === "sl_hit"  ? r.sl
+      const tl = cfg.tpLevel;
+      const exitPrice = r.status === "sl_hit"  ? r.sl
+                      : r.status === "tp1_hit" ? r.tp1
+                      : r.status === "tp2_hit" ? (tl === "tp1" ? r.tp1 : r.tp2)
+                      : r.status === "tp3_hit" ? (tl === "all" ? r.tp3 : tl === "tp1_tp2" ? r.tp2 : r.tp1)
                       : (r.resolvedPrice ?? r.entryPrice);
       const profit = r.entryPrice - exitPrice;
       const risk   = r.sl - r.entryPrice;
@@ -309,6 +312,13 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
     highLevDanger:    ja
       ? "🚨 レバ10xはアルトコインでは清算リスクが非常に高いです。3x以下を推奨します。"
       : "🚨 10x leverage on altcoins carries extreme liquidation risk. 3x or below recommended.",
+    tpLevelLabel:  ja ? "利確段階"  : "Exit Target",
+    tpLevelTp1:    ja ? "TP1のみ"  : "TP1 only",
+    tpLevelTp12:   ja ? "TP1+TP2" : "TP1+TP2",
+    tpLevelAll:    ja ? "全TP"     : "All TP",
+    tpDescTp1:     ja ? "保守的"   : "Conservative",
+    tpDescTp12:    ja ? "標準"     : "Standard",
+    tpDescAll:     ja ? "楽観的"   : "Optimistic",
   };
 
   return (
@@ -364,6 +374,35 @@ export default function PnlSimulator({ records, lang, currentScanResults }: PnlS
                 }`}
               >
                 {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ━━━ 利確段階フィルター (常時表示) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        <div>
+          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block mb-2">
+            🎯 {T.tpLevelLabel}
+          </label>
+          <div className="flex gap-1.5 flex-wrap">
+            {(
+              [
+                { value: "tp1",    label: T.tpLevelTp1,  desc: T.tpDescTp1  },
+                { value: "tp1_tp2", label: T.tpLevelTp12, desc: T.tpDescTp12 },
+                { value: "all",    label: T.tpLevelAll,  desc: T.tpDescAll  },
+              ] as const
+            ).map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setTpLevel(opt.value)}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                  tpLevel === opt.value
+                    ? "bg-blue-500 text-white shadow-sm"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                }`}
+              >
+                {opt.label}
+                <span className="ml-1 opacity-60">({opt.desc})</span>
               </button>
             ))}
           </div>

@@ -1,5 +1,7 @@
 import type { BacktestRecord } from "./backtestStorage";
 
+export type TpLevel = "tp1" | "tp1_tp2" | "all";
+
 export interface SimulationConfig {
   initialCapital: number;
   leverage: number;
@@ -7,6 +9,7 @@ export interface SimulationConfig {
   mode: "risk" | "position";
   riskPerTrade: number;     // mode="risk" 用（%）
   positionSizePct: number;  // mode="position" 用（%）
+  tpLevel: TpLevel;         // 利確段階フィルター
 }
 
 export interface SimulationResult {
@@ -56,10 +59,11 @@ export function simulateBacktest(
   ];
 
   for (const r of resolved) {
-    const exitPrice = r.status === "tp1_hit" ? r.tp1
-                    : r.status === "tp2_hit" ? r.tp2
-                    : r.status === "tp3_hit" ? r.tp3
-                    : r.status === "sl_hit"  ? r.sl
+    const tl = config.tpLevel;
+    const exitPrice = r.status === "sl_hit"  ? r.sl
+                    : r.status === "tp1_hit" ? r.tp1
+                    : r.status === "tp2_hit" ? (tl === "tp1" ? r.tp1 : r.tp2)
+                    : r.status === "tp3_hit" ? (tl === "all" ? r.tp3 : tl === "tp1_tp2" ? r.tp2 : r.tp1)
                     : (r.resolvedPrice ?? r.entryPrice);
     const profit = r.entryPrice - exitPrice;
     const risk   = r.sl - r.entryPrice;
