@@ -10,7 +10,7 @@ import type { CandidateInput } from "./strategies/types";
 import type { MarketContext } from "./marketContext";
 
 const EXPIRE_DAYS = 14;
-const SCORE_THRESHOLD = 8;
+const SCORE_THRESHOLD = 13;
 export const SCORING_VERSION = "v2.0";
 
 function isPending(status: BacktestStatus): boolean {
@@ -268,7 +268,7 @@ export function recordNewCandidates(
             && c.volume24h >= 50_000
             && c.openInterest >= 20_000;
         case "new_listing":
-          return c.shortScore >= 8 && c.listedDaysAgo <= 30;
+          return c.shortScore >= SCORE_THRESHOLD && c.listedDaysAgo <= 30;
         case "high_lev":
           return c.shortScore >= 12
             && c.athDropPct <= -70
