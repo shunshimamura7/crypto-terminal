@@ -1,5 +1,57 @@
 # 変更ログ
 
+## 2026-05-29: バックテスト・シミュレーション品質改善【MAJOR】
+
+**対象ファイル**: `app/lib/backtestSimulator.ts`, `components/PnlSimulator.tsx`, `components/ShortScanner.tsx`, `app/lib/backtestChecker.ts`
+
+### 修正内容
+
+#### 1. expired レコードのシミュレーション混入バグを修正
+- **ファイル**: `app/lib/backtestSimulator.ts`, `components/PnlSimulator.tsx`（Sharpe計算も）
+- **Before**: `r.status !== "active"` フィルター → expired が混入
+- **After**: `tp1_hit | tp2_hit | tp3_hit | sl_hit` ホワイトリスト化
+- `backtestStats.ts` / `backtestAnalysis.ts` と同じ設計に統一
+
+#### 2. PnlSimulator に TPレベルフィルター追加
+- **ファイル**: `app/lib/backtestSimulator.ts`（`TpLevel` 型 / `SimulationConfig.tpLevel`）, `components/PnlSimulator.tsx`
+- **`"tp1"`（デフォルト）**: tp2_hit / tp3_hit もすべて `r.tp1` 価格で利確扱い（保守的・現実的）
+- **`"tp1_tp2"`**: tp3_hit のみ `r.tp2` にキャップ
+- **`"all"`**: 従来通り（楽観的）
+- localStorage `bell:portfolio:settings` に `tpLevel` 永続化
+- 軍資金ボタン直後に常時表示 UI として追加（advancedOpen の外）
+
+#### 3. autoRecord dead code を削除
+- **ファイル**: `components/ShortScanner.tsx`
+- `toAutoRecord` を計算してトーストのみ出す無意味なブロック（L.3091〜3111相当）を削除
+- `autoRecordRef` / その `useEffect` も削除（24行削減）
+- `autoRecord` state と UI トグルは維持（設定永続化用途）
+
+#### 4. バックテスト記録閾値 8 → 13 に引き上げ
+- **ファイル**: `app/lib/backtestChecker.ts`
+- `SCORE_THRESHOLD = 8` → `SCORE_THRESHOLD = 13`
+- `new_listing` プリセットのハードコード `>= 8` も `>= SCORE_THRESHOLD` 参照に統一
+- 推奨閾値(13)未満のノイズ銘柄がバックテストに混入する問題を解消
+
+#### 5. UIテキスト修正
+- **ファイル**: `components/ShortScanner.tsx`
+- 「スコア8以上の銘柄が自動記録されます」→「スコア13以上」（ja/en両対応）
+
+#### 6. 既存データリセット（手動）
+- 旧データ（スコア8〜12混入）を UI の「データリセット」ボタンで全削除
+- 2026-05-29 よりクリーンなデータ蓄積開始
+
+### 既知の残存問題
+- **SL未検知バイアス**: `lastPrice` のみ使用でチェック間隔内のSLタッチを見逃す可能性（勝率数〜10%過大評価）。修正にはOHLCV対応が必要（難度高・未対処）
+- **TP2/TP3のR倍率過大**: TP2 = 3.75〜6R、TP3 = 8〜13R（SL比較）→ TPレベルフィルターで対処済み
+
+### バックテストの正しい読み方
+- **TP1のみモードで見る**（デフォルト設定）
+- PF 1.5以上でエッジあり
+- 100件確定後にスコア帯別分析を実施
+- シミュレーション数字は「上限値」。実践では1/3〜1/2程度に収まると想定
+
+---
+
 ## 2026-05-01 推奨停止・精度警告・v2.0フィルター追加
 
 **対象ファイル**: `components/ShortScanner.tsx`, `components/BacktestPanel.tsx`
