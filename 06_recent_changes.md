@@ -1,5 +1,17 @@
 # 変更ログ
 
+## 2026-06-03: 非crypto銘柄除外を共通化（symbolFilters.ts）
+
+**対象ファイル**: `app/lib/symbolFilters.ts`（新規）, `app/lib/precursorScanner.ts`, `app/api/short-scan/route.ts`, `app/api/optimizer/collect/route.ts`
+
+- `isNonCryptoSymbol` / `filterCryptoOnly` を `app/lib/symbolFilters.ts` に集約
+- USOIL/NFP/NAS100/SPX500/SILVER/US 等の株価指数・コモディティ・FXシンセティックを全スキャン経路から除外
+- 前兆スキャン(`precursorScanner.ts`)は除外フィルタが皆無だったため追加（根本原因対処）
+- `short-scan/route.ts` はローカル定義の `isNonCrypto()` を削除してimport統一
+- `optimizer/collect/route.ts` はローカル定義の `isExcluded()` を削除してimport統一
+
+---
+
 ## 2026-05-29: バックテスト・シミュレーション品質改善【MAJOR】
 
 **対象ファイル**: `app/lib/backtestSimulator.ts`, `components/PnlSimulator.tsx`, `components/ShortScanner.tsx`, `app/lib/backtestChecker.ts`

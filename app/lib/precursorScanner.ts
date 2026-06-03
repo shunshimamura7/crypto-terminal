@@ -1,3 +1,5 @@
+import { isNonCryptoSymbol } from "@/app/lib/symbolFilters";
+
 const MEXC = "https://api.mexc.com";
 const DELAY_MS = 110;
 
@@ -177,7 +179,7 @@ export async function fetchTopTickers(limit = 200): Promise<MexcTickerItem[]> {
   if (!res.ok) return [];
   const json = await res.json();
   const all: MexcTickerItem[] = (json?.data ?? [])
-    .filter((t: MexcTickerItem) => t.symbol?.endsWith("_USDT"));
+    .filter((t: MexcTickerItem) => t.symbol?.endsWith("_USDT") && !isNonCryptoSymbol(t.symbol));
   all.sort((a, b) => parseFloat(b.volume24) - parseFloat(a.volume24));
   return all.slice(0, limit);
 }

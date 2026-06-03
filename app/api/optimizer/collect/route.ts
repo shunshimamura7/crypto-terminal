@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isNonCryptoSymbol } from "@/app/lib/symbolFilters";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,38 +12,6 @@ const BUDGET_MS = 52_000;
 const DAYS_180_MS = 180 * 24 * 3_600_000;
 const HOURS_72_SEC = 72 * 3_600;
 
-// Explicit exclusion list (stocks, commodities, non-crypto synthetics)
-const EXCLUDED_BASE = new Set([
-  "USOIL", "UKOIL", "XAUT", "USIB", "USIN",
-  "ANTHROPIC", "OPENAI", "SPACEX",
-  "NVDA", "TSLA", "AAPL", "META", "GOOGL", "AMZN", "MSFT", "NFLX", "AMD", "COIN", "MSTR",
-]);
-
-// 非crypto除外キーワード（株式/コモディティ/指数）
-const EXCLUDE_KEYWORDS = [
-  // 株式トークン
-  "ANTHROPIC", "OPENAI", "SPACEX", "TRUMP", "MUSK",
-  "NVIDIA", "TSLA", "AAPL", "GOOGL", "MSFT", "META",
-  "AMZN", "NFLX", "UBER", "COIN", "HOOD",
-  // コモディティ
-  "USOIL", "XAUT", "ALUMINUM", "SILVER", "COPPER",
-  "NATGAS", "WHEAT", "CORN", "OIL", "CRUDE",
-  // 指数
-  "SPX500", "SPX", "US30", "HK50", "JP225", "NAS100",
-  "NIFTY", "DAX", "FTSE", "CAC40", "ASX200", "VIX",
-  // FX系
-  "EURUSD", "GBPUSD", "USDJPY",
-];
-
-function isExcluded(symbol: string): boolean {
-  const base = symbol.replace(/_USDT$/i, "").toUpperCase();
-  if (EXCLUDED_BASE.has(base)) return true;
-  // e.g. AAPLSTOCK_USDT, NFLXSTOCK_USDT
-  if (/STOCK$/i.test(base)) return true;
-  // キーワードフィルタ（非crypto除外）
-  if (EXCLUDE_KEYWORDS.some(kw => base.includes(kw))) return true;
-  return false;
-}
 
 async function mexcGet(path: string, ms = 10_000) {
   const ctrl = new AbortController();
@@ -108,7 +77,7 @@ export async function GET(req: NextRequest): Promise<NextResponse<CollectRespons
     .filter((c: any) => {
       if (c.state !== 0) return false;
       if (!c.symbol?.endsWith("_USDT")) return false;
-      if (isExcluded(c.symbol as string)) return false;
+      if (isNonCryptoSymbol(c.symbol as string)) return false;
       const ct = Number(c.createTime || 0);
       return ct > 0 && ct >= cutoff;
     })

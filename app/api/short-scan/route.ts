@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isNonCryptoSymbol } from "@/app/lib/symbolFilters";
 import { calcShortScore, calcVolumeProfile, calcTradeSetup, calcVolumeSpike, calcLiquidationZone, calcATRData } from "@/app/lib/shortScorer";
 import type { ShortCandidate, VolumeProfile, TradeSetup, ATRData } from "@/app/lib/shortScorer";
 import { fetchGtDexData } from "@/app/lib/geckoTerminal";
@@ -72,22 +73,6 @@ async function fetchKline4h(symbol: string, day14AgoSec: number, nowSec: number)
   return res;
 }
 
-// Non-crypto tokenized assets (equities, commodities, forex, indices)
-const NON_CRYPTO_PATTERNS = [
-  /^(GOLD|SILVER|COPPER|XAU|XAG|XPD|XPT)_/i,
-  /^(HK50|SPX|NASDAQ|NDX|DJI|FTSE|DAX|NI225|HSI|KOSPI|CAC40|IBEX|ASX200)_/i,
-  /^(WTI|BRENT|NATGAS|WHEAT|CORN|SOYBEAN|SUGAR|COFFEE|COTTON|COCOA)_/i,
-  /^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|KRW|HKD|CNH|SGD|MXN|BRL|INR|ZAR)_/i,
-];
-// STOCK文字列を含むシンボルの例外（除外しないcrypto銘柄）
-const STOCK_EXCEPTIONS = new Set<string>([]);
-function isNonCrypto(symbol: string): boolean {
-  if (NON_CRYPTO_PATTERNS.some(p => p.test(symbol))) return true;
-  // _USDTを除去してからSTOCKを含むか確認（NBISSTOCK_USDTなど末尾$が機能しないため）
-  const stripped = symbol.replace(/_USDT$/i, "").toUpperCase();
-  if (/STOCK/.test(stripped) && !STOCK_EXCEPTIONS.has(stripped)) return true;
-  return false;
-}
 
 const MAJOR_PAIRS = new Set([
   "BTC_USDT","ETH_USDT","BNB_USDT","SOL_USDT","XRP_USDT","DOGE_USDT","ADA_USDT","AVAX_USDT",
@@ -554,7 +539,7 @@ export async function GET(req: NextRequest) {
     const sym = t.symbol;
     if (!sym?.endsWith("_USDT")) continue;
     if (MAJOR_PAIRS.has(sym)) continue;
-    if (isNonCrypto(sym)) { nonCryptoFiltered++; continue; }
+    if (isNonCryptoSymbol(sym)) { nonCryptoFiltered++; continue; }
 
     const price = parseFloat(t.lastPrice || "0");
     if (!price) continue;
