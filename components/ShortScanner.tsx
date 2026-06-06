@@ -4389,6 +4389,11 @@ export default function ShortScanner() {
         stats={btStats}
         lang={lang}
         onReset={() => { clearRecords(); setBtRecords([]); }}
+        onDeleteRecord={(id) => {
+          const newRecords = btRecords.filter(r => r.id !== id);
+          saveRecords(newRecords);
+          setBtRecords(newRecords);
+        }}
       />
 
       {/* Symbol Health Panel */}

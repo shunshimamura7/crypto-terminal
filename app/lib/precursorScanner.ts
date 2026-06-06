@@ -125,6 +125,7 @@ export async function scanPrecursors(tickers: MexcTickerItem[]): Promise<Precurs
 
   for (const ticker of tickers) {
     const symbol = ticker.symbol;
+    if (isNonCryptoSymbol(symbol)) continue;
     const currentPrice = parseFloat(ticker.lastPrice);
     const fr = parseFloat(ticker.fundingRate) || 0;
     const openInterest = parseFloat(ticker.holdVol) || 0;

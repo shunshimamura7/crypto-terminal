@@ -280,7 +280,7 @@ function LossAnalysisPanel({ analysis, records }: { analysis: BacktestAnalysis; 
 
 // ── DataIntegritySection ──────────────────────────────────────────────────────
 
-function DataIntegritySection({ records, lang }: { records: BacktestRecord[]; lang: "ja" | "en" }) {
+function DataIntegritySection({ records, lang, onDeleteRecord }: { records: BacktestRecord[]; lang: "ja" | "en"; onDeleteRecord?: (id: string) => void }) {
   const report = useMemo(() => checkDataIntegrity(records), [records]);
   const tpOrderV1Count = report.issues.filter(i => i.category === "TP順序異常" && i.level === "warning").length;
 
@@ -331,13 +331,24 @@ function DataIntegritySection({ records, lang }: { records: BacktestRecord[]; la
             <summary className="cursor-pointer text-blue-600 hover:underline select-none">詳細を表示</summary>
             <div className="mt-2 max-h-60 overflow-y-auto space-y-1">
               {report.issues.slice(0, 50).map((issue, i) => (
-                <div key={i} className={`p-2 rounded text-[11px] ${
+                <div key={i} className={`p-2 rounded text-[11px] flex items-start justify-between gap-2 ${
                   issue.level === "critical" ? "bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-800" :
                   issue.level === "warning"  ? "bg-yellow-50 border border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-800" :
                                               "bg-blue-50 border border-blue-200 dark:bg-blue-950/30 dark:border-blue-800"
                 }`}>
-                  <div className="font-semibold text-gray-700 dark:text-gray-300">[{issue.category}] {issue.symbol.replace("_USDT","")}</div>
-                  <div className="text-gray-500">{issue.description}</div>
+                  <div>
+                    <div className="font-semibold text-gray-700 dark:text-gray-300">[{issue.category}] {issue.symbol.replace("_USDT","")}</div>
+                    <div className="text-gray-500">{issue.description}</div>
+                  </div>
+                  {onDeleteRecord && issue.recordId && (issue.level === "critical" || issue.level === "warning") && (
+                    <button
+                      onClick={() => onDeleteRecord(issue.recordId!)}
+                      className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-red-300 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30"
+                      title="このレコードを削除"
+                    >
+                      削除
+                    </button>
+                  )}
                 </div>
               ))}
               {report.issues.length > 50 && (
@@ -691,9 +702,10 @@ interface BacktestPanelProps {
   stats: BacktestStats;
   lang: "ja" | "en";
   onReset: () => void;
+  onDeleteRecord?: (id: string) => void;
 }
 
-export default function BacktestPanel({ records, stats, lang, onReset }: BacktestPanelProps) {
+export default function BacktestPanel({ records, stats, lang, onReset, onDeleteRecord }: BacktestPanelProps) {
   const t = lang === "en" ? BT_EN : BT_JA;
 
   function handleReset() {
@@ -1278,6 +1290,7 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                           <th className="px-2 py-1.5 text-center">{t.btStatusCol}</th>
                           <th className="px-2 py-1.5 text-right">{t.btPnlCol}</th>
                           <th className="px-2 py-1.5 text-right">{t.btDaysCol}</th>
+                          {onDeleteRecord && <th className="px-2 py-1.5"></th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -1313,6 +1326,17 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
                                 {pnl != null ? `${pnl >= 0 ? "+" : ""}${pnl.toFixed(1)}%` : "—"}
                               </td>
                               <td className="px-2 py-1.5 text-right text-gray-500">{days}d</td>
+                              {onDeleteRecord && (
+                                <td className="px-2 py-1.5">
+                                  <button
+                                    onClick={() => onDeleteRecord(r.id)}
+                                    className="text-[10px] px-1.5 py-0.5 rounded border border-gray-300 text-gray-400 hover:bg-red-50 hover:text-red-500 hover:border-red-300 transition-colors"
+                                    title="削除"
+                                  >
+                                    ✕
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
@@ -1447,7 +1471,7 @@ export default function BacktestPanel({ records, stats, lang, onReset }: Backtes
               </div>
 
               {/* データ健全性 */}
-              <DataIntegritySection records={records} lang={lang} />
+              <DataIntegritySection records={records} lang={lang} onDeleteRecord={onDeleteRecord} />
             </>
           )}
         </div>
