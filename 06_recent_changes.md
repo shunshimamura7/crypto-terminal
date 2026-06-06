@@ -1,5 +1,11 @@
 # 変更ログ
 
+## 2026-06-06
+- fix: precursorScanner の非crypto除外フィルター漏れ修正（USOIL/UKOIL/SILVER/XAUT/NAS100/NFP/SPX500/US対応）
+- feat: バックテスト記録の個別削除ボタン追加（データ健全性パネル + レコード一覧）
+
+---
+
 ## 2026-06-03: 非crypto銘柄除外を共通化（symbolFilters.ts）
 
 **対象ファイル**: `app/lib/symbolFilters.ts`（新規）, `app/lib/precursorScanner.ts`, `app/api/short-scan/route.ts`, `app/api/optimizer/collect/route.ts`
