@@ -280,7 +280,7 @@ function LossAnalysisPanel({ analysis, records }: { analysis: BacktestAnalysis; 
 
 // ── DataIntegritySection ──────────────────────────────────────────────────────
 
-function DataIntegritySection({ records, lang, onDeleteRecord }: { records: BacktestRecord[]; lang: "ja" | "en"; onDeleteRecord?: (id: string) => void }) {
+function DataIntegritySection({ records, lang, onDeleteRecord }: { records: BacktestRecord[]; lang: "ja" | "en"; onDeleteRecord?: (id: string, symbol?: string) => void }) {
   const report = useMemo(() => checkDataIntegrity(records), [records]);
   const tpOrderV1Count = report.issues.filter(i => i.category === "TP順序異常" && i.level === "warning").length;
 
@@ -340,9 +340,9 @@ function DataIntegritySection({ records, lang, onDeleteRecord }: { records: Back
                     <div className="font-semibold text-gray-700 dark:text-gray-300">[{issue.category}] {issue.symbol.replace("_USDT","")}</div>
                     <div className="text-gray-500">{issue.description}</div>
                   </div>
-                  {onDeleteRecord && issue.recordId && (issue.level === "critical" || issue.level === "warning") && (
+                  {onDeleteRecord && (issue.level === "critical" || issue.level === "warning") && (
                     <button
-                      onClick={() => onDeleteRecord(issue.recordId!)}
+                      onClick={() => onDeleteRecord(issue.recordId ?? '', issue.symbol)}
                       className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-red-300 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30"
                       title="このレコードを削除"
                     >
@@ -702,7 +702,7 @@ interface BacktestPanelProps {
   stats: BacktestStats;
   lang: "ja" | "en";
   onReset: () => void;
-  onDeleteRecord?: (id: string) => void;
+  onDeleteRecord?: (id: string, symbol?: string) => void;
 }
 
 export default function BacktestPanel({ records, stats, lang, onReset, onDeleteRecord }: BacktestPanelProps) {

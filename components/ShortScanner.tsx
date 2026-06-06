@@ -4389,8 +4389,10 @@ export default function ShortScanner() {
         stats={btStats}
         lang={lang}
         onReset={() => { clearRecords(); setBtRecords([]); }}
-        onDeleteRecord={(id) => {
-          const newRecords = btRecords.filter(r => r.id !== id);
+        onDeleteRecord={(id, symbol) => {
+          const newRecords = id
+            ? btRecords.filter(r => r.id !== id)
+            : btRecords.filter(r => r.symbol !== symbol);
           saveRecords(newRecords);
           setBtRecords(newRecords);
         }}
