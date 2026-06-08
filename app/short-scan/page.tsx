@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import ShortScanner from "@/components/ShortScanner";
 import PrecursorScanner from "@/components/PrecursorScanner";
 import MarketRegimeBanner from "@/components/MarketRegimeBanner";
+import type { MarketRegime } from "@/app/lib/marketRegime";
 
 const SCORING_ITEMS = [
   { label: "ATH下落",      pts: "3pt", color: "#ef4444" },
@@ -54,6 +55,7 @@ function ScoringBar() {
 }
 
 export default function ShortScanPage() {
+  const [regime, setRegime] = useState<MarketRegime>("neutral");
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("bell:darkMode") === "true";
@@ -137,7 +139,7 @@ export default function ShortScanPage() {
       <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8">
 
         {/* 市況警告バー */}
-        <MarketRegimeBanner />
+        <MarketRegimeBanner onRegimeChange={setRegime} />
 
         {/* 下: スコア型スキャナー（既存・主力）*/}
         <section id="scanner">
@@ -148,7 +150,7 @@ export default function ShortScanPage() {
 
         {/* 前兆スキャン */}
         <section id="precursor">
-          <PrecursorScanner />
+          <PrecursorScanner regime={regime} />
         </section>
       </div>
 

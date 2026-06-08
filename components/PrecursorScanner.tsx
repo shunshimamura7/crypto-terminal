@@ -1,12 +1,17 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { getRecords, saveRecords } from "@/app/lib/backtestStorage";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import type { PrecursorSignal } from "@/app/lib/precursorScanner";
 import type { PrecursorScanResponse } from "@/app/api/precursor-scan/route";
+import { isPrecursorRecommended, getPrecursorRecommendThreshold, MarketRegime } from "@/app/lib/marketRegime";
 
-export default function PrecursorScanner() {
+interface Props {
+  regime?: MarketRegime;
+}
+
+export default function PrecursorScanner({ regime = "neutral" }: Props) {
   const [signals, setSignals] = useState<PrecursorSignal[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -162,6 +167,8 @@ export default function PrecursorScanner() {
     setRecorded(prev => new Set([...prev, signal.symbol]));
   }
 
+  const threshold = useMemo(() => getPrecursorRecommendThreshold(regime), [regime]);
+
   return (
     <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
       {/* ヘッダー */}
@@ -261,6 +268,15 @@ export default function PrecursorScanner() {
         </div>
       )}
 
+      {/* 警戒モード厳格化バッジ */}
+      {threshold.isStricter && (
+        <div className="px-5 pt-3">
+          <div className="inline-flex items-center gap-1.5 bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-700 rounded px-2.5 py-1 text-xs text-red-700 dark:text-red-300 font-semibold">
+            🚨 警戒モード: 推奨バッジは score≥{threshold.minScore} または {threshold.minSignals}signals以上に厳格化中
+          </div>
+        </div>
+      )}
+
       {/* スコア凡例 */}
       {signals.length > 0 && (
         <div className="px-5 pt-3 pb-1 flex flex-wrap gap-2 text-[11px] text-gray-500 dark:text-gray-400">
@@ -295,7 +311,7 @@ export default function PrecursorScanner() {
                 const base = s.symbol.replace(/_USDT$/, "");
                 const isRecorded = recorded.has(s.symbol);
                 const signalCount = Object.values(s.signals).filter(Boolean).length;
-                const isElite = s.precursorScore >= 6 || signalCount >= 4;
+                const isElite = isPrecursorRecommended(s.precursorScore, signalCount, regime);
                 return (
                   <tr key={s.symbol} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-4 py-2 font-bold text-gray-900 dark:text-gray-100">{base}</td>

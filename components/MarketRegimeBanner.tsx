@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { judgeMarketRegime, MarketRegimeResult } from "@/app/lib/marketRegime";
+import { judgeMarketRegime, MarketRegime, MarketRegimeResult } from "@/app/lib/marketRegime";
 
-export default function MarketRegimeBanner() {
+interface Props {
+  onRegimeChange?: (regime: MarketRegime) => void;
+}
+
+export default function MarketRegimeBanner({ onRegimeChange }: Props = {}) {
   const [result, setResult] = useState<MarketRegimeResult | null>(null);
 
   useEffect(() => {
@@ -17,10 +21,13 @@ export default function MarketRegimeBanner() {
         if (fearGreed === null) return;
         const bondYield10y: number | undefined =
           typeof data.us10y === "number" ? data.us10y : undefined;
-        setResult(judgeMarketRegime({ btcChange24h, fearGreed, bondYield10y }));
+        const r = judgeMarketRegime({ btcChange24h, fearGreed, bondYield10y });
+        setResult(r);
+        onRegimeChange?.(r.regime);
       })
       .catch(() => {});
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!result) return null;

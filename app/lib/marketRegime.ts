@@ -79,3 +79,28 @@ export function judgeMarketRegime(ctx: MarketRegimeContext): MarketRegimeResult 
     positionSizeMultiplier: 1.0,
   };
 }
+
+// 前兆スキャン用推奨閾値
+// shortDangerous時のみ厳格化（score≥7 OR signalCount≥5）
+// shortFavorable / neutral は通常運用（score≥6 OR signalCount≥4）
+export interface RecommendThreshold {
+  minScore: number;
+  minSignals: number;
+  isStricter: boolean;
+}
+
+export function getPrecursorRecommendThreshold(regime: MarketRegime): RecommendThreshold {
+  if (regime === "shortDangerous") {
+    return { minScore: 7, minSignals: 5, isStricter: true };
+  }
+  return { minScore: 6, minSignals: 4, isStricter: false };
+}
+
+export function isPrecursorRecommended(
+  score: number,
+  signalCount: number,
+  regime: MarketRegime,
+): boolean {
+  const t = getPrecursorRecommendThreshold(regime);
+  return score >= t.minScore || signalCount >= t.minSignals;
+}
