@@ -1,5 +1,46 @@
 # 変更ログ
 
+## 2026-06-08
+
+#### Phase 9: ETFフロー連携
+**目的**: BTC現物ETFの net flow を marketRegime 判定に統合
+
+**実装**:
+- `app/api/etf-flow/route.ts`（新規）: farside.co.uk/btc/ をサーバーfetch + HTMLパース、1時間キャッシュ
+- 戻り値: `{ latest, last3dSum, last5dSum, latestDate, trend }`
+- `app/lib/marketRegime.ts`: `etfFlow3dSum?: number` 追加。≤ -1000M → favorableScore+1、≥ +1500M → dangerScore+1（仮値）
+- `components/MarketRegimeBanner.tsx`: 並列fetch追加、ETF3日計を流出=緑/流入=赤で表示
+- `app/lib/backtestStorage.ts`: `marketContext.etfFlow3dSum?` 追加
+- `app/short-scan/page.tsx`: `marketEnvData` 型に `etfFlow3dSum?` 追加
+
+**根拠**: 直近のBTC ETFは連日アウトフロー基調（5/27 -733M, 6/1 -484M, 6/2 -519M）。機関売りはショート追い風のマクロシグナルとして統合
+
+---
+
+#### Phase 10: BTCドミナンス連携
+**目的**: アルトのショート専門ツール特有のシグナルとしてドミナンス変化を統合
+
+**実装**:
+- `app/api/btc-dominance/route.ts`（新規）: CoinGecko 3エンドポイント並列fetch
+  - `/api/v3/global` → 現在のBTCドミナンス
+  - `/api/v3/coins/bitcoin/market_chart?days=7` → BTC時価総額履歴
+  - `/api/v3/global/market_cap_chart?days=7` → 総時価総額履歴
+  - 7日前のドミナンスを算出 → 現在との差分を `dominanceDelta7d` として返す
+- `app/lib/marketRegime.ts`: `btcDominanceDelta?: number` 追加。≥ +1.5pt → favorableScore+1（アルト売られ=ショート追い風）、≤ -1.5pt → dangerScore+1（アルトシーズン=ショート危険）、仮値
+- `components/MarketRegimeBanner.tsx`: 並列fetchに追加、BTC.D + 7日変化を色分け表示
+- `app/lib/backtestStorage.ts`: `marketContext.btcDominance?`, `btcDominanceDelta?` 追加
+
+---
+
+#### Phase 10 バグ修正: dominanceDelta7d 計算ズレ
+**問題**: 初回実装で BTC市場履歴 `days=8`、総時価総額履歴 `days=7` と指定がズレてた。両配列の `[0]` を使って7日前ドミナンスを算出してたため「8日前のBTC時価総額 ÷ 7日前の総時価総額」という実在しない時点を計算していた
+
+**修正**: 両エンドポイントを `days=7` に統一。`[0]` が両方とも7日前で揃うようになり、正しい7日前ドミナンスを算出
+
+**教訓**: Claude Code が「だいたい合ってる」近似実装をするケースあり。新規実装したAPIは計算ロジックを自分で読み返させる工程を入れるとリグレッション防げる
+
+---
+
 ## 2026-06-06
 - fix: precursorScanner の非crypto除外フィルター漏れ修正（USOIL/UKOIL/SILVER/XAUT/NAS100/NFP/SPX500/US対応）
 - feat: バックテスト記録の個別削除ボタン追加（データ健全性パネル + レコード一覧）

@@ -133,3 +133,6 @@ components/
 | **中** | セクター分析タイムアウト | CoinGecko 429多発時に全データなし | 部分対応(fetchWithRetry) |
 | **低** | ~~Google Generative AI SDK~~ | ~~package.jsonにあるが、用途が不明確~~ | **削除済み（2026-04-25）** |
 | **低** | ~~`route.ts.backup`~~ | ~~`/api/chat/route.ts.backup` が残っている~~ | **削除済み（2026-04-25）** |
+| **中** | ~~Phase 9: ETFフロー連携~~ | ~~farside.co.uk HTMLパースによる net flow 統合~~ | **✅ 解決済み（2026-06-08）** |
+| **中** | ~~Phase 10: MVRV Z-Score~~ | ~~無料データソースなしで実装不可能と判明~~ | **🚫 実装不可 → Phase 10 = BTCドミナンスに変更** |
+| **中** | ~~Phase 10: BTCドミナンス連携~~ | ~~CoinGecko 3エンドポイント並列fetchで7日変化を算出~~ | **✅ 解決済み（2026-06-08）** |
