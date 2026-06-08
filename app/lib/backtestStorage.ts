@@ -137,7 +137,7 @@ export interface BacktestRecord {
 
   // ★ PRECURSOR: 前兆スキャン
   strategy?: "PRECURSOR";         // 前兆スキャンで記録したレコード
-  signals?: { volDecline4h: boolean; lowerHighs4h: boolean; volDryDaily: boolean; lowerHighsDaily: boolean; frLongTrap: boolean; };
+  signals?: { volDecline4h: boolean; lowerHighs4h: boolean; volDryDaily: boolean; lowerHighsDaily: boolean; frLongTrap: boolean; frNearZeroBonus?: boolean; };
   fr?: number;
   tpPrice?: number;
 }

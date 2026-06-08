@@ -54,7 +54,7 @@ export default function PrecursorScanner() {
               id,
               symbol: s.symbol,
               score: s.precursorScore,
-              scoreMax: 7,
+              scoreMax: 8,
               recordedAt: s.detectedAt,
               entryPrice: s.currentPrice,
               sl: s.suggestedSL,
@@ -269,7 +269,8 @@ export default function PrecursorScanner() {
           <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded">出来高枯渇 +1</span>
           <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded">高値↓日足 +1</span>
           <span className="px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded">FRトラップ +1</span>
-          <span className="text-gray-400">/ 最大7pt・TP=-5%・SL=+8%</span>
+          <span className="px-1.5 py-0.5 bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 rounded">FR≈0ボーナス +1</span>
+          <span className="text-gray-400">/ 最大8pt・TP=-5%・SL=+8%</span>
         </div>
       )}
 
@@ -293,17 +294,24 @@ export default function PrecursorScanner() {
               {signals.map(s => {
                 const base = s.symbol.replace(/_USDT$/, "");
                 const isRecorded = recorded.has(s.symbol);
+                const signalCount = Object.values(s.signals).filter(Boolean).length;
+                const isElite = s.precursorScore >= 6 || signalCount >= 4;
                 return (
                   <tr key={s.symbol} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-4 py-2 font-bold text-gray-900 dark:text-gray-100">{base}</td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${
-                        s.precursorScore >= 6 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                        : s.precursorScore >= 5 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
-                        : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"
-                      }`}>
-                        {s.precursorScore}/7
-                      </span>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${
+                          s.precursorScore >= 6 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                          : s.precursorScore >= 5 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
+                          : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"
+                        }`}>
+                          {s.precursorScore}/8
+                        </span>
+                        {isElite && (
+                          <span className="inline-block px-1 py-0.5 bg-red-600 text-white text-[9px] font-bold rounded">推奨</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-0.5">
@@ -312,6 +320,7 @@ export default function PrecursorScanner() {
                         {s.signals.volDryDaily     && <span className="px-1 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded text-[10px]">出来高枯渇</span>}
                         {s.signals.lowerHighsDaily && <span className="px-1 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded text-[10px]">高値↓日足</span>}
                         {s.signals.frLongTrap      && <span className="px-1 py-0.5 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded text-[10px]">FRトラップ</span>}
+                        {s.signals.frNearZeroBonus && <span className="px-1 py-0.5 bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 rounded text-[10px]">FR≈0</span>}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right font-mono">

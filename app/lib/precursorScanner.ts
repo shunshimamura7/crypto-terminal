@@ -13,6 +13,7 @@ export interface PrecursorSignal {
     volDryDaily: boolean;
     lowerHighsDaily: boolean;
     frLongTrap: boolean;
+    frNearZeroBonus: boolean;
   };
   fr: number;
   openInterest: number;
@@ -117,7 +118,10 @@ function calcSignals(
   // frLongTrap: FR > +0.03%（ロングが積み上がり過熱）
   const frLongTrap = fr > 0.0003;
 
-  return { volDecline4h, lowerHighs4h, volDryDaily, lowerHighsDaily, frLongTrap };
+  // frNearZeroBonus: 0 <= FR < 0.005%（バックテスト勝率85.7%/EV+3.14%と別格）
+  const frNearZeroBonus = fr >= 0 && fr < 0.00005;
+
+  return { volDecline4h, lowerHighs4h, volDryDaily, lowerHighsDaily, frLongTrap, frNearZeroBonus };
 }
 
 export async function scanPrecursors(tickers: MexcTickerItem[]): Promise<PrecursorSignal[]> {
@@ -147,11 +151,12 @@ export async function scanPrecursors(tickers: MexcTickerItem[]): Promise<Precurs
 
     const signals = calcSignals(bars4h, barsDaily, fr);
     const precursorScore =
-      (signals.volDecline4h   ? 2 : 0) +
-      (signals.lowerHighs4h   ? 2 : 0) +
-      (signals.volDryDaily    ? 1 : 0) +
+      (signals.volDecline4h    ? 2 : 0) +
+      (signals.lowerHighs4h    ? 2 : 0) +
+      (signals.volDryDaily     ? 1 : 0) +
       (signals.lowerHighsDaily ? 1 : 0) +
-      (signals.frLongTrap     ? 1 : 0);
+      (signals.frLongTrap      ? 1 : 0) +
+      (signals.frNearZeroBonus ? 1 : 0);
 
     if (precursorScore < 4) continue;
 

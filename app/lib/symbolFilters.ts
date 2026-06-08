@@ -2,7 +2,7 @@
 const NON_CRYPTO_BASES = new Set([
   // コモディティ
   "USOIL", "UKOIL", "XAUT", "SILVER", "ALUMINUM", "COPPER", "NATGAS",
-  "WHEAT", "CORN", "CRUDE", "OIL", "NFP", "US",
+  "WHEAT", "CORN", "CRUDE", "OIL", "NFP", "US", "NOM",
   // 指数 (exact base names)
   "SPX", "SPX500", "NAS100", "VIX", "DJI", "HSI", "IBEX", "NIFTY", "KOSPI", "JP225",
   // FX
