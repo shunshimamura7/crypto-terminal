@@ -24,8 +24,8 @@ export async function GET() {
         next: { revalidate: 3600 },
       }).then(r => r.ok ? r.json() : null).catch(() => null),
 
-      // BTC market cap history (8 days to get 7d-ago data point)
-      fetch(cgUrl("coins/bitcoin/market_chart", { vs_currency: "usd", days: "8", interval: "daily" }), {
+      // BTC market cap history (7 days — [0] aligns with totalChart [0] = 7d ago)
+      fetch(cgUrl("coins/bitcoin/market_chart", { vs_currency: "usd", days: "7", interval: "daily" }), {
         signal: AbortSignal.timeout(10000),
         next: { revalidate: 3600 },
       }).then(r => r.ok ? r.json() : null).catch(() => null),
