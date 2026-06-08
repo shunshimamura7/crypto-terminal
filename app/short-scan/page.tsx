@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import ShortScanner from "@/components/ShortScanner";
 import PrecursorScanner from "@/components/PrecursorScanner";
+import MarketRegimeBanner from "@/components/MarketRegimeBanner";
 
 const SCORING_ITEMS = [
   { label: "ATH下落",      pts: "3pt", color: "#ef4444" },
@@ -134,6 +135,9 @@ export default function ShortScanPage() {
 
       {/* Content — 両スキャンが独立して並列実行 */}
       <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8">
+
+        {/* 市況警告バー */}
+        <MarketRegimeBanner />
 
         {/* 下: スコア型スキャナー（既存・主力）*/}
         <section id="scanner">
