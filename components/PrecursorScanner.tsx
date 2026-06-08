@@ -81,6 +81,7 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
               signals: s.signals,
               fr: s.fr,
               tpPrice: s.suggestedTP,
+              entryRegime: autoRecordRef.current ? regime : undefined,
             };
           });
         if (newRecords.length > 0) {
@@ -140,7 +141,7 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
       id,
       symbol: signal.symbol,
       score: signal.precursorScore,
-      scoreMax: 7,
+      scoreMax: 8,
       recordedAt: signal.detectedAt,
       entryPrice: signal.currentPrice,
       sl: signal.suggestedSL,
@@ -162,6 +163,7 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
       signals: signal.signals,
       fr: signal.fr,
       tpPrice: signal.suggestedTP,
+      entryRegime: regime,
     };
     saveRecords([...getRecords(), record]);
     setRecorded(prev => new Set([...prev, signal.symbol]));

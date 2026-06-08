@@ -237,6 +237,7 @@ export function recordNewCandidates(
   clientScores?: Map<string, ClientScoreEntry>,
   marketContext?: MarketContext | null,
   badgesMap?: Map<string, BadgeEntry>,
+  regime?: "shortFavorable" | "neutral" | "shortDangerous",
 ): BacktestRecord[] {
   const records = getRecords();
   const activeSymbols = new Set(
@@ -327,7 +328,8 @@ export function recordNewCandidates(
         preset,
         priceSource: "scan" as const,
         scoreBreakdown,
-        marketContext: marketContext ?? undefined,
+        marketContext: marketContext ? { ...marketContext, regime } : undefined,
+        entryRegime: regime,
         version: SCORING_VERSION,
         newsContext: c.newsContext,
         liquidityInfo: c.liquidityInfo,

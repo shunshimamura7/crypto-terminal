@@ -3083,7 +3083,7 @@ export default function ShortScanner({ regime = "neutral" }: { regime?: MarketRe
         }
 
         const currentMarketCtx = await marketCtxPromise;
-        recordNewCandidates(json.candidates.filter(c => !isExcessivePump(c)), currentPreset, clientScoresMap, currentMarketCtx, badgesMap);
+        recordNewCandidates(json.candidates.filter(c => !isExcessivePump(c)), currentPreset, clientScoresMap, currentMarketCtx, badgesMap, regime);
         const newRecords = getRecords();
         const recorded = newRecords.length - beforeCount;
         buildDangerListFromRecords(newRecords);

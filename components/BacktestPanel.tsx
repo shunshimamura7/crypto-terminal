@@ -1376,6 +1376,36 @@ export default function BacktestPanel({ records, stats, lang, onReset, onDeleteR
                 );
               })()}
 
+              {/* regime別勝率 (Phase 4) */}
+              {tabRecords.filter(r => r.entryRegime).length >= 3 && (() => {
+                const withRegime = tabRecords.filter(r => r.entryRegime && r.status !== "active" && !r.status.startsWith("pending_") && r.status !== "expired");
+                const isWin = (r: BacktestRecord) => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit";
+                const regimes: Array<{ key: "shortFavorable" | "neutral" | "shortDangerous"; label: string; cls: string }> = [
+                  { key: "shortFavorable", label: "🟢 好機",  cls: "text-green-700" },
+                  { key: "neutral",        label: "🟡 中立",  cls: "text-gray-600" },
+                  { key: "shortDangerous", label: "🚨 警戒",  cls: "text-red-600" },
+                ];
+                return (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-1.5">🎯 市況regime別勝率</p>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      {regimes.map(({ key, label, cls }) => {
+                        const recs  = withRegime.filter(r => r.entryRegime === key);
+                        const wins  = recs.filter(isWin).length;
+                        const total = recs.length;
+                        return (
+                          <div key={key} className="bg-gray-50 rounded-lg p-2 border border-gray-100 text-center">
+                            <div className={`font-bold text-sm ${cls}`}>{total > 0 ? `${((wins / total) * 100).toFixed(0)}%` : "—"}</div>
+                            <div className="text-gray-500 text-[10px] mt-0.5">{label}</div>
+                            <div className="text-gray-400 text-[10px]">{wins}勝 / {total - wins}負 / {total}件</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* 勝ち vs 負けのスコア比較 */}
               {tabRecords.filter(r => r.scoreBreakdown).length >= 5 && (() => {
                 const resolved = tabRecords.filter(r => r.scoreBreakdown && r.status !== "active" && !r.status.startsWith("pending_"));

@@ -98,7 +98,12 @@ export interface BacktestRecord {
     fearGreed: number | null; fearGreedLabel: string | null;
     btcChange24h: number;
     marketPhase: "risk_on" | "neutral" | "risk_off";
+    regime?: "shortFavorable" | "neutral" | "shortDangerous";
+    bondYield10y?: number;
   };
+
+  // ★ Phase 4: エントリー時市況regime（前兆スキャン含む全レコード共通）
+  entryRegime?: "shortFavorable" | "neutral" | "shortDangerous";
 
   // ★ v2.0: スコアリングバージョン
   version?: string;
