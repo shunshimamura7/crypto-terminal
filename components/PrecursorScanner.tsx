@@ -5,7 +5,7 @@ import { getRecords, saveRecords } from "@/app/lib/backtestStorage";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import type { PrecursorSignal } from "@/app/lib/precursorScanner";
 import type { PrecursorScanResponse } from "@/app/api/precursor-scan/route";
-import { isPrecursorRecommended, getPrecursorRecommendThreshold, MarketRegime } from "@/app/lib/marketRegime";
+import { isPrecursorRecommended, getPrecursorRecommendThreshold, MarketRegime, confirmBtRecordIfDangerous } from "@/app/lib/marketRegime";
 
 interface Props {
   regime?: MarketRegime;
@@ -135,6 +135,7 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
   }
 
   function handleRecord(signal: PrecursorSignal) {
+    if (!confirmBtRecordIfDangerous(regime, signal.symbol)) return;
     const id = `precursor-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const rr = (signal.currentPrice - signal.suggestedTP) / (signal.suggestedSL - signal.currentPrice);
     const record: BacktestRecord = {
@@ -235,6 +236,11 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
             >
               全件自動記録: {autoRecord ? "ON" : "OFF"}
             </button>
+            {regime === "shortDangerous" && autoRecord && (
+              <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold">
+                ⚠️ 警戒中自動記録: 検証用のみ
+              </span>
+            )}
             <button
               onClick={scanPrecursors}
               disabled={loading}
@@ -362,10 +368,12 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
                         className={`text-[11px] px-2 py-0.5 rounded font-semibold transition-colors whitespace-nowrap ${
                           isRecorded
                             ? "bg-gray-100 text-gray-400 cursor-default"
+                            : regime === "shortDangerous"
+                            ? "bg-orange-500 hover:bg-orange-600 text-white"
                             : "bg-purple-600 hover:bg-purple-700 text-white"
                         }`}
                       >
-                        {isRecorded ? "✓ 記録済" : "BT記録"}
+                        {isRecorded ? "✓ 記録済" : regime === "shortDangerous" ? "⚠️ BT記録" : "BT記録"}
                       </button>
                     </td>
                   </tr>

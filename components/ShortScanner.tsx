@@ -3615,6 +3615,11 @@ export default function ShortScanner({ regime = "neutral" }: { regime?: MarketRe
                     className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${autoRecord ? "text-green-700 dark:text-green-400 font-semibold" : "text-gray-600 dark:text-gray-300"}`}>
                     {autoRecord ? "🎯 自動記録: ON" : "🎯 自動記録: OFF"}
                   </button>
+                  {regime === "shortDangerous" && autoRecord && (
+                    <div className="px-3 py-1 text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border-t border-red-100 dark:border-red-800">
+                      ⚠️ 警戒中: 検証用のみ
+                    </div>
+                  )}
                   <button onClick={toggleSound}
                     className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300">
                     {soundEnabled ? t.soundOn : t.soundOff}

@@ -119,3 +119,16 @@ export function getScoreScannerRecommendThreshold(regime: MarketRegime): ScoreSc
   }
   return { withCG: 13, noCG: 11, isStricter: false };
 }
+
+// 警戒モード時のBT記録確認ダイアログ
+// 戻り値: true=記録を実行する / false=キャンセル
+export function confirmBtRecordIfDangerous(regime: MarketRegime, symbol: string): boolean {
+  if (regime !== "shortDangerous") return true;
+  const message =
+    `🚨 警戒モード中です\n\n` +
+    `${symbol} を記録しようとしています。\n\n` +
+    `現在の市況: BTC上昇 / F&G極端Fear / スクイーズリスク高\n` +
+    `推奨アクション: エリート推奨のみ・ポジサイズ半分\n\n` +
+    `それでも記録しますか？`;
+  return window.confirm(message);
+}
