@@ -143,7 +143,7 @@ export default function ShortScanPage() {
 
         {/* 下: スコア型スキャナー（既存・主力）*/}
         <section id="scanner">
-          <ShortScanner />
+          <ShortScanner regime={regime} />
         </section>
 
         <hr className="border-slate-200 dark:border-slate-700" />

@@ -39,6 +39,8 @@ import { evaluateHunterPatterns } from "@/app/lib/hunterScorer";
 import { saveHunterRecord } from "@/app/lib/hunterStorage";
 import type { HunterPattern } from "@/app/lib/types/hunter";
 import type { HunterRecord } from "@/app/lib/listingHunterRecords";
+import { getScoreScannerRecommendThreshold } from "@/app/lib/marketRegime";
+import type { MarketRegime } from "@/app/lib/marketRegime";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
 const MEXC_REF = process.env.NEXT_PUBLIC_MEXC_REFERRAL_CODE ?? "";
@@ -1839,7 +1841,7 @@ function HeatmapView({ candidates, t, onClickSymbol, isLongBias }: {
 }
 
 // ─── Mobile Card List ────────────────────────────────────────────────────────
-function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts, t, lang, watchlistSet, onWatchlistToggle, marketBtcChange, slHitSet, fng }: {
+function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts, t, lang, watchlistSet, onWatchlistToggle, marketBtcChange, slHitSet, fng, recommendThreshold = RECOMMEND_THRESHOLD }: {
   candidates: ExtendedCandidate[];
   expandedRows: Set<string>;
   toggleRow: (sym: string) => void;
@@ -1852,6 +1854,7 @@ function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts
   marketBtcChange?: number;
   slHitSet?: Set<string>;
   fng?: number | null;
+  recommendThreshold?: number;
 }) {
   if (candidates.length === 0) return null;
   return (
@@ -1859,7 +1862,7 @@ function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts
       {candidates.map(c => {
         const base = c.symbol.replace("_USDT", "");
         const isOpen = expandedRows.has(c.symbol);
-        const rec = getShortRecommendation(c, marketBtcChange ?? 0, slHitSet);
+        const rec = getShortRecommendation(c, marketBtcChange ?? 0, slHitSet, recommendThreshold);
         const borderColor =
           rec === "banned" || rec === "banned_fresh" ? "border-l-red-500" :
           rec === "caution" ? "border-l-orange-400" :
@@ -1954,7 +1957,7 @@ function MobileCardList({ candidates, expandedRows, toggleRow, snapshots, alerts
 }
 
 // ─── Summary Bar (修正5) ─────────────────────────────────────────────────────
-function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strongThreshold = RECOMMEND_THRESHOLD, btcChange24h = 0, slHitSet }: {
+function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strongThreshold = RECOMMEND_THRESHOLD, btcChange24h = 0, slHitSet, recommendThreshold = RECOMMEND_THRESHOLD }: {
   candidates: ExtendedCandidate[];
   t: Translations;
   onFilter: (key: "strong" | "long" | "pattern" | "allTf" | "spike") => void;
@@ -1963,6 +1966,7 @@ function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strong
   strongThreshold?: number;
   btcChange24h?: number;
   slHitSet?: Set<string>;
+  recommendThreshold?: number;
 }) {
   const counts = useMemo(() => ({
     strong:  candidates.filter(c => c.displayScore >= strongThreshold).length,
@@ -1973,10 +1977,10 @@ function SummaryBar({ candidates, t, onFilter, isLongBias, summaryFilter, strong
   }), [candidates, isLongBias, strongThreshold]);
 
   const recCounts = useMemo(() => ({
-    recommended: candidates.filter(c => getShortRecommendation(c, btcChange24h, slHitSet) === "recommended").length,
-    caution:     candidates.filter(c => getShortRecommendation(c, btcChange24h, slHitSet) === "caution").length,
-    banned:      candidates.filter(c => { const r = getShortRecommendation(c, btcChange24h, slHitSet); return r === "banned" || r === "banned_fresh"; }).length,
-  }), [candidates, btcChange24h, slHitSet]);
+    recommended: candidates.filter(c => getShortRecommendation(c, btcChange24h, slHitSet, recommendThreshold) === "recommended").length,
+    caution:     candidates.filter(c => getShortRecommendation(c, btcChange24h, slHitSet, recommendThreshold) === "caution").length,
+    banned:      candidates.filter(c => { const r = getShortRecommendation(c, btcChange24h, slHitSet, recommendThreshold); return r === "banned" || r === "banned_fresh"; }).length,
+  }), [candidates, btcChange24h, slHitSet, recommendThreshold]);
 
   const items: Array<{ key: "strong"|"long"|"pattern"|"allTf"|"spike"; label: string; count: number; cls: string }> = [
     { key: "strong",  label: t.summaryShort,   count: counts.strong,  cls: "text-red-600 bg-red-50 border-red-200" },
@@ -2037,7 +2041,7 @@ function isLongBias(c: ExtendedCandidate): boolean {
 
 type ShortRec = "banned" | "banned_fresh" | "caution" | "recommended" | "neutral";
 
-function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0, slHitSet?: Set<string>): ShortRec {
+function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0, slHitSet?: Set<string>, recommendThreshold = RECOMMEND_THRESHOLD): ShortRec {
   const fr = c.fundingRate;
   // ── 禁止条件 ───────────────────────────────────────────────────────────────
   // SL hit後24h再エントリー禁止
@@ -2078,7 +2082,7 @@ function getShortRecommendation(c: ExtendedCandidate, btcChange24h = 0, slHitSet
   if (c.trendMultiTF != null && c.trendMultiTF.alignment === 0) return "caution";
 
   // ── 推奨 ───────────────────────────────────────────────────────────────────
-  if (c.displayScore >= RECOMMEND_THRESHOLD && (fr === null || fr >= 0)) return "recommended";
+  if (c.displayScore >= recommendThreshold && (fr === null || fr >= 0)) return "recommended";
   return "neutral";
 }
 
@@ -2377,8 +2381,8 @@ function SymbolHealthPanel({ healthData, onClear }: { healthData: Map<string, Sy
 
 // ─── Recommended Short Picks Panel ───────────────────────────────────────────
 function RecommendedPanel({
-  candidates, t, btcChange24h, lang, isShortStopped = false, slHitSet,
-}: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number; lang: Lang; isShortStopped?: boolean; slHitSet?: Set<string> }) {
+  candidates, t, btcChange24h, lang, isShortStopped = false, slHitSet, recommendThreshold = RECOMMEND_THRESHOLD,
+}: { candidates: ExtendedCandidate[]; t: Translations; btcChange24h: number; lang: Lang; isShortStopped?: boolean; slHitSet?: Set<string>; recommendThreshold?: number }) {
   const [open, setOpen] = useState(true);
   useEffect(() => {
     if (localStorage.getItem("bell:recommendedPanel:open") === "false") setOpen(false);
@@ -2394,7 +2398,7 @@ function RecommendedPanel({
 
   const { picks, hiddenCount } = useMemo(() => {
     const allRec = candidates.filter(
-      c => getShortRecommendation(c, btcChange24h, slHitSet) === "recommended",
+      c => getShortRecommendation(c, btcChange24h, slHitSet, recommendThreshold) === "recommended",
     );
     const qualified = allRec
       .filter(c => (c.tradeSetup?.rrTp2 ?? c.tradeSetup?.rrRatio ?? 0) >= 1.5)
@@ -2666,7 +2670,7 @@ function ShortcutHelpModal({ t, onClose }: { t: Translations; onClose: () => voi
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function ShortScanner() {
+export default function ShortScanner({ regime = "neutral" }: { regime?: MarketRegime }) {
   const [data,         setData]         = useState<ScanResponse | null>(null);
   const [loading,      setLoading]      = useState(false);
   const [loadStart,    setLoadStart]    = useState(0);
@@ -3207,7 +3211,9 @@ export default function ShortScanner() {
   const marketRegimeRef = useRef<typeof marketRegime>(null);
   useEffect(() => { marketRegimeRef.current = marketRegime; }, [marketRegime]);
 
-  const strongThreshold = regimeFilterOn && marketRegime ? RECOMMEND_THRESHOLD + marketRegime.scoreAdjust : RECOMMEND_THRESHOLD;
+  const scoreScannerThreshold = useMemo(() => getScoreScannerRecommendThreshold(regime), [regime]);
+  const recommendThreshold = HAS_CG ? scoreScannerThreshold.withCG : scoreScannerThreshold.noCG;
+  const strongThreshold = regimeFilterOn && marketRegime ? recommendThreshold + marketRegime.scoreAdjust : recommendThreshold;
 
   // Extended candidates — server already applied filter params; no client-side re-filter
   const extended = useMemo((): ExtendedCandidate[] => {
@@ -3780,7 +3786,14 @@ export default function ShortScanner() {
 
       {/* Recommended Panel */}
       {data && !loading && normalCandidates.length > 0 && (
-        <RecommendedPanel candidates={normalCandidates} t={t} btcChange24h={marketBtcChange} lang={lang} isShortStopped={dangerZone.shouldBlockEntry} slHitSet={recentSlHitSymbols} />
+        <>
+          {scoreScannerThreshold.isStricter && (
+            <div className="inline-flex items-center gap-1.5 bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-700 rounded px-3 py-1.5 text-xs text-red-700 dark:text-red-300 font-semibold mb-2">
+              🚨 警戒モード: 推奨バッジは score≥{recommendThreshold}/{DISPLAY_MAX} に厳格化中
+            </div>
+          )}
+          <RecommendedPanel candidates={normalCandidates} t={t} btcChange24h={marketBtcChange} lang={lang} isShortStopped={dangerZone.shouldBlockEntry} slHitSet={recentSlHitSymbols} recommendThreshold={recommendThreshold} />
+        </>
       )}
 
       {/* Summary bar (修正5) */}
@@ -3795,6 +3808,7 @@ export default function ShortScanner() {
             strongThreshold={strongThreshold}
             btcChange24h={marketBtcChange}
             slHitSet={recentSlHitSymbols}
+            recommendThreshold={recommendThreshold}
           />
           {excessivePumpCandidates.length > 0 && (
             <span className="text-orange-600 font-semibold text-xs">
@@ -3935,6 +3949,7 @@ export default function ShortScanner() {
                 marketBtcChange={marketBtcChange}
                 slHitSet={recentSlHitSymbols}
                 fng={marketRegime?.fng}
+                recommendThreshold={recommendThreshold}
               />
             </div>
           )}
@@ -3976,7 +3991,7 @@ export default function ShortScanner() {
                   const hasAlert = alerts.some(a => a.symbol === c.symbol);
                   const p24 = c.priceChange24h, p7 = c.priceChange7d;
                   const isSelected = idx === selectedIdx;
-                  const shortRec = getShortRecommendation(c, marketBtcChange, recentSlHitSymbols);
+                  const shortRec = getShortRecommendation(c, marketBtcChange, recentSlHitSymbols, recommendThreshold);
                   const hoursFromListing = c.hoursFromFutures ?? (c.listedDaysAgo * 24);
                   return (
                     <React.Fragment key={c.symbol}>

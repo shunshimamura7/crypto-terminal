@@ -104,3 +104,18 @@ export function isPrecursorRecommended(
   const t = getPrecursorRecommendThreshold(regime);
   return score >= t.minScore || signalCount >= t.minSignals;
 }
+
+// スコア型スキャナー用の推奨閾値
+// shortDangerous時のみ+3pt厳格化
+export interface ScoreScannerThreshold {
+  withCG: number;
+  noCG: number;
+  isStricter: boolean;
+}
+
+export function getScoreScannerRecommendThreshold(regime: MarketRegime): ScoreScannerThreshold {
+  if (regime === "shortDangerous") {
+    return { withCG: 16, noCG: 14, isStricter: true };
+  }
+  return { withCG: 13, noCG: 11, isStricter: false };
+}
