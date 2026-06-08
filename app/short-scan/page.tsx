@@ -56,7 +56,7 @@ function ScoringBar() {
 
 export default function ShortScanPage() {
   const [regime, setRegime] = useState<MarketRegime>("neutral");
-  const [marketEnvData, setMarketEnvData] = useState<{ fearGreed?: number; bondYield10y?: number }>({});
+  const [marketEnvData, setMarketEnvData] = useState<{ fearGreed?: number; bondYield10y?: number; etfFlow3dSum?: number }>({});
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("bell:darkMode") === "true";

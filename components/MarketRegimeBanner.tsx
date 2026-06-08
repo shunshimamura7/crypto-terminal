@@ -3,31 +3,50 @@
 import { useEffect, useState } from "react";
 import { judgeMarketRegime, MarketRegime, MarketRegimeResult } from "@/app/lib/marketRegime";
 
+interface EtfFlowData {
+  last3dSum: number | null;
+  latestDate: string | null;
+  trend: "outflow" | "inflow" | "mixed" | null;
+}
+
 interface Props {
   onRegimeChange?: (regime: MarketRegime) => void;
-  onMarketEnvChange?: (data: { fearGreed: number; bondYield10y?: number }) => void;
+  onMarketEnvChange?: (data: { fearGreed: number; bondYield10y?: number; etfFlow3dSum?: number }) => void;
 }
 
 export default function MarketRegimeBanner({ onRegimeChange, onMarketEnvChange }: Props = {}) {
   const [result, setResult] = useState<MarketRegimeResult | null>(null);
+  const [etfFlow, setEtfFlow] = useState<EtfFlowData | null | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/market-env", { signal: AbortSignal.timeout(5000) })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (cancelled || !data) return;
-        const btcChange24h: number = data.btcChange24h ?? 0;
-        const fearGreed: number | null = data.fng?.value ?? null;
-        if (fearGreed === null) return;
-        const bondYield10y: number | undefined =
-          typeof data.us10y === "number" ? data.us10y : undefined;
-        const r = judgeMarketRegime({ btcChange24h, fearGreed, bondYield10y });
-        setResult(r);
-        onRegimeChange?.(r.regime);
-        onMarketEnvChange?.({ fearGreed, bondYield10y });
-      })
-      .catch(() => {});
+    Promise.all([
+      fetch("/api/market-env", { signal: AbortSignal.timeout(5000) })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch("/api/etf-flow", { signal: AbortSignal.timeout(12000) })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([marketEnv, etfData]) => {
+      if (cancelled) return;
+      if (!marketEnv) return;
+      const btcChange24h: number = marketEnv.btcChange24h ?? 0;
+      const fearGreed: number | null = marketEnv.fng?.value ?? null;
+      if (fearGreed === null) return;
+      const bondYield10y: number | undefined =
+        typeof marketEnv.us10y === "number" ? marketEnv.us10y : undefined;
+
+      const etfFlow3dSum: number | undefined =
+        etfData?.last3dSum != null ? etfData.last3dSum : undefined;
+
+      setEtfFlow(etfData?.last3dSum != null
+        ? { last3dSum: etfData.last3dSum, latestDate: etfData.latestDate ?? null, trend: etfData.trend ?? null }
+        : null
+      );
+
+      const r = judgeMarketRegime({ btcChange24h, fearGreed, bondYield10y, etfFlow3dSum });
+      setResult(r);
+      onRegimeChange?.(r.regime);
+      onMarketEnvChange?.({ fearGreed, bondYield10y, etfFlow3dSum });
+    });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -72,6 +91,30 @@ export default function MarketRegimeBanner({ onRegimeChange, onMarketEnvChange }
             {result.reasons.map((r, i) => (
               <span key={i}>• {r}</span>
             ))}
+          </div>
+          {/* ETFフロー表示 */}
+          <div className="text-[11px] mt-1">
+            {etfFlow === undefined && (
+              <span className="text-gray-400 dark:text-gray-500">ETF: 取得中...</span>
+            )}
+            {etfFlow === null && (
+              <span className="text-gray-400 dark:text-gray-500 opacity-60">ETF: 取得失敗</span>
+            )}
+            {etfFlow != null && etfFlow.last3dSum !== null && (
+              <span className={
+                etfFlow.trend === "outflow"
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : etfFlow.trend === "inflow"
+                    ? "text-rose-700 dark:text-rose-400"
+                    : "text-gray-600 dark:text-gray-400"
+              }>
+                ₿ETF 3日計: {etfFlow.last3dSum >= 0 ? "+" : ""}{etfFlow.last3dSum.toFixed(0)}M$
+                {etfFlow.trend === "outflow" && " (流出 ショート追い風)"}
+                {etfFlow.trend === "inflow" && " (流入 ショート警戒)"}
+                {etfFlow.trend === "mixed" && " (混合)"}
+                {etfFlow.latestDate && <span className="opacity-60 ml-1">({etfFlow.latestDate}時点)</span>}
+              </span>
+            )}
           </div>
         </div>
       </div>

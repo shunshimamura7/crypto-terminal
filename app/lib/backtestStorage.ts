@@ -101,6 +101,7 @@ export interface BacktestRecord {
     marketPhase: "risk_on" | "neutral" | "risk_off";
     regime?: "shortFavorable" | "neutral" | "shortDangerous";
     bondYield10y?: number;
+    etfFlow3dSum?: number;
   };
 
   // ★ Phase 4: エントリー時市況regime（前兆スキャン含む全レコード共通）

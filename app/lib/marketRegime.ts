@@ -10,6 +10,7 @@ export interface MarketRegimeContext {
   btcChange24h: number;
   fearGreed: number;
   bondYield10y?: number;
+  etfFlow3dSum?: number;
 }
 
 export interface MarketRegimeResult {
@@ -53,6 +54,16 @@ export function judgeMarketRegime(ctx: MarketRegimeContext): MarketRegimeResult 
     } else if (ctx.bondYield10y > 4.3) {
       favorableScore += 1;
       reasons.push(`米10年債 ${ctx.bondYield10y.toFixed(2)}% (BTC逆風、ショート有利)`);
+    }
+  }
+
+  if (ctx.etfFlow3dSum !== undefined) {
+    if (ctx.etfFlow3dSum <= -1000) {
+      favorableScore += 1;
+      reasons.push(`BTC ETF 3日資金流出 ${ctx.etfFlow3dSum.toFixed(0)}M$ ショート追い風`);
+    } else if (ctx.etfFlow3dSum >= 1500) {
+      dangerScore += 1;
+      reasons.push(`BTC ETF 3日資金流入 +${ctx.etfFlow3dSum.toFixed(0)}M$ ショート危険`);
     }
   }
 
