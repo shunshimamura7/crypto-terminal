@@ -11,6 +11,7 @@ export interface MarketRegimeContext {
   fearGreed: number;
   bondYield10y?: number;
   etfFlow3dSum?: number;
+  btcDominanceDelta?: number;
 }
 
 export interface MarketRegimeResult {
@@ -64,6 +65,17 @@ export function judgeMarketRegime(ctx: MarketRegimeContext): MarketRegimeResult 
     } else if (ctx.etfFlow3dSum >= 1500) {
       dangerScore += 1;
       reasons.push(`BTC ETF 3日資金流入 +${ctx.etfFlow3dSum.toFixed(0)}M$ ショート危険`);
+    }
+  }
+
+  // 仮値閾値 ±1.5pt — BT蓄積後に調整 (Phase 10)
+  if (ctx.btcDominanceDelta !== undefined) {
+    if (ctx.btcDominanceDelta >= 1.5) {
+      favorableScore += 1;
+      reasons.push(`BTC.D 7日 +${ctx.btcDominanceDelta.toFixed(1)}pt（アルト売られ、ショート追い風）`);
+    } else if (ctx.btcDominanceDelta <= -1.5) {
+      dangerScore += 1;
+      reasons.push(`BTC.D 7日 ${ctx.btcDominanceDelta.toFixed(1)}pt（アルトシーズン、ショート危険）`);
     }
   }
 

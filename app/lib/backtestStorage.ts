@@ -102,6 +102,8 @@ export interface BacktestRecord {
     regime?: "shortFavorable" | "neutral" | "shortDangerous";
     bondYield10y?: number;
     etfFlow3dSum?: number;
+    btcDominance?: number;
+    btcDominanceDelta?: number;
   };
 
   // ★ Phase 4: エントリー時市況regime（前兆スキャン含む全レコード共通）
