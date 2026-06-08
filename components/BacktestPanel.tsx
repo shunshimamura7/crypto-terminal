@@ -1406,6 +1406,62 @@ export default function BacktestPanel({ records, stats, lang, onReset, onDeleteR
                 );
               })()}
 
+              {/* Phase 7a: パターン別実勝率 */}
+              {tabRecords.filter(r => r.matchedPatterns && r.matchedPatterns.length > 0).length >= 3 && (() => {
+                const resolved = tabRecords.filter(
+                  r => r.matchedPatterns && r.matchedPatterns.length > 0 &&
+                       (r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit" || r.status === "sl_hit")
+                );
+                if (resolved.length < 3) return null;
+                const isWin = (r: BacktestRecord) => r.status === "tp1_hit" || r.status === "tp2_hit" || r.status === "tp3_hit";
+                const patternMap = new Map<string, { name: string; wins: number; total: number }>();
+                for (const r of resolved) {
+                  for (const p of r.matchedPatterns!) {
+                    if (!patternMap.has(p.id)) patternMap.set(p.id, { name: p.name, wins: 0, total: 0 });
+                    const s = patternMap.get(p.id)!;
+                    s.total++;
+                    if (isWin(r)) s.wins++;
+                  }
+                }
+                const stats = [...patternMap.entries()]
+                  .map(([id, s]) => ({ id, ...s, winRate: s.wins / s.total }))
+                  .filter(s => s.total >= 3)
+                  .sort((a, b) => b.winRate - a.winRate);
+                if (stats.length === 0) return null;
+                return (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-1.5">🔬 パターン別実勝率（記録ベース）</p>
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-600 border-b border-gray-200">
+                            <th className="px-2 py-1.5 text-left">パターン</th>
+                            <th className="px-2 py-1.5 text-center">勝率</th>
+                            <th className="px-2 py-1.5 text-center">件数</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stats.map(s => (
+                            <tr key={s.id} className="border-b border-gray-100 last:border-0">
+                              <td className="px-2 py-1.5 text-gray-600">
+                                <span className="font-mono text-[10px] text-gray-400 mr-1">{s.id}</span>
+                                {s.name}
+                              </td>
+                              <td className={`px-2 py-1.5 text-center font-bold ${s.winRate >= 0.6 ? "text-green-700" : s.winRate <= 0.4 ? "text-red-600" : "text-gray-700"}`}>
+                                {(s.winRate * 100).toFixed(0)}%
+                              </td>
+                              <td className="px-2 py-1.5 text-center text-gray-500">
+                                {s.wins}勝/{s.total - s.wins}負
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* 勝ち vs 負けのスコア比較 */}
               {tabRecords.filter(r => r.scoreBreakdown).length >= 5 && (() => {
                 const resolved = tabRecords.filter(r => r.scoreBreakdown && r.status !== "active" && !r.status.startsWith("pending_"));

@@ -134,8 +134,26 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
     });
   }
 
-  function handleRecord(signal: PrecursorSignal) {
+  async function handleRecord(signal: PrecursorSignal) {
     if (!confirmBtRecordIfDangerous(regime, signal.symbol)) return;
+
+    // Phase 7a: パターン判定（失敗しても記録は続行）
+    let matchedPatterns: Array<{ id: string; name: string }> | undefined;
+    try {
+      const res = await fetch("/api/pattern/detect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: signal.symbol }),
+        signal: AbortSignal.timeout(12000),
+      });
+      const json = await res.json();
+      if (json.ok && Array.isArray(json.data?.matched)) {
+        matchedPatterns = json.data.matched;
+      }
+    } catch {
+      // パターン取得失敗はスキップ
+    }
+
     const id = `precursor-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const rr = (signal.currentPrice - signal.suggestedTP) / (signal.suggestedSL - signal.currentPrice);
     const record: BacktestRecord = {
@@ -165,6 +183,7 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
       fr: signal.fr,
       tpPrice: signal.suggestedTP,
       entryRegime: regime,
+      matchedPatterns,
     };
     saveRecords([...getRecords(), record]);
     setRecorded(prev => new Set([...prev, signal.symbol]));

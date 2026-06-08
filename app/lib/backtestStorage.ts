@@ -105,6 +105,9 @@ export interface BacktestRecord {
   // ★ Phase 4: エントリー時市況regime（前兆スキャン含む全レコード共通）
   entryRegime?: "shortFavorable" | "neutral" | "shortDangerous";
 
+  // ★ Phase 7a: BT記録時に検出されたパターン（後日の重み付け分析用データ蓄積）
+  matchedPatterns?: Array<{ id: string; name: string }>;
+
   // ★ v2.0: スコアリングバージョン
   version?: string;
 
