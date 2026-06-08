@@ -5,13 +5,15 @@ import { getRecords, saveRecords } from "@/app/lib/backtestStorage";
 import type { BacktestRecord } from "@/app/lib/backtestStorage";
 import type { PrecursorSignal } from "@/app/lib/precursorScanner";
 import type { PrecursorScanResponse } from "@/app/api/precursor-scan/route";
-import { isPrecursorRecommended, getPrecursorRecommendThreshold, MarketRegime, confirmBtRecordIfDangerous } from "@/app/lib/marketRegime";
+import { isPrecursorRecommended, getPrecursorRecommendThreshold, MarketRegime, confirmBtRecordIfDangerous, getMacroFineTuneBonus } from "@/app/lib/marketRegime";
 
 interface Props {
   regime?: MarketRegime;
+  fearGreed?: number;
+  bondYield10y?: number;
 }
 
-export default function PrecursorScanner({ regime = "neutral" }: Props) {
+export default function PrecursorScanner({ regime = "neutral", fearGreed, bondYield10y }: Props) {
   const [signals, setSignals] = useState<PrecursorSignal[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,6 +36,9 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
   });
   const autoRecordRef = useRef(autoRecord);
   useEffect(() => { autoRecordRef.current = autoRecord; }, [autoRecord]);
+
+  // macroResult を useCallback 内で参照するために ref 経由で最新値を保持
+  const macroResultRef = useRef<{ bonus: number; reasons: string[] }>({ bonus: 0, reasons: [] });
 
   const scanPrecursors = useCallback(async () => {
     setLoading(true);
@@ -58,8 +63,8 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
             return {
               id,
               symbol: s.symbol,
-              score: s.precursorScore,
-              scoreMax: 8,
+              score: s.precursorScore + macroResultRef.current.bonus,
+              scoreMax: regime === "shortDangerous" ? 8 : 10,
               recordedAt: s.detectedAt,
               entryPrice: s.currentPrice,
               sl: s.suggestedSL,
@@ -159,8 +164,8 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
     const record: BacktestRecord = {
       id,
       symbol: signal.symbol,
-      score: signal.precursorScore,
-      scoreMax: 8,
+      score: signal.precursorScore + macroResult.bonus,
+      scoreMax: regime === "shortDangerous" ? 8 : 10,
       recordedAt: signal.detectedAt,
       entryPrice: signal.currentPrice,
       sl: signal.suggestedSL,
@@ -190,6 +195,12 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
   }
 
   const threshold = useMemo(() => getPrecursorRecommendThreshold(regime), [regime]);
+  const macroResult = useMemo(
+    () => getMacroFineTuneBonus({ fearGreed, bondYield10y, regime }),
+    [fearGreed, bondYield10y, regime],
+  );
+  useEffect(() => { macroResultRef.current = macroResult; }, [macroResult]);
+  const scoreMax = regime === "shortDangerous" ? 8 : 10;
 
   return (
     <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
@@ -304,6 +315,15 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
         </div>
       )}
 
+      {/* マクロ細階調ボーナス表示（警戒モード以外で有効な場合のみ） */}
+      {!threshold.isStricter && macroResult.bonus > 0 && (
+        <div className="px-5 pt-2">
+          <div className="inline-flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-700 rounded px-2.5 py-1 text-xs text-blue-700 dark:text-blue-300 font-semibold">
+            🌐 マクロ細階調 +{macroResult.bonus}pt: {macroResult.reasons.join(" / ")}
+          </div>
+        </div>
+      )}
+
       {/* スコア凡例 */}
       {signals.length > 0 && (
         <div className="px-5 pt-3 pb-1 flex flex-wrap gap-2 text-[11px] text-gray-500 dark:text-gray-400">
@@ -345,11 +365,11 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
                     <td className="px-3 py-2 text-center">
                       <div className="flex flex-col items-center gap-0.5">
                         <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${
-                          s.precursorScore >= 6 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                          : s.precursorScore >= 5 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
+                          s.precursorScore + macroResult.bonus >= 6 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                          : s.precursorScore + macroResult.bonus >= 5 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
                           : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"
                         }`}>
-                          {s.precursorScore}/8
+                          {s.precursorScore + macroResult.bonus}/{scoreMax}
                         </span>
                         {isElite && (
                           <span className="inline-block px-1 py-0.5 bg-red-600 text-white text-[9px] font-bold rounded">推奨</span>
@@ -364,6 +384,7 @@ export default function PrecursorScanner({ regime = "neutral" }: Props) {
                         {s.signals.lowerHighsDaily && <span className="px-1 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded text-[10px]">高値↓日足</span>}
                         {s.signals.frLongTrap      && <span className="px-1 py-0.5 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded text-[10px]">FRトラップ</span>}
                         {s.signals.frNearZeroBonus && <span className="px-1 py-0.5 bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 rounded text-[10px]">FR≈0</span>}
+                        {macroResult.bonus > 0 && <span className="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded text-[10px]">🌐+{macroResult.bonus}</span>}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right font-mono">

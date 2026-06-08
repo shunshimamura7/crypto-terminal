@@ -39,7 +39,7 @@ import { evaluateHunterPatterns } from "@/app/lib/hunterScorer";
 import { saveHunterRecord } from "@/app/lib/hunterStorage";
 import type { HunterPattern } from "@/app/lib/types/hunter";
 import type { HunterRecord } from "@/app/lib/listingHunterRecords";
-import { getScoreScannerRecommendThreshold } from "@/app/lib/marketRegime";
+import { getScoreScannerRecommendThreshold, getMacroFineTuneBonus } from "@/app/lib/marketRegime";
 import type { MarketRegime } from "@/app/lib/marketRegime";
 
 // ─── Referral (C) ─────────────────────────────────────────────────────────────
@@ -569,6 +569,7 @@ interface ExtendedCandidate extends ShortCandidate {
     volumeDecayBonus: number;
   } | null;
   fearGreedBonus: number;
+  macroFineTuneBonus: number;
 }
 
 function calcNewListingBonus(c: ShortCandidate): {
@@ -1013,6 +1014,15 @@ function ScoreDetail({ c, snapshots, alerts, t, lang, watchlistSet, onWatchlistT
             </div>
           );
         })()}
+
+        {/* Macro Fine-Tune Bonus */}
+        {c.macroFineTuneBonus > 0 && (
+          <div className="mt-1">
+            <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+              🌐 マクロ細階調: +{c.macroFineTuneBonus}pt
+            </p>
+          </div>
+        )}
 
         {/* Data grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-600 mb-2">
@@ -2877,6 +2887,7 @@ export default function ShortScanner({ regime = "neutral" }: { regime?: MarketRe
   // Market context for DangerZone + Phase3 Regime
   const [marketBtcChange, setMarketBtcChange] = useState<number>(0);
   const [marketFearGreed, setMarketFearGreed] = useState<number | null>(null);
+  const [marketBondYield, setMarketBondYield] = useState<number | undefined>(undefined);
   const [regimeFilterOn,  setRegimeFilterOn]  = useState(false);
 
   // Toast (施策10)
@@ -2921,9 +2932,10 @@ export default function ShortScanner({ regime = "neutral" }: { regime?: MarketRe
   useEffect(() => {
     fetch("/api/market-env")
       .then(r => r.json())
-      .then((d: { btcChange24h?: number; fng?: { value: number } | null }) => {
+      .then((d: { btcChange24h?: number; fng?: { value: number } | null; us10y?: number }) => {
         if (d?.btcChange24h != null) setMarketBtcChange(d.btcChange24h);
         if (d?.fng?.value != null)   setMarketFearGreed(d.fng.value);
+        if (typeof d?.us10y === "number") setMarketBondYield(d.us10y);
       })
       .catch(() => {});
   }, []);
@@ -3255,7 +3267,12 @@ export default function ShortScanner({ regime = "neutral" }: { regime?: MarketRe
       const riskOffBonus = marketRegime?.regime === "RISK_OFF" ? 1 : 0;
       const { bonus: newListingBonus, breakdown: newListingBreakdown } = calcNewListingBonus(c);
       const fearGreedBonus = calcFearGreedBonus(marketRegime?.fng ?? undefined);
-      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore + oiChangeScore - mcFdvPenalty + riskOffBonus + newListingBonus + fearGreedBonus;
+      const { bonus: macroFineTuneBonus } = getMacroFineTuneBonus({
+        fearGreed: marketFearGreed ?? undefined,
+        bondYield10y: marketBondYield,
+        regime,
+      });
+      const displayScore = c.shortScore + exclusivityScore + frBonus + futuresHeatScore + snsHeatScore + mcFdvScore + oiChangeScore - mcFdvPenalty + riskOffBonus + newListingBonus + fearGreedBonus + macroFineTuneBonus;
       const phase = detectPhase(c.fundingRate, null, null, c.priceChange24h);
       const { badges: strategyBadges, convictionLevel, expiryDays } = detectBadges({
         candidate: c,
@@ -3270,13 +3287,13 @@ export default function ShortScanner({ regime = "neutral" }: { regime?: MarketRe
       });
       return {
         ...c,
-        scoreBreakdown: { ...c.scoreBreakdown, oiChangeScore, mcFdvPenalty, riskOffBonus },
+        scoreBreakdown: { ...c.scoreBreakdown, oiChangeScore, mcFdvPenalty, riskOffBonus, macroFineTuneBonus },
         listedOnBinance, listedOnBybit, exclusivityScore, frBonus, cgData, futuresHeatScore, snsHeatScore, mcFdvScore,
         oiChangePct, oiChangeScore, mcFdvPenalty, riskOffBonus,
         displayScore, phase,
         strategyBadges, convictionLevel, expiryDays,
         newListingBonus, newListingBreakdown,
-        fearGreedBonus,
+        fearGreedBonus, macroFineTuneBonus,
       };
     });
     const sorted = mapped.sort((a, b) => {
@@ -3311,7 +3328,7 @@ export default function ShortScanner({ regime = "neutral" }: { regime?: MarketRe
     }
     if (minScore > 0) result = result.filter(c => c.displayScore >= minScore);
     return result;
-  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, filterSettledOnly, filterFsRatio5x, strongThreshold, minDrop, maxVolRatio, minVol24k, maxDays, minOiK, minScore, marketRegime]);
+  }, [data, binanceSyms, bybitSyms, snapshots, sortBy, cgMap, summaryFilter, filterSettledOnly, filterFsRatio5x, strongThreshold, minDrop, maxVolRatio, minVol24k, maxDays, minOiK, minScore, marketRegime, marketBondYield, regime]);
 
   const { normalCandidates, excessivePumpCandidates } = useMemo(() => {
     const normal: ExtendedCandidate[] = [];

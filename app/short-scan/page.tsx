@@ -56,6 +56,7 @@ function ScoringBar() {
 
 export default function ShortScanPage() {
   const [regime, setRegime] = useState<MarketRegime>("neutral");
+  const [marketEnvData, setMarketEnvData] = useState<{ fearGreed?: number; bondYield10y?: number }>({});
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("bell:darkMode") === "true";
@@ -139,7 +140,7 @@ export default function ShortScanPage() {
       <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8">
 
         {/* 市況警告バー */}
-        <MarketRegimeBanner onRegimeChange={setRegime} />
+        <MarketRegimeBanner onRegimeChange={setRegime} onMarketEnvChange={setMarketEnvData} />
 
         {/* 下: スコア型スキャナー（既存・主力）*/}
         <section id="scanner">
@@ -150,7 +151,7 @@ export default function ShortScanPage() {
 
         {/* 前兆スキャン */}
         <section id="precursor">
-          <PrecursorScanner regime={regime} />
+          <PrecursorScanner regime={regime} fearGreed={marketEnvData.fearGreed} bondYield10y={marketEnvData.bondYield10y} />
         </section>
       </div>
 

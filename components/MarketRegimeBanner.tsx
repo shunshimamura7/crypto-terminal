@@ -5,9 +5,10 @@ import { judgeMarketRegime, MarketRegime, MarketRegimeResult } from "@/app/lib/m
 
 interface Props {
   onRegimeChange?: (regime: MarketRegime) => void;
+  onMarketEnvChange?: (data: { fearGreed: number; bondYield10y?: number }) => void;
 }
 
-export default function MarketRegimeBanner({ onRegimeChange }: Props = {}) {
+export default function MarketRegimeBanner({ onRegimeChange, onMarketEnvChange }: Props = {}) {
   const [result, setResult] = useState<MarketRegimeResult | null>(null);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function MarketRegimeBanner({ onRegimeChange }: Props = {}) {
         const r = judgeMarketRegime({ btcChange24h, fearGreed, bondYield10y });
         setResult(r);
         onRegimeChange?.(r.regime);
+        onMarketEnvChange?.({ fearGreed, bondYield10y });
       })
       .catch(() => {});
     return () => { cancelled = true; };

@@ -120,6 +120,35 @@ export function getScoreScannerRecommendThreshold(regime: MarketRegime): ScoreSc
   return { withCG: 13, noCG: 11, isStricter: false };
 }
 
+// マクロデータの細階調スコアボーナス
+// shortDangerous時は無効化（推奨閾値が既に厳格化されているため二重カウント防止）
+// F&G 75超: ショート好機 +1pt / 米10年債 4.5%超: BTC逆風 +1pt
+export interface MacroFineTuneInput {
+  fearGreed?: number;
+  bondYield10y?: number;
+  regime: MarketRegime;
+}
+
+export function getMacroFineTuneBonus(input: MacroFineTuneInput): {
+  bonus: number;
+  reasons: string[];
+} {
+  if (input.regime === "shortDangerous") {
+    return { bonus: 0, reasons: [] };
+  }
+  let bonus = 0;
+  const reasons: string[] = [];
+  if (input.fearGreed !== undefined && input.fearGreed >= 75) {
+    bonus += 1;
+    reasons.push(`F&G ${input.fearGreed} (過熱) +1pt`);
+  }
+  if (input.bondYield10y !== undefined && input.bondYield10y >= 4.5) {
+    bonus += 1;
+    reasons.push(`米10年債 ${input.bondYield10y.toFixed(2)}% (BTC逆風) +1pt`);
+  }
+  return { bonus, reasons };
+}
+
 // 警戒モード時のBT記録確認ダイアログ
 // 戻り値: true=記録を実行する / false=キャンセル
 export function confirmBtRecordIfDangerous(regime: MarketRegime, symbol: string): boolean {

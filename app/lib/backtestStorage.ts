@@ -90,6 +90,7 @@ export interface BacktestRecord {
     pocDistanceScore?: number; volTrendScore?: number;
     exclusivityScore?: number; frBonus?: number;
     futuresHeatScore?: number; snsHeatScore?: number; mcFdvScore?: number;
+    macroFineTuneBonus?: number;
   };
 
   // ★ v2.0: エントリー時市場コンテキスト
